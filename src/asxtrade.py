@@ -93,23 +93,32 @@ def update_prices(db, available_stocks, config, ensure_indexes=True):
     for asx_code in available_stocks:
         url = "{}{}{}".format(config.get('asx_prices'), '' if config.get('asx_prices').endswith('/') else '/', asx_code)
         print("Fetching {} prices from {}".format(asx_code, url))
-        resp = fetcher.get(url)
-        d = json.loads(resp.content.decode())
-        d.update({ 'fetch_date': fetch_date })
-        #assert len(d.keys()) > 10
+        already_fetched_doc = db.asx_prices.find_one({ 'asx_code': asx_code, 'fetch_date': fetch_date })
+        if already_fetched_doc is not None:
+            print("Already got data for ASX {}".format(asx_code))
+            continue
+        try:
+            resp = fetcher.get(url)
+            d = json.loads(resp.content.decode())
+            d.update({ 'fetch_date': fetch_date })
+            #assert len(d.keys()) > 10
+            if df is None:
+                df = pd.DataFrame(columns=d.keys()) 
+            row = pd.Series(d, name=asx_code)
+            df = df.append(row)
+            db.asx_prices.find_one_and_update({ 'asx_code': asx_code, 'fetch_date': fetch_date }, { '$set': d }, upsert=True)
+        except Exception as e:
+            print("WARNING: unable to fetch data for {} -- ignored.".format(asx_code))
+            print(str(e))
         time.sleep(5)  # be nice to the API endpoint
-        if df is None:
-            df = pd.DataFrame(columns=d.keys()) 
-        row = pd.Series(d, name=asx_code)
-        df.append(row)
-        db.asx_prices.find_one_and_update({ 'asx_code': asx_code, 'fetch_date': d.get('fetch_date') }, { '$set': d }, upsert=True)
     fname = "{}/asx_prices.{}.tsv".format(config.get('data_root'), fetch_date)
     df.to_csv(fname, sep='\t')
     print("Saved {} stock codes with prices to {}".format(len(df), fname))
    
 def available_stocks(db):
-    ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': 'ORDINARY FULLY PAID' })])
-    print("Found {} stocks on ASX...".format(len(ret)))
+    ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': 'ORDINARY FULLY PAID' }) 
+                                              if db.asx_blacklist.find_one({'asx_code': r.get('asx_code') }) is None])
+    print("Found {} available stocks on ASX...".format(len(ret)))
     return ret
 
 def update_company_details(db, available_stocks, config, ensure_indexes=False):
@@ -172,12 +181,14 @@ if __name__ == "__main__":
     if a.want_isin:
         print("**** UPDATING ASX SECURITIES")
         update_isin(db, config, ensure_indexes=True) 
+    stocks_to_fetch = available_stocks(db)
     if a.want_prices:
         print("**** UPDATING PRICES")
-        update_prices(db, available_stocks(db), config, ensure_indexes=True)
+        update_prices(db, stocks_to_fetch, config, ensure_indexes=True)
     if a.want_details:
         print("**** UPDATING COMPANY DETAILS")
-        update_company_details(db, available_stocks(db), config, ensure_indexes=True)
+        update_company_details(db, stocks_to_fetch, config, ensure_indexes=True)
          
     mongo.close()
+    print("Run completed.")
     exit(0)
