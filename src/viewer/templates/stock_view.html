@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ asx_code }}</h1>
+<img src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+{% endblock %}
