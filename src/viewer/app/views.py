@@ -109,6 +109,7 @@ def make_rsi_plot(stock_code, dataframe):
     ma20 = dataframe.last_price.rolling(window=20).mean()
     ma200 = dataframe.last_price.rolling(window=200).mean()
 
+    timeline = timeline.to_list()
     linema20, = ax2.plot(timeline, ma20, color='blue', lw=2, label='MA (20)')
     linema200, = ax2.plot(timeline, ma200, color='red', lw=2, label='MA (200)')
 
@@ -125,7 +126,7 @@ def make_rsi_plot(stock_code, dataframe):
     leg = ax2.legend(loc='center left', shadow=True, fancybox=True, prop=props)
     leg.get_frame().set_alpha(0.5)
 
-    volume = (dataframe.last_price * dataframe.volume)/1e6  # dollar volume in millions
+    volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
     vmax = max(volume)
     poly = ax2t.fill_between(timeline.to_list(), volume.to_list(), 0,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
@@ -134,18 +135,21 @@ def make_rsi_plot(stock_code, dataframe):
 
     # compute the MACD indicator
     fillcolor = 'darkslategrey'
-    nslow = 26
-    nfast = 12
-    nema = 9
-    #emaslow, emafast, macd = moving_average_convergence(prices, nslow=nslow, nfast=nfast)
-    #ema9 = moving_average(macd, nema, type='exponential')
-    #ax3.plot(r.date, macd, color='black', lw=2)
-    #ax3.plot(r.date, ema9, color='blue', lw=1)
-    #x3.fill_between(r.date, macd - ema9, 0, alpha=0.5, facecolor=fillcolor, edgecolor=fillcolor)
-    #ax3.text(0.025, 0.95, 'MACD (%d, %d, %d)' % (nfast, nslow, nema), va='top',
-    #         transform=ax3.transAxes, fontsize=textsize)
 
-    #ax3.set_yticks([])
+    n_fast = 12
+    n_slow = 26
+    n_ema= 9
+    emafast = dataframe.last_price.ewm(span=n_fast, adjust=False).mean()
+    emaslow = dataframe.last_price.ewm(span=n_slow, adjust=False).mean()
+    macd = emafast - emaslow
+    nema = macd.ewm(span=n_ema, adjust=False).mean()
+    ax3.plot(timeline, macd, color='black', lw=2)
+    ax3.plot(timeline, nema, color='blue', lw=1)
+    ax3.fill_between(timeline, macd - nema, 0, alpha=0.5, facecolor=fillcolor, edgecolor=fillcolor)
+    ax3.text(0.025, 0.95, 'MACD ({}, {}, {})'.format(n_fast, n_slow, n_ema), va='top',
+             transform=ax3.transAxes, fontsize=textsize)
+
+    ax3.set_yticks([])
     # turn off upper axis tick labels, rotate the lower ones, etc
     for ax in ax1, ax2, ax2t, ax3:
         if ax != ax3:
