@@ -55,12 +55,14 @@ def update_isin(db, config, ensure_indexes=True):
     if ensure_indexes:
          db.asx_isin.create_index([( 'asx_code', pymongo.ASCENDING), ('asx_isin_code', pymongo.ASCENDING) ], unique=True)
 
-    with tempfile.NamedTemporaryFile(delete=False) as content:
+    df = None
+    with tempfile.NamedTemporaryFile() as content:
          content.write(resp.content)
+         content.seek(0)
+         df = pd.read_excel(content.name)
 
     fname = "{}/asx_isin/isin.{}.csv".format(config.get('data_root'), datetime.now().strftime('%Y-%m-%d'))
     out_df = None
-    df = pd.read_excel(content.name)
     n = 0
     for row in df[4:].itertuples(): # TODO FIXME...first four rows are rubbish - but maybe need to be a bit more flexible
         row_index, asx_code, company_name, security_name, isin_code = row
@@ -72,11 +74,12 @@ def update_isin(db, config, ensure_indexes=True):
               'asx_isin_code': isin_code, 'last_updated': datetime.utcnow() }
         if out_df is None:
             out_df = pd.DataFrame(columns=d.keys())
-        row = pd.Series(d, name=d.get('asx_code'))
-        df = df.append(row)
+        out_df = out_df.append(d)
         db.asx_isin.find_one_and_update({ 'asx_isin_code': isin_code, 'asx_code': asx_code }, { "$set": d }, upsert=True)
         n += 1
-        print("Saved {} securities to {} for validation by great_expectations.".format(n, fname))
+
+    out_df.to_csv(fname, sep='\t')
+    print("Saved {} securities to {} for validation.".format(n, fname))
 
 def get_fetcher():
     fetcher = requests.Session()
