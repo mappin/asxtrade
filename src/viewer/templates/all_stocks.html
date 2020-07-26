@@ -12,6 +12,7 @@
       <td>Year low price</td>
       <td>Volume</td>
       <td>EPS</td>
+      <td>Price/Earnings</td>
    </th>
 {%for stock in stocks %}
    <tr>
@@ -22,7 +23,8 @@
       <td>{{ stock.year_high_price }} (on {{ stock.year_high_date }})</td>
       <td>{{ stock.year_low_price }} (on {{ stock.year_low_date }})</td>
       <td>{{ stock.volume }}</td>
-      <td>{{ stock.eps }}</td>
+      <td>{{ stock.eps|floatformat }}</td>
+      <td>{{ stock.pe|floatformat }}</td>
    </tr>
 {%endfor %}
 </table>
