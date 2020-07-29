@@ -64,7 +64,7 @@ def make_rsi_plot(stock_code, dataframe):
     plt.rc('axes', grid=True)
     plt.rc('grid', color='0.75', linestyle='-', linewidth=0.5)
 
-    textsize = 9
+    textsize = 8
     left, width = 0.1, 0.8
     rect1 = [left, 0.7, width, 0.2]
     rect2 = [left, 0.3, width, 0.4]
@@ -94,7 +94,7 @@ def make_rsi_plot(stock_code, dataframe):
     ax1.set_ylim(0, 100)
     ax1.set_yticks([30, 70])
     ax1.text(0.025, 0.95, 'RSI (14)', va='top', transform=ax1.transAxes, fontsize=textsize)
-    ax1.set_title('{} daily'.format(stock_code))
+    #ax1.set_title('{} daily'.format(stock_code))
 
     # plot the price and volume data
     dx = 0.0
@@ -162,6 +162,7 @@ def make_rsi_plot(stock_code, dataframe):
 
         ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
 
+    plt.setp(ax.get_xticklabels(), fontsize=8)
     plt.plot()
     return plt.gcf()
 
