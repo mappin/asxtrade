@@ -1,6 +1,37 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>{{ asx_code }}</h1>
-<img src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+<h2>{{ asx_code }}</h2>
+<img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+
+<h2 class="asxtrade">Information</h2>
+
+<table>
+     <tr><th>Field</th><th>Value</th></tr>
+     <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
+     <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
+     <tr><td>Indices</td><td>{{ cd.indices }}</td></tr>
+</table>
+
+<h2 class="asxtrade">Available securities</h2>
+
+<table>
+    <tr>
+      <th>ASX code</th>
+      <th>Company</th>
+      <th>Security code</th>
+      <th>Description</th>
+      <th>Last updated</th>
+    </tr>
+{% for s in securities %}
+    <tr>
+      <td>{{ s.asx_code }}</td>
+      <td>{{ s.company_name }}</td>
+      <td>{{ s.asx_isin_code }}</td>
+      <td>{{ s.security_name }}</td>
+      <td>{{ s.last_updated }}</td>
+    </tr>
+{% endfor %}
+</table>
+
 {% endblock %}
