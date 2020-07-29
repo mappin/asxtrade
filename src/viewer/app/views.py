@@ -85,8 +85,8 @@ def make_rsi_plot(stock_code, dataframe):
 
     timeline = dataframe.fetch_date
     ax1.plot(timeline, rsi, color=fillcolor)
-    ax1.axhline(70, color=fillcolor)
-    ax1.axhline(30, color=fillcolor)
+    ax1.axhline(70, color='darkgreen')
+    ax1.axhline(30, color='darkgreen')
     ax1.fill_between(timeline, rsi, 70, where=(rsi >= 70), facecolor=fillcolor, edgecolor=fillcolor)
     ax1.fill_between(timeline, rsi, 30, where=(rsi <= 30), facecolor=fillcolor, edgecolor=fillcolor)
     ax1.text(0.6, 0.9, '>70 = overbought', va='top', transform=ax1.transAxes, fontsize=textsize)
@@ -128,7 +128,7 @@ def make_rsi_plot(stock_code, dataframe):
 
     volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
     vmax = max(volume)
-    poly = ax2t.fill_between(timeline, volume.to_list(), 0,
+    poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
     ax2t.set_ylim(0, 5*vmax)
     ax2t.set_yticks([])
@@ -145,7 +145,7 @@ def make_rsi_plot(stock_code, dataframe):
     nema = macd.ewm(span=n_ema, adjust=False).mean()
     ax3.plot(timeline, macd, color='black', lw=2)
     ax3.plot(timeline, nema, color='blue', lw=1)
-    ax3.fill_between(timeline, macd - nema, 0, alpha=0.5, facecolor=fillcolor, edgecolor=fillcolor)
+    ax3.fill_between(timeline, macd - nema, 0, alpha=0.3, facecolor=fillcolor, edgecolor=fillcolor)
     ax3.text(0.025, 0.95, 'MACD ({}, {}, {})'.format(n_fast, n_slow, n_ema), va='top',
              transform=ax3.transAxes, fontsize=textsize)
 
