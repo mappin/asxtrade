@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from app.models import Quotation
+from app.models import Quotation, Security, CompanyDetails
 from datetime import datetime
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -128,7 +128,7 @@ def make_rsi_plot(stock_code, dataframe):
 
     volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
     vmax = max(volume)
-    poly = ax2t.fill_between(timeline.to_list(), volume.to_list(), 0,
+    poly = ax2t.fill_between(timeline, volume.to_list(), 0,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
     ax2t.set_ylim(0, 5*vmax)
     ax2t.set_yticks([])
@@ -165,19 +165,27 @@ def make_rsi_plot(stock_code, dataframe):
     plt.plot()
     return plt.gcf()
 
+def as_dataframe(iterable):
+    df = None
+    headers = None
+    for idx, rec in enumerate(iterable):
+        d = model_to_dict(rec)
+        if df is None:
+            headers = d.keys()
+            df = pd.DataFrame(columns=headers)
+        df = df.append(d, ignore_index=True)
+    if 'fetch_date' in headers:
+        df['fetch_date'] = pd.to_datetime(df['fetch_date'])
+        df = df.sort_values(by='fetch_date')
+    return df
+
 def show_stock(request, stock=None):
    stock_regex = re.compile('^\w+$')
    assert stock_regex.match(stock)
    quotes = Quotation.objects.filter(asx_code=stock)
-   df = None
-   for idx, quote in enumerate(quotes):
-       d = model_to_dict(quote)
-       if df is None:
-           df = pd.DataFrame(columns=d.keys())
-       df = df.append(d, ignore_index=True)
-   df['fetch_date'] = pd.to_datetime(df['fetch_date'])
-   df = df.sort_values(by='fetch_date')
-   #print(df)
+   securities = Security.objects.filter(asx_code=stock)
+   company_details = CompanyDetails.objects.filter(asx_code=stock).first()
+   df = as_dataframe(quotes)
    assert len(df) > 0
    fig = make_rsi_plot(stock, df)
    #convert graph into dtring buffer and then we convert 64 bit code into image
@@ -188,5 +196,7 @@ def show_stock(request, stock=None):
    context = {
        'rsi_data': b64data.decode('utf-8'),
        'asx_code': stock,
+       'securities': securities,
+       'cd': company_details,
    }
    return render(request, "stock_view.html", context=context)
