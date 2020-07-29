@@ -6,16 +6,17 @@
 
 <h2 class="asxtrade">Information</h2>
 
-<table>
+<table class="small">
      <tr><th>Field</th><th>Value</th></tr>
      <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
      <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
-     <tr><td>Indices</td><td>{{ cd.indices }}</td></tr>
+     <tr><td>Indices</td><td>{%for i in indices %}{{ i|pprint }}{%endfor %}</td></tr>
+     <tr><td>Website</td><td>{{ cd.web_address|urlize }}</td></tr>
 </table>
 
 <h2 class="asxtrade">Available securities</h2>
 
-<table>
+<table class="small">
     <tr>
       <th>ASX code</th>
       <th>Company</th>
