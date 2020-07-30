@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{ asx_code }}</h2>
+<h2>{{ asx_code }} - momentum</h2>
 <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
 
 <h2 class="asxtrade">Information</h2>
@@ -34,5 +34,9 @@
     </tr>
 {% endfor %}
 </table>
+
+<h2 class="asxtrade">Sector performance (past 3 months)</h2>
+
+<img class="sector_past3months" src="data:image/png;base64, {{ sector_past3months_data }}" alt="Sector performance over past 3 months - {{ asx_code }}">
 
 {% endblock %}
