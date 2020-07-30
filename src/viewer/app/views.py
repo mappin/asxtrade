@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from app.models import Quotation, Security, CompanyDetails
-from datetime import datetime
+from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
@@ -10,6 +10,7 @@ import base64
 import urllib
 import numpy as np
 import pandas as pd
+from pylru import lrudecorator
 from django.forms.models import model_to_dict
 
 def all_stocks(request):
@@ -59,6 +60,22 @@ def relative_strength(prices, n=14):
         rsi[i] = 100. - 100./(1. + rs)
 
     return rsi
+
+def make_sector_momentum_plot(dataframe):
+    fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
+    timeline = dataframe['date']
+    for name, ax, linecolour in zip(['n_up', 'n_down', 'n_unchanged'], axes, ['darkgreen', 'red', 'grey']):
+        # use a moving average to smooth out 5-day trading weeks and see the trend
+        ax.plot(timeline, dataframe[name].rolling(7).mean(), color=linecolour)
+        ax.set_ylabel('', fontsize=8)
+        ax.set_title(name)
+
+        # Remove the automatic x-axis label from all but the bottom subplot
+        if ax != axes[-1]:
+            ax.set_xlabel('')
+    plt.setp(ax.get_xticklabels(), fontsize=8)
+    plt.plot()
+    return plt.gcf()
 
 def make_rsi_plot(stock_code, dataframe):
     plt.rc('axes', grid=True)
@@ -180,24 +197,68 @@ def as_dataframe(iterable):
         df = df.sort_values(by='fetch_date')
     return df
 
+def plot_as_base64(fig):
+    #convert graph into dtring buffer and then we convert 64 bit code into image
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    b64data = base64.b64encode(buf.read())
+    return b64data
+
+@lrudecorator(10)
+def analyse_sector(sector_name):
+    assert isinstance(sector_name, str) and len(sector_name) > 0
+
+    sector_stocks = [c.asx_code for c in CompanyDetails.objects.filter(sector_name=sector_name)]
+    start_date = datetime.today() - timedelta(days=90)
+    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, datetime.today())]
+    assert len(all_dates) >= 80
+    sector_df = pd.DataFrame(columns=['date', 'n_up', 'n_down', 'n_unchanged'])
+    print("Found {} stocks in sector {}".format(len(sector_stocks), sector_name))
+    for day in all_dates:
+        daily_sector_quotes = Quotation.objects. \
+                                     filter(fetch_date=day). \
+                                     filter(asx_code__in=sector_stocks). \
+                                     filter(change_price__isnull=False)
+        pos = neg = zeroes = 0
+        for quote in daily_sector_quotes:
+            if quote.change_price > 0.0:
+                pos += 1
+            elif quote.change_price < 0.0:
+                neg += 1
+            else:
+                zeroes += 1
+        sector_df = sector_df.append({ 'date': day, 'n_up': pos,
+                                       'n_down': neg, 'n_unchanged': zeroes },
+                                     ignore_index=True)
+    sector_df['date'] = pd.to_datetime(sector_df['date'])
+    return sector_df
+
 def show_stock(request, stock=None):
    stock_regex = re.compile('^\w+$')
    assert stock_regex.match(stock)
+
+   # make stock momentum plot
    quotes = Quotation.objects.filter(asx_code=stock)
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    df = as_dataframe(quotes)
    assert len(df) > 0
    fig = make_rsi_plot(stock, df)
-   #convert graph into dtring buffer and then we convert 64 bit code into image
-   buf = io.BytesIO()
-   fig.savefig(buf, format='png')
-   buf.seek(0)
-   b64data = base64.b64encode(buf.read())
+   rsi_data = plot_as_base64(fig)
+
+   # show sector performance over past 3 months
+   sector_df = analyse_sector(company_details.sector_name)
+   #print(sector_df)
+   fig = make_sector_momentum_plot(sector_df)
+   sector_b64 = plot_as_base64(fig)
+
+   # populate template
    context = {
-       'rsi_data': b64data.decode('utf-8'),
+       'rsi_data': rsi_data.decode('utf-8'),
        'asx_code': stock,
        'securities': securities,
        'cd': company_details,
+       'sector_past3months_data': sector_b64.decode('utf-8'),
    }
    return render(request, "stock_view.html", context=context)
