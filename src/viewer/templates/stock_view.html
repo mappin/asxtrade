@@ -16,7 +16,7 @@
 
 <h2 class="asxtrade">Available securities</h2>
 
-<table class="small">
+<table>
     <tr>
       <th>ASX code</th>
       <th>Company</th>
@@ -25,7 +25,7 @@
       <th>Last updated</th>
     </tr>
 {% for s in securities %}
-    <tr>
+    <tr class="small">
       <td>{{ s.asx_code }}</td>
       <td>{{ s.company_name }}</td>
       <td>{{ s.asx_isin_code }}</td>
