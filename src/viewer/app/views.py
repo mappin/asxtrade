@@ -96,7 +96,7 @@ def make_rsi_plot(stock_code, dataframe):
     ax3 = fig.add_axes(rect3, facecolor=axescolor, sharex=ax1)
 
     # plot the relative strength indicator
-    prices = dataframe['last_price'].to_numpy()
+    prices = pd.to_numeric(dataframe['last_price'], errors='coerce').to_numpy()
     rsi = relative_strength(prices)
     fillcolor = 'darkgoldenrod'
 
@@ -243,6 +243,7 @@ def show_stock(request, stock=None):
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    df = as_dataframe(quotes)
+   print(df['last_price'])
    assert len(df) > 0
    fig = make_rsi_plot(stock, df)
    rsi_data = plot_as_base64(fig)
@@ -253,7 +254,7 @@ def show_stock(request, stock=None):
    fig = make_sector_momentum_plot(sector_df)
    sector_b64 = plot_as_base64(fig)
 
-   # populate template
+   # populate template and render HTML page with context
    context = {
        'rsi_data': rsi_data.decode('utf-8'),
        'asx_code': stock,
