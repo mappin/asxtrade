@@ -6,8 +6,7 @@
 
 <h2 class="asxtrade">Information</h2>
 
-<table class="small">
-     <tr><th>Field</th><th>Value</th></tr>
+<table class="small" style="width: 60%">
      <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
      <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
      <tr><td>Indices</td><td>{%for i in indices %}{{ i|pprint }}{%endfor %}</td></tr>
@@ -16,8 +15,8 @@
 
 <h2 class="asxtrade">Available securities</h2>
 
-<table>
-    <tr>
+<table style="width: 80%">
+    <tr class="small">
       <th>ASX code</th>
       <th>Company</th>
       <th>Security code</th>
