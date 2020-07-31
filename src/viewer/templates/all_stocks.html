@@ -2,26 +2,26 @@
 
 {% block content %}
 <p>Latest ASX prices for all stocks as at {{ most_recent_date }}</p>
-<table>
-   <th>
-      <td>ASX Code</td>
-      <td>Annual dividend yield</td>
-      <td>Price ($AUD)</td>
-      <td>Day change</td>
-      <td>Year high price</td>
-      <td>Year low price</td>
-      <td>Volume</td>
-      <td>EPS</td>
-      <td>Price/Earnings</td>
-   </th>
-{%for stock in stocks %}
+<table style="width: 100%">
    <tr>
+      <th>ASX Code</th>
+      <th>Annual dividend yield</th>
+      <th>Price ($AUD)</th>
+      <th>Day change</th>
+      <th>Year high price</th>
+      <th>Year low price</th>
+      <th>Volume</th>
+      <th>EPS</th>
+      <th>Price/Earnings</th>
+   </tr>
+{%for stock in stocks %}
+   <tr class="small">
       <td><a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a></td>
       <td>{{ stock.annual_dividend_yield |floatformat }}</td>
       <td>{{ stock.last_price }}</td>
       <td>{{ stock.change_price }} ({{ stock.change_in_percent }})</td>
-      <td>{{ stock.year_high_price }} (on {{ stock.year_high_date }})</td>
-      <td>{{ stock.year_low_price }} (on {{ stock.year_low_date }})</td>
+      <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+      <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
       <td>{{ stock.volume }}</td>
       <td>{{ stock.eps|floatformat }}</td>
       <td>{{ stock.pe|floatformat }}</td>

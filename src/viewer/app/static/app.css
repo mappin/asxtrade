@@ -6,3 +6,12 @@ img.stock {
   margin-top: 25px;
   margin-bottom: 25px;
 }
+
+div.menubar {
+  margin-right: 25px;
+}
+
+span.unimportant {
+  color: grey;
+  size: -2;
+}
