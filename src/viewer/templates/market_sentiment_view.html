@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Market sentiment over past week</h2>
+<img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
+
+<h2>Top 10 each day</h2>
+
+<table>
+{% for date, series in best_ten.items %}
+   <tr><td class="small">{{ date }}</td><td>
+   {% for index, val in series.items %}
+       <a href="/show/{{ index }}">{{ index }}&nbsp;</a>
+   {% endfor %}
+   </td></tr>
+{% endfor %}
+</table>
+
+<h2>Bottom 10 each day</h2>
+
+<table>
+{% for date, series in worst_ten.items %}
+   <tr><td class="small">{{ date }}</td><td>
+   {% for index, val in series.items %}
+       <a href="/show/{{ index }}">{{ index }}&nbsp;</a>
+   {% endfor %}
+   </td></tr>
+{% endfor %}
+</table>
+
+{% endblock %}
