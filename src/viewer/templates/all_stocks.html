@@ -15,7 +15,7 @@
       <th>Price/Earnings</th>
    </tr>
 {%for stock in stocks %}
-   <tr class="small">
+   <tr class="small" style="margin-bottom: 5px">
       <td><a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a></td>
       <td>{{ stock.annual_dividend_yield |floatformat }}</td>
       <td>{{ stock.last_price }}</td>

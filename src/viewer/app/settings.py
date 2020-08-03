@@ -85,12 +85,11 @@ DATABASES = {
         'CLIENT': {
             'host': 'pi1',
             'port': 27017,
-            'username': 'ro',
+            'username': 'rw',
             'password': os.getenv('PASSWORD'),
         }
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators

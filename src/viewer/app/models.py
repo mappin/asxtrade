@@ -37,6 +37,11 @@ class Quotation(model.Model):
     year_low_date = model.DateField()
     year_low_price = model.FloatField()
 
+    def percent_change(self):
+        # since the ASX uses a string field, we auto-convert to float on the fly
+        pc = float(self.change_in_percent.strip('%'))
+        return pc
+
     class Meta:
        db_table = 'asx_prices'
        managed = False # managed by asxtrade.py
