@@ -263,3 +263,65 @@ def show_stock(request, stock=None):
        'sector_past3months_data': sector_b64.decode('utf-8'),
    }
    return render(request, "stock_view.html", context=context)
+
+@lrudecorator(2)
+def analyse_market(start_date):
+    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, datetime.today())]
+    assert len(all_dates) == 7
+    df = pd.DataFrame(columns=['date', 'asx_code', 'change_in_percent'])
+    all_quotes = {}
+    all_stocks = set()
+    for date in all_dates:
+        quotes = Quotation.objects.filter(fetch_date=date) \
+                                  .exclude(change_price__isnull=True) \
+                                  .exclude(error_code='id-or-code-invalid') \
+                                  .exclude(change_in_percent__isnull=True)
+        #print("Obtained {} quotes for {}".format(len(quotes), date))
+        daily_quotes = { q.asx_code: q.percent_change() for q in quotes }
+        for_plotting = {}
+        for k,v in daily_quotes.items():
+            if abs(v) > 1.0: # exclude boring movements from the plot
+                for_plotting[k] = v
+                all_stocks.add(k)
+        if len(for_plotting.keys()) > 10: # ignore days where nothing happens
+            all_quotes[date] = for_plotting
+
+    # every pandas data series must have the same keys in it or a plotting error will occur
+    all_series = []
+    for date in filter(lambda k: k in all_quotes, all_dates):
+        d = all_quotes[date]
+        assert(d, dict)
+        for k in all_stocks:
+            if not k in d:
+                d.update({ k: 0 })
+        series = pd.Series(all_quotes[date], name=date)
+        all_series.append(series)
+
+    return all_series
+
+def make_market_sentiment_plot(data_series):
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(9, 4), sharey=True)
+    bp = ax.violinplot(data_series, widths=0.9)
+    labels = [ds.name for ds in data_series]
+    ax.set_xticks(np.arange(1, len(labels) + 1))
+    ax.set_xticklabels(labels)
+    ax.set_xlim(0.25, len(labels) + 0.75)
+    plt.plot()
+    return plt.gcf()
+
+def market_sentiment(request):
+    start_date = datetime.today() - timedelta(days=6)
+    all_data_series = analyse_market(start_date)
+    fig = make_market_sentiment_plot(all_data_series)
+    sentiment_data = plot_as_base64(fig)
+    top10 = { series.name: series.nlargest(n=10) for series in all_data_series }
+    bottom10 = { series.name: series.nsmallest(n=10) for series in all_data_series }
+    print(top10)
+    context = {
+       'sentiment_data': sentiment_data.decode('utf-8'),
+       'n_days': len(all_data_series),
+       'n_stocks_plotted': max([len(series) for series in all_data_series]),
+       'best_ten': top10,
+       'worst_ten': bottom10,
+    }
+    return render(request, 'market_sentiment_view.html', context=context)
