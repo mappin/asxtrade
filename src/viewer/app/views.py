@@ -1,5 +1,11 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
+from django.forms.models import model_to_dict
+from django.views.generic import FormView, TemplateView
+from django.http import HttpResponseRedirect
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
 from app.models import Quotation, Security, CompanyDetails
+from app.forms import SectorSearchForm, DividendSearchForm
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -11,7 +17,103 @@ import urllib
 import numpy as np
 import pandas as pd
 from pylru import lrudecorator
-from django.forms.models import model_to_dict
+
+
+class SearchMixin:
+    paginate_by = 50
+    model = Quotation
+    object_list = Quotation.objects.none()
+
+    def get(self, request, *args, **kwargs):
+       # need to subclass this method to ensure pagination works correctly (as 'next', 'last' etc. is GET not POST)
+       d = {}
+       key = self.__class__.__name__
+       print("Updating session state: {}".format(key))
+       d.update(request.session.get(key, {})) # update the form to the session state
+       return self.update_form(d)
+
+    def update_form(self, form_values):
+       assert isinstance(form_values, dict)
+       # apply the form settings to self.queryset (specific to a CBV - watch for subclass overrides)
+       self.object_list = self.get_queryset(**form_values)
+       state_field = self.__class__.__name__  # NB: must use class name so that each search type has its own state for a given user
+       self.request.session[state_field] = form_values
+       context = self.get_context_data()
+       assert context is not None
+       assert self.action_url is not None
+       context['action_url'] = self.action_url
+       self.form = self.form_class(initial=form_values)
+       context['form'] = self.form
+       return self.render_to_response(context)
+
+    def form_invalid(self, form):
+       return self.update_form(form.cleaned_data)
+
+    # this is called from self.post()
+    def form_valid(self, form):
+       assert form.is_valid()
+       return self.update_form(form.cleaned_data)
+
+class SectorSearchView(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
+    form_class = SectorSearchForm
+    template_name = "search_form.html" # generic template, not specific to this view
+    action_url = '/search/by-sector'
+    ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
+    sector_name = None
+    as_at_date = None
+
+    def render_to_response(self, context):
+        context['stocks'] = self.object_list
+        context['sector'] = self.sector_name
+        context['most_recent_date'] = self.as_at_date
+        return super().render_to_response(context)
+
+    def get_queryset(self, **kwargs):
+       if kwargs == {}:
+           return Quotation.objects.none()
+       assert 'sector' in kwargs and len(kwargs['sector']) > 0
+       self.sector_name = kwargs['sector']
+       all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+                                    key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+       wanted_companies = CompanyDetails.objects.filter(sector_name=self.sector_name)
+       wanted_stocks = [wc.asx_code for wc in wanted_companies]
+       self.as_at_date = all_available_dates[-1]
+       print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
+       results = Quotation.objects.filter(fetch_date=self.as_at_date) \
+                                  .filter(asx_code__in=wanted_stocks) \
+                                  .order_by(*self.ordering)
+       return results
+
+sector_search = SectorSearchView.as_view()
+
+class DividendYieldSearch(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
+    form_class = DividendSearchForm
+    template_name = "search_form.html" # generic template, not specific to this view
+    action_url = '/search/by-yield'
+    ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
+    as_at_date = None
+
+    def render_to_response(self, context):
+        context['stocks'] = self.object_list
+        context['most_recent_date'] = self.as_at_date
+        return super().render_to_response(context)
+
+    def get_queryset(self, **kwargs):
+       if kwargs == {}:
+           return Quotation.objects.none()
+
+       all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+                                    key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+       self.as_at_date = all_available_dates[-1]
+       min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
+       max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
+       results = Quotation.objects.filter(fetch_date=self.as_at_date) \
+                                  .filter(annual_dividend_yield__gte=min_yield) \
+                                  .filter(annual_dividend_yield__lte=max_yield) \
+                                  .order_by(*self.ordering)
+       return results
+
+dividend_search = DividendYieldSearch.as_view()
 
 def all_stocks(request):
    # NB: dbfield is a str NOT date so order_by is just to get distinct working desirably
@@ -64,16 +166,17 @@ def relative_strength(prices, n=14):
 def make_sector_momentum_plot(dataframe):
     fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
     timeline = dataframe['date']
-    for name, ax, linecolour in zip(['n_up', 'n_down', 'n_unchanged'], axes, ['darkgreen', 'red', 'grey']):
+    # now do the plot
+    for name, ax, linecolour in zip(['n_pos', 'n_neg', 'n_unchanged'], axes, ['darkgreen', 'red', 'grey']):
         # use a moving average to smooth out 5-day trading weeks and see the trend
-        ax.plot(timeline, dataframe[name].rolling(7).mean(), color=linecolour)
+        ax.plot(timeline, dataframe[name].rolling(30).mean(), color=linecolour)
         ax.set_ylabel('', fontsize=8)
         ax.set_title(name)
 
         # Remove the automatic x-axis label from all but the bottom subplot
         if ax != axes[-1]:
             ax.set_xlabel('')
-    plt.setp(ax.get_xticklabels(), fontsize=8)
+    plt.xticks(fontsize=8, rotation=30)
     plt.plot()
     return plt.gcf()
 
@@ -179,8 +282,7 @@ def make_rsi_plot(stock_code, dataframe):
 
         ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
 
-    plt.setp(ax.get_xticklabels(), fontsize=8)
-    plt.plot()
+    plt.xticks(fontsize=8)
     return plt.gcf()
 
 def as_dataframe(iterable):
@@ -213,24 +315,34 @@ def analyse_sector(sector_name):
     start_date = datetime.today() - timedelta(days=90)
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, datetime.today())]
     assert len(all_dates) >= 80
-    sector_df = pd.DataFrame(columns=['date', 'n_up', 'n_down', 'n_unchanged'])
     print("Found {} stocks in sector {}".format(len(sector_stocks), sector_name))
-    for day in all_dates:
+    all_quotes = []
+    start_prices = {}
+    cum_price_change = {}
+    for day in sorted(all_dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
         daily_sector_quotes = Quotation.objects. \
                                      filter(fetch_date=day). \
                                      filter(asx_code__in=sector_stocks). \
                                      filter(change_price__isnull=False)
-        pos = neg = zeroes = 0
+
+        n_pos = n_neg = n_unchanged = 0
         for quote in daily_sector_quotes:
-            if quote.change_price > 0.0:
-                pos += 1
-            elif quote.change_price < 0.0:
-                neg += 1
+            code = quote.asx_code
+            if not code in start_prices:
+                start_prices[code] = quote.last_price
+                cum_price_change[code] = 0.0
+            cum_price_change[code] += quote.change_price
+            c = cum_price_change[code]
+            if c > 0.1 * start_prices[code]:
+                n_pos += 1
+            elif c < 0 and abs(c) > 0.1 * start_prices[code]:
+                n_neg += 1
             else:
-                zeroes += 1
-        sector_df = sector_df.append({ 'date': day, 'n_up': pos,
-                                       'n_down': neg, 'n_unchanged': zeroes },
-                                     ignore_index=True)
+                n_unchanged += 1
+        all_quotes.append({ 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged })
+
+    sector_df = pd.DataFrame.from_records(all_quotes)
+    print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
     return sector_df
 
@@ -290,7 +402,7 @@ def analyse_market(start_date):
     all_series = []
     for date in filter(lambda k: k in all_quotes, all_dates):
         d = all_quotes[date]
-        assert(d, dict)
+        assert isinstance(d, dict)
         for k in all_stocks:
             if not k in d:
                 d.update({ k: 0 })

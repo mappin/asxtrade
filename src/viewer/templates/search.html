@@ -18,10 +18,8 @@
     {% block searchform %}
     {% endblock %}
 
-    {% block searchresults %}
-       <div class="results">Input your search data</div>
-    {% endblock %}
- 
+    {% include "stock_list.html" %}
+
     {% if page_obj %}
     <div class="pagination">
         <span class="step-links">

@@ -1,0 +1,34 @@
+{% block stock_list %}
+<p>Prices current as at {{ most_recent_date }}.
+{% if sector %}
+   Only stocks in {{ sector }} are displayed.
+{% endif %}
+</p>
+<table style="width: 100%">
+   <tr>
+      <th>ASX Code</th>
+      <th>Annual yield</th>
+      <th>Price ($AUD)</th>
+      <th>Day change</th>
+      <th>Volume</th>
+      <th>EPS</th>
+      <th>Price/Earnings</th>
+      <th>Year high price</th>
+      <th>Year low price</th>
+   </tr>
+{% for stock in stocks %}
+   <tr class="small" style="margin-bottom: 5px">
+      <td><a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a></td>
+      <td>{{ stock.annual_dividend_yield |floatformat }}</td>
+      <td>{{ stock.last_price }}</td>
+      <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
+      <td align="right">{{ stock.volume }}&nbsp;&nbsp;</td>
+      <td align="right">{{ stock.eps|floatformat }}</td>
+      <td align="center">{{ stock.pe|floatformat }}</td>
+      <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+      <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
+   </tr>
+{% endfor %}
+</table>
+
+{% endblock %}

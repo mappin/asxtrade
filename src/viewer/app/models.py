@@ -37,6 +37,8 @@ class Quotation(model.Model):
     year_low_date = model.DateField()
     year_low_price = model.FloatField()
 
+    objects = DjongoManager() # convenient access to mongo API
+
     def percent_change(self):
         # since the ASX uses a string field, we auto-convert to float on the fly
         pc = float(self.change_in_percent.strip('%'))
@@ -125,6 +127,8 @@ class CompanyDetails(model.Model):
     sector_name = model.TextField()
     web_address = model.TextField()
 
+    objects = DjongoManager()
+    
     class Meta:
         managed = False
         db_table = "asx_company_details"
