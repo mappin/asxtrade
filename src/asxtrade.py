@@ -59,12 +59,14 @@ def update_isin(db, config, ensure_indexes=True):
     with tempfile.NamedTemporaryFile() as content:
          content.write(resp.content)
          content.seek(0)
-         df = pd.read_excel(content.name)
+         df = pd.read_csv(content.name, sep='\t')
+         print(df.describe())
 
     fname = "{}/asx_isin/isin.{}.csv".format(config.get('data_root'), datetime.now().strftime('%Y-%m-%d'))
-    out_df = None
+    all_records = []
     n = 0
-    for row in df[4:].itertuples(): # TODO FIXME...first four rows are rubbish - but maybe need to be a bit more flexible
+    for row in df[4:].itertuples():
+        # NB: first four rows are rubbish so we skip them during save...
         row_index, asx_code, company_name, security_name, isin_code = row
         asx_code = str(asx_code) # some ASX codes are all integers which we dont want treated as int
         assert len(asx_code) >= 3
@@ -72,12 +74,10 @@ def update_isin(db, config, ensure_indexes=True):
         assert len(security_name) > 0
         d = { 'asx_code': asx_code, 'company_name': company_name, 'security_name': security_name,
               'asx_isin_code': isin_code, 'last_updated': datetime.utcnow() }
-        if out_df is None:
-            out_df = pd.DataFrame(columns=d.keys())
-        out_df = out_df.append(d)
+        all_records.append(d)
         db.asx_isin.find_one_and_update({ 'asx_isin_code': isin_code, 'asx_code': asx_code }, { "$set": d }, upsert=True)
         n += 1
-
+    out_df = pd.DataFrame.from_records(all_records)
     out_df.to_csv(fname, sep='\t')
     print("Saved {} securities to {} for validation.".format(n, fname))
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
         stocks_to_fetch = available_stocks(db)
         if a.want_prices:
             print("**** UPDATING PRICES")
-            if a.date: 
+            if a.date:
                import re
                pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
                assert pattern.match(a.date)
