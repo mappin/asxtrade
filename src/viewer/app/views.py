@@ -342,7 +342,7 @@ def analyse_sector(sector_name):
         all_quotes.append({ 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged })
 
     sector_df = pd.DataFrame.from_records(all_quotes)
-    print(sector_df)
+    #print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
     return sector_df
 
@@ -355,16 +355,18 @@ def show_stock(request, stock=None):
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    df = as_dataframe(quotes)
-   print(df['last_price'])
+   #print(df['last_price'])
    assert len(df) > 0
    fig = make_rsi_plot(stock, df)
    rsi_data = plot_as_base64(fig)
+   plt.close(fig)
 
    # show sector performance over past 3 months
    sector_df = analyse_sector(company_details.sector_name)
    #print(sector_df)
    fig = make_sector_momentum_plot(sector_df)
    sector_b64 = plot_as_base64(fig)
+   plt.close(fig)
 
    # populate template and render HTML page with context
    context = {
@@ -426,9 +428,10 @@ def market_sentiment(request):
     all_data_series = analyse_market(start_date)
     fig = make_market_sentiment_plot(all_data_series)
     sentiment_data = plot_as_base64(fig)
+    plt.close(fig)
     top10 = { series.name: series.nlargest(n=10) for series in all_data_series }
     bottom10 = { series.name: series.nsmallest(n=10) for series in all_data_series }
-    print(top10)
+    #print(top10)
     context = {
        'sentiment_data': sentiment_data.decode('utf-8'),
        'n_days': len(all_data_series),
