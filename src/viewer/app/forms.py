@@ -20,3 +20,7 @@ class SectorSearchForm(forms.Form):
 class DividendSearchForm(forms.Form):
     min_yield = forms.FloatField(required=False, min_value=0.0)
     max_yield = forms.FloatField(required=False, min_value=0.0, max_value=1000.0)
+
+class CompanySearchForm(forms.Form):
+    name = forms.CharField(required=False)
+    activity = forms.CharField(required=False)

@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
 from app.models import Quotation, Security, CompanyDetails
-from app.forms import SectorSearchForm, DividendSearchForm
+from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -98,13 +98,16 @@ class DividendYieldSearch(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, 
         context['most_recent_date'] = self.as_at_date
         return super().render_to_response(context)
 
+    def latest_quotation_date(self):
+        all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+                                     key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+        return all_available_dates[-1]
+
     def get_queryset(self, **kwargs):
        if kwargs == {}:
            return Quotation.objects.none()
 
-       all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
-                                    key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
-       self.as_at_date = all_available_dates[-1]
+       self.as_at_date = self.latest_quotation_date()
        min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
        max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
@@ -114,6 +117,33 @@ class DividendYieldSearch(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, 
        return results
 
 dividend_search = DividendYieldSearch.as_view()
+
+
+class CompanySearch(DividendYieldSearch):
+    form_class = CompanySearchForm
+    action_url = "/search/by-company"
+
+    def get_queryset(self, **kwargs):
+        if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
+            return Quotation.objects.none()
+
+        self.as_at_date = self.latest_quotation_date()
+        matching_companies = set()
+        wanted_name = kwargs.get('name', '')
+        wanted_activity = kwargs.get('activity', '')
+        if len(wanted_name) > 0:
+            matching_companies.update([hit.asx_code for hit in
+                                       CompanyDetails.objects.filter(name_full__icontains=wanted_name)])
+        if len(wanted_activity) > 0:
+            matching_companies.update([hit.asx_code for hit in \
+                                       CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity)])
+        print("Showing results for {} companies".format(len(matching_companies)))
+        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
+                                   .filter(asx_code__in=matching_companies) \
+                                   .order_by(*self.ordering)
+        return results
+
+company_search = CompanySearch.as_view()
 
 def all_stocks(request):
    # NB: dbfield is a str NOT date so order_by is just to get distinct working desirably
