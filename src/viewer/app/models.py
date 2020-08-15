@@ -1,4 +1,5 @@
 import django.db.models as model
+from django.conf import settings
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 
@@ -128,7 +129,19 @@ class CompanyDetails(model.Model):
     web_address = model.TextField()
 
     objects = DjongoManager()
-    
+
     class Meta:
         managed = False
         db_table = "asx_company_details"
+
+class Watchlist(model.Model):
+    # record stocks of interest to the user
+    user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)
+    asx_code = model.TextField()
+    when = model.DateTimeField(auto_now_add=True)
+
+    objects = DjongoManager()
+
+    class Meta:
+        managed = True # viewer application is responsible NOT asxtrade.py
+        db_table = "user_watchlist"

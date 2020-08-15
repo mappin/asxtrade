@@ -1,3 +1,4 @@
+{% load static %}
 {% block stock_list %}
 <p>Prices current as at {{ most_recent_date }}.
 {% if sector %}
@@ -18,7 +19,15 @@
    </tr>
 {% for stock in stocks %}
    <tr class="small" style="margin-bottom: 5px">
-      <td><a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a></td>
+      <td>
+         <a href="/watchlist/{{ stock.asx_code }}?next={{ request.path }}">
+         {% if stock.asx_code in watched %}
+             <img src="{% static "star.png" %}" width="12" />
+         {% else %}
+             <img src="{% static "empty-star.png" %}" width="12" />
+         {% endif %}
+         </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
+      </td>
       <td>{{ stock.annual_dividend_yield |floatformat }}</td>
       <td>{{ stock.last_price }}</td>
       <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
