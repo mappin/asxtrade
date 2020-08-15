@@ -57,7 +57,7 @@ class SearchMixin:
 
 def user_watchlist(user):
     watch_list = set([hit.asx_code for hit in Watchlist.objects.filter(user=user)])
-    print("Found {} stocks in user watchlist")
+    print("Found {} stocks in user watchlist".format(len(watch_list)))
     return watch_list
 
 def latest_quotation_date():
@@ -497,7 +497,7 @@ def show_watched(request):
     context = {
          "most_recent_date": as_at,
          "stocks": results,
-         "title": "Stocks present on your watchlist",
+         "title": "Stocks you are watching",
          "watched": user_watchlist(request.user)
     }
     return render(request, 'all_stocks.html', context=context)
