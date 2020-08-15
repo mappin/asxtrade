@@ -3,8 +3,9 @@ from django.forms.models import model_to_dict
 from django.views.generic import FormView, TemplateView
 from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
-from app.models import Quotation, Security, CompanyDetails
+from app.models import Quotation, Security, CompanyDetails, Watchlist
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
@@ -54,7 +55,18 @@ class SearchMixin:
        assert form.is_valid()
        return self.update_form(form.cleaned_data)
 
-class SectorSearchView(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
+def user_watchlist(user):
+    watch_list = set([hit.asx_code for hit in Watchlist.objects.filter(user=user)])
+    print("Found {} stocks in user watchlist")
+    return watch_list
+
+def latest_quotation_date():
+    all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+                                 key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+    return all_available_dates[-1]
+
+
+class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = SectorSearchForm
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-sector'
@@ -63,9 +75,12 @@ class SectorSearchView(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, Mul
     as_at_date = None
 
     def render_to_response(self, context):
-        context['stocks'] = self.object_list
-        context['sector'] = self.sector_name
-        context['most_recent_date'] = self.as_at_date
+        context.update({
+            'stocks': self.object_list,
+            'sector': self.sector_name,
+            'most_recent_date': self.as_at_date,
+            'watched': user_watchlist(self.request.user)
+        })
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
@@ -86,7 +101,7 @@ class SectorSearchView(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, Mul
 
 sector_search = SectorSearchView.as_view()
 
-class DividendYieldSearch(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
+class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = DividendSearchForm
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-yield'
@@ -94,20 +109,18 @@ class DividendYieldSearch(LoginRequiredMixin, SearchMixin, MultipleObjectMixin, 
     as_at_date = None
 
     def render_to_response(self, context):
-        context['stocks'] = self.object_list
-        context['most_recent_date'] = self.as_at_date
+        context.update({
+           'stocks': self.object_list,
+           'most_recent_date': self.as_at_date,
+           'watched': user_watchlist(self.request.user)
+        })
         return super().render_to_response(context)
-
-    def latest_quotation_date(self):
-        all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
-                                     key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
-        return all_available_dates[-1]
 
     def get_queryset(self, **kwargs):
        if kwargs == {}:
            return Quotation.objects.none()
 
-       self.as_at_date = self.latest_quotation_date()
+       self.as_at_date = latest_quotation_date()
        min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
        max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
@@ -127,7 +140,7 @@ class CompanySearch(DividendYieldSearch):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
             return Quotation.objects.none()
 
-        self.as_at_date = self.latest_quotation_date()
+        self.as_at_date = latest_quotation_date()
         matching_companies = set()
         wanted_name = kwargs.get('name', '')
         wanted_activity = kwargs.get('activity', '')
@@ -157,7 +170,8 @@ def all_stocks(request):
    assert qs is not None
    context = {
        "most_recent_date": ymd,
-       "stocks": qs
+       "stocks": qs,
+       "watched": user_watchlist(request.user)
    }
    return render(request, "all_stocks.html", context=context)
 
@@ -470,3 +484,33 @@ def market_sentiment(request):
        'worst_ten': bottom10,
     }
     return render(request, 'market_sentiment_view.html', context=context)
+
+@login_required
+def show_watched(request):
+    matching_companies = user_watchlist(request.user)
+
+    as_at = latest_quotation_date()
+    print("Showing results for {} companies".format(len(matching_companies)))
+    results = Quotation.objects.filter(fetch_date=as_at) \
+                               .filter(asx_code__in=matching_companies) \
+                               .order_by('asx_code')
+    context = {
+         "most_recent_date": as_at,
+         "stocks": results,
+         "title": "Stocks present on your watchlist",
+         "watched": user_watchlist(request.user)
+    }
+    return render(request, 'all_stocks.html', context=context)
+
+@login_required
+def toggle_watched(request, stock=None):
+    if stock is None:
+        return
+    assert isinstance(stock, str) and len(stock) >= 3
+    current_watchlist = user_watchlist(request.user)
+    if stock in current_watchlist: # remove from watchlist?
+        Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
+    else:
+        w = Watchlist(user=request.user, asx_code=stock)
+        w.save()
+    return HttpResponseRedirect(request.GET.get('next', '/'))

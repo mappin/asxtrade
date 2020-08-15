@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from app.views import show_stock, all_stocks, market_sentiment, sector_search, dividend_search, company_search
+from app.views import *
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,5 +24,7 @@ urlpatterns = [
     path('search/by-yield', dividend_search),
     path('search/by-company', company_search),
     path('show/<str:stock>', show_stock, name='show'),
+    path('watched', show_watched),
+    path('watchlist/<str:stock>', toggle_watched),
     path('stats/market-sentiment', market_sentiment)
 ]
