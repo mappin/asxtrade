@@ -2,6 +2,8 @@ import django.db.models as model
 from django.conf import settings
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
+from pylru import lrudecorator
+from datetime import datetime
 
 class Quotation(model.Model):
     _id = ObjectIdField()
@@ -145,3 +147,61 @@ class Watchlist(model.Model):
     class Meta:
         managed = True # viewer application is responsible NOT asxtrade.py
         db_table = "user_watchlist"
+
+def user_watchlist(user):
+    watch_list = set([hit.asx_code for hit in Watchlist.objects.filter(user=user)])
+    print("Found {} stocks in user watchlist".format(len(watch_list)))
+    return watch_list
+
+def latest_quotation_date():
+    all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+                                 key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+    return all_available_dates[-1]
+
+def latest(stock):
+    latest_date = latest_quotation_date()
+    obj = Quotation.objects.get(asx_code=stock, fetch_date=latest_date)
+    return (obj.last_price, latest_date)
+
+def latest_price(stock):
+    price, as_at = latest(stock)
+    return price
+
+class VirtualPurchase(model.Model):
+    user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)
+    asx_code = model.TextField()
+    buy_date = model.DateField()
+    price_at_buy_date = model.FloatField()
+    amount = model.FloatField() # dollar value purchased (assumes no fees)
+    n = model.IntegerField()    # number of shares purchased at buy_date (rounded down to nearest whole share)
+
+    objects = DjongoManager()
+
+    def current_price(self):
+        assert self.n > 0
+        p = latest_price(self.asx_code)
+        buy_price = self.price_at_buy_date
+        if buy_price > 0:
+            pct_move = (p / buy_price) * 100.0 - 100.0
+        else:
+            pct_move = 0.0
+        return (self.n * p, pct_move)
+
+    def __str__(self):
+        cur_price, pct_move = self.current_price()
+        return "If purchased on {}: ${} ({} shares) are now worth ${:.2f} ({:.2f}%)".format(self.buy_date, self.amount, self.n, cur_price, pct_move)
+
+    class Meta:
+        managed = True                # viewer application
+        db_table = "virtual_purchase"
+
+def user_purchases(user):
+    assert user is not None
+    purchases = {}
+    for purchase in VirtualPurchase.objects.filter(user=user):
+        code = purchase.asx_code
+        if not code in purchases:
+            purchases[code] = []
+        purchases[code].append(purchase)
+    print("Found virtual purchases for {} stocks".format(len(purchases)))
+    return purchases

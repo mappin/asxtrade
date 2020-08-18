@@ -26,7 +26,9 @@
          {% else %}
              <img src="{% static "empty-star.png" %}" width="12" />
          {% endif %}
-         </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
+       </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
+             <img src="{% static "money.png" %}" width="12" />
+       </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
       </td>
       <td>{{ stock.annual_dividend_yield |floatformat }}</td>
       <td>{{ stock.last_price }}</td>
@@ -37,6 +39,18 @@
       <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
       <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
    </tr>
+   {% if 'virtual_purchases' in stock %}
+       {% for purchase in stock.virtual_purchases %}
+       <tr>
+          <td></td>
+          <td colspan="6" class="small">{{ purchase }}</td>
+          <td><a href="/delete/{{ purchase.buy_date|date:"Y-m-d"}}/{{ purchase.asx_code }}?next={{ request.path }}">
+                  <img src="{% static "trashcan.png" %}" width="12" />
+              </a>
+          </td>
+       </tr>
+       {% endfor %}
+   {% endif %}
 {% endfor %}
 </table>
 

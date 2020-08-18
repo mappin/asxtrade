@@ -26,5 +26,7 @@ urlpatterns = [
     path('show/<str:stock>', show_stock, name='show'),
     path('watched', show_watched),
     path('watchlist/<str:stock>', toggle_watched),
+    path('purchase/<str:stock>', buy_virtual_stock),
+    path('delete/<str:buy_date>/<str:stock>', delete_virtual_stock),
     path('stats/market-sentiment', market_sentiment)
 ]
