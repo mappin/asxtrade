@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
-from app.models import Quotation, Security, CompanyDetails, Watchlist
+from app.models import *
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
@@ -54,17 +54,6 @@ class SearchMixin:
     def form_valid(self, form):
        assert form.is_valid()
        return self.update_form(form.cleaned_data)
-
-def user_watchlist(user):
-    watch_list = set([hit.asx_code for hit in Watchlist.objects.filter(user=user)])
-    print("Found {} stocks in user watchlist".format(len(watch_list)))
-    return watch_list
-
-def latest_quotation_date():
-    all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
-                                 key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
-    return all_available_dates[-1]
-
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = SectorSearchForm
@@ -166,7 +155,10 @@ def all_stocks(request):
    assert len(sorted_all_dates) > 0
    ymd = sorted_all_dates[-1]
    assert isinstance(ymd, str) and len(ymd) > 8
-   qs = Quotation.objects.order_by('-annual_dividend_yield', '-last_price', '-volume').filter(fetch_date=ymd).exclude(asx_code__isnull=True).exclude(last_price__isnull=True)
+   qs = Quotation.objects.order_by('-annual_dividend_yield', '-last_price', '-volume') \
+                         .filter(fetch_date=ymd) \
+                         .exclude(asx_code__isnull=True) \
+                         .exclude(last_price__isnull=True)
    assert qs is not None
    context = {
        "most_recent_date": ymd,
@@ -491,26 +483,78 @@ def show_watched(request):
 
     as_at = latest_quotation_date()
     print("Showing results for {} companies".format(len(matching_companies)))
-    results = Quotation.objects.filter(fetch_date=as_at) \
+    # here we use a dict to give to the template: so we can augment user_purchases
+    # into the template ie. not just model objects given to the template. Doing
+    # it this way makes it easier to display purchases in the template
+    results = { hit.asx_code: model_to_dict(hit) for hit in Quotation.objects.filter(fetch_date=as_at) \
                                .filter(asx_code__in=matching_companies) \
-                               .order_by('asx_code')
+                               .order_by('asx_code') }
+    purchases = user_purchases(request.user)
+    for key, stock in results.items():
+        if key in purchases:
+            assert isinstance(stock, dict)
+            stock['virtual_purchases'] = purchases[key]
+    #print(results.values())
     context = {
          "most_recent_date": as_at,
-         "stocks": results,
+         "stocks": results.values(),
          "title": "Stocks you are watching",
-         "watched": user_watchlist(request.user)
+         "watched": user_watchlist(request.user),
     }
     return render(request, 'all_stocks.html', context=context)
 
+def validate_stock(stock):
+    assert stock is not None
+    assert isinstance(stock, str) and len(stock) >= 3
+    assert re.match('^\w+$', stock)
+
+def validate_date(d):
+    assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
+    assert re.match('^\d{4}-\d{2}-\d{2}$', d)
+
+def redirect_to_next(request, fallback_next='/'):
+    # redirect will trigger a redraw which will show the purchase since next will be the same page
+    assert request is not None
+    if request.GET is not None:
+        return HttpResponseRedirect(request.GET.get('next', fallback_next))
+    else:
+        return HttpResponseRedirect(fallback_next)
+
 @login_required
 def toggle_watched(request, stock=None):
-    if stock is None:
-        return
-    assert isinstance(stock, str) and len(stock) >= 3
+    validate_stock(stock)
     current_watchlist = user_watchlist(request.user)
     if stock in current_watchlist: # remove from watchlist?
         Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
     else:
         w = Watchlist(user=request.user, asx_code=stock)
         w.save()
-    return HttpResponseRedirect(request.GET.get('next', '/'))
+    return redirect_to_next(request)
+
+@login_required
+def buy_virtual_stock(request, stock=None, amount=5000.0):
+    validate_stock(stock)
+    assert amount > 0.0
+    cur_price, latest_date = latest(stock)
+    if cur_price >= 1e-6:
+        vp = VirtualPurchase(asx_code=stock, user=request.user,
+                             buy_date=latest_date, price_at_buy_date=cur_price,
+                             amount=amount, n=int(amount / cur_price))
+        vp.save()
+        print("Purchased {} as at {}: {} shares at {} each".format(vp.asx_code, latest_date, vp.n, vp.price_at_buy_date))
+    else:
+        print("WARNING: cant buy {} as its price is zero".format(stock))
+        # do nothing in this case...
+        pass
+    return redirect_to_next(request)
+
+@login_required
+def delete_virtual_stock(request, buy_date=None, stock=None):
+    validate_stock(stock)
+    validate_date(buy_date)
+    print(buy_date)
+    print(stock)
+    stocks_to_delete = VirtualPurchase.objects.filter(buy_date=buy_date, asx_code=stock)
+    print("Selected {} stocks to delete".format(len(stocks_to_delete)))
+    stocks_to_delete.delete()
+    return redirect_to_next(request)
