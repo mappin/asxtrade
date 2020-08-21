@@ -330,15 +330,12 @@ def make_rsi_plot(stock_code, dataframe):
     return plt.gcf()
 
 def as_dataframe(iterable):
-    df = None
-    headers = None
-    for idx, rec in enumerate(iterable):
+    rows = []
+    for rec in iterable:
         d = model_to_dict(rec)
-        if df is None:
-            headers = d.keys()
-            df = pd.DataFrame(columns=headers)
-        df = df.append(d, ignore_index=True)
-    if 'fetch_date' in headers:
+        rows.append(d)
+    df = pd.DataFrame.from_records(rows)
+    if 'fetch_date' in df.columns:
         df['fetch_date'] = pd.to_datetime(df['fetch_date'])
         df = df.sort_values(by='fetch_date')
     return df
@@ -402,7 +399,8 @@ def show_stock(request, stock=None):
        raise Http404("No company details for {}".format(stock))
    df = as_dataframe(quotes)
    #print(df['last_price'])
-   assert len(df) > 0
+   if len(df) == 0:
+       raise Http404("No price quotes for {}".format(stock))
    fig = make_rsi_plot(stock, df)
    rsi_data = plot_as_base64(fig)
    plt.close(fig)
