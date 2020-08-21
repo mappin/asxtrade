@@ -134,8 +134,12 @@ class CompanySearch(DividendYieldSearch):
         wanted_name = kwargs.get('name', '')
         wanted_activity = kwargs.get('activity', '')
         if len(wanted_name) > 0:
+            # match by company name first...
             matching_companies.update([hit.asx_code for hit in
                                        CompanyDetails.objects.filter(name_full__icontains=wanted_name)])
+            # but also matching codes
+            matching_companies.update([hit.asx_code for hit in
+                                       CompanyDetails.objects.filter(asx_code__icontains=wanted_name)])
         if len(wanted_activity) > 0:
             matching_companies.update([hit.asx_code for hit in \
                                        CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity)])
