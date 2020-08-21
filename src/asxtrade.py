@@ -13,6 +13,7 @@ import tempfile
 import time
 import pandas as pd
 import os
+import re
 
 retry_strategy = Retry(
     total=10,
@@ -137,10 +138,11 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
     print("Saved {} stock codes with prices to {}".format(len(df), fname))
 
 def available_stocks(db):
-    ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': 'ORDINARY FULLY PAID' })
+    # only variants which include ORDINARY FULLY PAID/STAPLED SECURITIES eg. SYD
+    ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': re.compile('.*ORDINARY.*') })
                                               if db.asx_blacklist.find_one({'asx_code': r.get('asx_code') }) is None])
     print("Found {} available stocks on ASX...".format(len(ret)))
-    return ret
+    return sorted(ret)
 
 def update_company_details(db, available_stocks, config, ensure_indexes=False):
     assert len(available_stocks) > 1000
