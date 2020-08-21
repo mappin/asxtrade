@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.forms.models import model_to_dict
 from django.views.generic import FormView, TemplateView
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
@@ -151,6 +151,7 @@ class CompanySearch(DividendYieldSearch):
 
 company_search = CompanySearch.as_view()
 
+@login_required
 def all_stocks(request):
    # NB: dbfield is a str NOT date so order_by is just to get distinct working desirably
    all_dates = Quotation.objects.order_by('fetch_date').values_list('fetch_date', flat=True).distinct()
@@ -180,8 +181,10 @@ def relative_strength(prices, n=14):
     deltas = np.diff(prices)
     seed = deltas[:n+1]
     up = seed[seed >= 0].sum()/n
-    down = -seed[seed < 0].sum()/n
-    rs = up/down
+    down = -seed[seed < 0].sum() / n
+    if abs(down) < 1e-6 :
+        raise Http404("Relative strength not available due to no prices")
+    rs = up / down
     rsi = np.zeros_like(prices)
     rsi[:n] = 100. - 100./(1. + rs)
 
@@ -287,6 +290,7 @@ def make_rsi_plot(stock_code, dataframe):
     leg.get_frame().set_alpha(0.5)
 
     volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
+    print(volume)
     vmax = max(volume)
     poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
@@ -391,9 +395,11 @@ def show_stock(request, stock=None):
    assert stock_regex.match(stock)
 
    # make stock momentum plot
-   quotes = Quotation.objects.filter(asx_code=stock)
+   quotes = Quotation.objects.filter(asx_code=stock).exclude(last_price__isnull=True)
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
+   if company_details is None:
+       raise Http404("No company details for {}".format(stock))
    df = as_dataframe(quotes)
    #print(df['last_price'])
    assert len(df) > 0
