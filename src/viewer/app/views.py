@@ -290,7 +290,7 @@ def make_rsi_plot(stock_code, dataframe):
     leg.get_frame().set_alpha(0.5)
 
     volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
-    print(volume)
+    #print(volume)
     vmax = max(volume)
     poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
@@ -348,6 +348,22 @@ def plot_as_base64(fig):
     b64data = base64.b64encode(buf.read())
     return b64data
 
+def assess_stocks_in_sector(day, cum_price_change, start_prices, threshold=0.05): # 5% threshold is considered momentum
+    assert len(day) > 0
+    assert isinstance(cum_price_change, dict)
+    assert isinstance(start_prices, dict)
+
+    n_pos = n_neg = n_unchanged = 0
+    for code, cum_change in cum_price_change.items():
+        price_threshold = threshold * start_prices[code]
+        if cum_change > price_threshold:
+            n_pos += 1
+        elif cum_change < 0 and abs(cum_change) > price_threshold:
+            n_neg += 1
+        else:
+            n_unchanged += 1
+    return { 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged }
+
 @lrudecorator(10)
 def analyse_sector(sector_name):
     assert isinstance(sector_name, str) and len(sector_name) > 0
@@ -366,26 +382,31 @@ def analyse_sector(sector_name):
                                      filter(asx_code__in=sector_stocks). \
                                      filter(change_price__isnull=False)
 
-        n_pos = n_neg = n_unchanged = 0
         for quote in daily_sector_quotes:
             code = quote.asx_code
             if not code in start_prices:
                 start_prices[code] = quote.last_price
                 cum_price_change[code] = 0.0
             cum_price_change[code] += quote.change_price
-            c = cum_price_change[code]
-            if c > 0.1 * start_prices[code]:
-                n_pos += 1
-            elif c < 0 and abs(c) > 0.1 * start_prices[code]:
-                n_neg += 1
-            else:
-                n_unchanged += 1
-        all_quotes.append({ 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged })
+
+        all_quotes.append(assess_stocks_in_sector(day, cum_price_change, start_prices))
 
     sector_df = pd.DataFrame.from_records(all_quotes)
     #print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
     return sector_df
+
+def update_image_cache(tag, base64_data, n_days=7): # cache for a week by default
+    assert base64_data is not None
+    assert len(tag) > 0
+    now = datetime.utcnow()
+    defaults = {
+        "base64": base64_data,
+        "tag": tag,
+        "last_updated": now,
+        "valid_until": now + timedelta(days=n_days),
+    }
+    ImageCache.objects.update_or_create(tag=tag, defaults=defaults)
 
 def show_stock(request, stock=None):
    stock_regex = re.compile('^\w+$')
@@ -406,11 +427,17 @@ def show_stock(request, stock=None):
    plt.close(fig)
 
    # show sector performance over past 3 months
-   sector_df = analyse_sector(company_details.sector_name)
-   #print(sector_df)
-   fig = make_sector_momentum_plot(sector_df)
-   sector_b64 = plot_as_base64(fig)
-   plt.close(fig)
+   tag = "sector_momentum-{}".format(company_details.sector_name)
+   cache_hit = ImageCache.objects.filter(tag=tag).first()
+   if cache_hit is None or cache_hit.is_outdated():
+       sector_df = analyse_sector(company_details.sector_name)
+       #print(sector_df)
+       fig = make_sector_momentum_plot(sector_df)
+       sector_b64 = plot_as_base64(fig).decode('utf-8')
+       plt.close(fig)
+       update_image_cache(tag, sector_b64)
+   else:
+       sector_b64 = cache_hit.base64
 
    # populate template and render HTML page with context
    context = {
@@ -418,7 +445,7 @@ def show_stock(request, stock=None):
        'asx_code': stock,
        'securities': securities,
        'cd': company_details,
-       'sector_past3months_data': sector_b64.decode('utf-8'),
+       'sector_past3months_data': sector_b64,
    }
    return render(request, "stock_view.html", context=context)
 
