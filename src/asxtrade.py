@@ -116,7 +116,7 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
             print("Already got data for ASX {}".format(asx_code))
             continue
         try:
-            resp = fetcher.get(url)
+            resp = fetcher.get(url, timeout=(30,30))
             d = json.loads(resp.content.decode())
             d.update({ 'fetch_date': fetch_date })
             for key in ['last_trade_date', 'year_high_date', 'year_low_date']:
@@ -137,10 +137,18 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
     validate_prices(df)
     print("Saved {} stock codes with prices to {}".format(len(df), fname))
 
-def available_stocks(db):
+def available_stocks(db, config):
+    assert config is not None
     # only variants which include ORDINARY FULLY PAID/STAPLED SECURITIES eg. SYD
     ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': re.compile('.*ORDINARY.*') })
                                               if db.asx_blacklist.find_one({'asx_code': r.get('asx_code') }) is None])
+    exclude_stocks_without_details = config.get('exclude_stocks_without_details', False)
+    exclude_stocks_with_zero_volume = config.get('exclude_zero_volume_stocks', False)
+    if exclude_stocks_without_details: # will exclude if True nearly 1000 securities, so use with care
+        details_stocks = set(db.asx_company_details.distinct('asx_code'))
+        print("Eliminating securities without company details: found {} to check".format(len(ret)))
+        ret = ret.intersection(details_stocks)
+        # FALLTHRU...
     print("Found {} available stocks on ASX...".format(len(ret)))
     return sorted(ret)
 
@@ -163,7 +171,7 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
             if datetime.now(timezone.utc) < dt + timedelta(days=7):  # existing record less than a week old? if so, ignore it
                 print("Ignoring {} as record is less than a week old.".format(asx_code))
                 continue
-        resp = fetcher.get(url)
+        resp = fetcher.get(url, timeout=(30,30))
         try:
             d = resp.json()
             d.update({ 'asx_code': asx_code })
@@ -208,7 +216,7 @@ if __name__ == "__main__":
         update_isin(db, config, ensure_indexes=True)
 
     if any([a.want_prices, a.want_details]):
-        stocks_to_fetch = available_stocks(db)
+        stocks_to_fetch = available_stocks(db, config)
         if a.want_prices:
             print("**** UPDATING PRICES")
             if a.date:
