@@ -21,7 +21,6 @@ from pylru import lrudecorator
 
 
 class SearchMixin:
-    paginate_by = 50
     model = Quotation
     object_list = Quotation.objects.none()
 
@@ -59,6 +58,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     form_class = SectorSearchForm
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-sector'
+    paginate_by = 50
     ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
     sector_name = None
     as_at_date = None
@@ -82,15 +82,18 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        wanted_companies = CompanyDetails.objects.filter(sector_name=self.sector_name)
        wanted_stocks = set([wc.asx_code for wc in wanted_companies])
 
-       if 'best10' in kwargs or 'worst10' in kwargs:
+       if any(['best10' in kwargs, 'worst10' in kwargs]):
            sector_df, b10, w10 = analyse_sector(self.sector_name)
            wanted = set()
-           print(b10)
+           restricted = False
            if kwargs.get('best10', False):
                wanted = wanted.union(b10.index)
+               restricted = True
            if kwargs.get('worst10', False):
                wanted = wanted.union(w10.index)
-           wanted_stocks = wanted_stocks.intersection(wanted)
+               restricted = True
+           if restricted:
+               wanted_stocks = wanted_stocks.intersection(wanted)
            # FALLTHRU...
        self.as_at_date = all_available_dates[-1]
        print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
@@ -105,6 +108,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     form_class = DividendSearchForm
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-yield'
+    paginate_by = 50
     ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
     as_at_date = None
 
@@ -135,6 +139,7 @@ dividend_search = DividendYieldSearch.as_view()
 class CompanySearch(DividendYieldSearch):
     form_class = CompanySearchForm
     action_url = "/search/by-company"
+    paginate_by = 50
 
     def get_queryset(self, **kwargs):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
@@ -171,10 +176,11 @@ def all_stocks(request):
    assert len(sorted_all_dates) > 0
    ymd = sorted_all_dates[-1]
    assert isinstance(ymd, str) and len(ymd) > 8
-   qs = Quotation.objects.order_by('-annual_dividend_yield', '-last_price', '-volume') \
-                         .filter(fetch_date=ymd) \
+   qs = Quotation.objects.filter(fetch_date=ymd) \
                          .exclude(asx_code__isnull=True) \
-                         .exclude(last_price__isnull=True)
+                         .exclude(last_price__isnull=True) \
+                         .exclude(volume=0) \
+                         .order_by('-annual_dividend_yield', '-last_price', '-volume')
    assert qs is not None
    context = {
        "most_recent_date": ymd,
@@ -615,8 +621,7 @@ def buy_virtual_stock(request, stock=None, amount=5000.0):
 def delete_virtual_stock(request, buy_date=None, stock=None):
     validate_stock(stock)
     validate_date(buy_date)
-    print(buy_date)
-    print(stock)
+    
     stocks_to_delete = VirtualPurchase.objects.filter(buy_date=buy_date, asx_code=stock)
     print("Selected {} stocks to delete".format(len(stocks_to_delete)))
     stocks_to_delete.delete()
