@@ -44,8 +44,9 @@ class Quotation(model.Model):
 
     def percent_change(self):
         # since the ASX uses a string field, we auto-convert to float on the fly
-        pc = float(self.change_in_percent.strip('%'))
-        return pc
+        pc = self.change_in_percent.strip('%')
+        pc = pc.replace(',', '')
+        return float(pc)
 
     class Meta:
        db_table = 'asx_prices'
