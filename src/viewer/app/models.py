@@ -195,6 +195,23 @@ class VirtualPurchase(model.Model):
         managed = True                # viewer application
         db_table = "virtual_purchase"
 
+class ImageCache(model.Model):
+    # some images in viewer app are expensive to compute, so we cache them
+    # and if less than a week old, use them rather than recompute. The views
+    # automatically check the cache for expensive images eg. sector performance plot
+    _id = ObjectIdField()
+    base64 = model.TextField(max_length=400 * 1024, null=False, blank=False)
+    tag = model.TextField(max_length=100, null=False, blank=False) # used to identify if image is in ImageCache
+    last_updated = model.DateTimeField(auto_now_add=True)
+    valid_until = model.DateTimeField(auto_now_add=True) # image is cached until is_outdated(), up to caller to set this value correctly
+
+    def is_outdated(self):
+        return self.last_updated > self.valid_until
+
+    class Meta:
+        managed = True
+        db_table = "image_cache"
+
 def user_purchases(user):
     assert user is not None
     purchases = {}
