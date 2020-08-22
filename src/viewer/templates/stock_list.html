@@ -17,41 +17,61 @@
       <th>Year high price</th>
       <th>Year low price</th>
    </tr>
-{% for stock in stocks %}
-   <tr class="small" style="margin-bottom: 5px">
-      <td>
-         <a href="/watchlist/{{ stock.asx_code }}?next={{ request.path }}">
-         {% if stock.asx_code in watched %}
-             <img src="{% static "star.png" %}" width="12" />
-         {% else %}
-             <img src="{% static "empty-star.png" %}" width="12" />
-         {% endif %}
-       </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
-             <img src="{% static "money.png" %}" width="12" />
-       </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
-      </td>
-      <td>{{ stock.annual_dividend_yield |floatformat }}</td>
-      <td>{{ stock.last_price }}</td>
-      <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
-      <td align="right">{{ stock.volume }}&nbsp;&nbsp;</td>
-      <td align="right">{{ stock.eps|floatformat }}</td>
-      <td align="center">{{ stock.pe|floatformat }}</td>
-      <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
-      <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
-   </tr>
-   {% if 'virtual_purchases' in stock %}
-       {% for purchase in stock.virtual_purchases %}
-       <tr>
-          <td></td>
-          <td colspan="6" class="small">{{ purchase }}</td>
-          <td><a href="/delete/{{ purchase.buy_date|date:"Y-m-d"}}/{{ purchase.asx_code }}?next={{ request.path }}">
-                  <img src="{% static "trashcan.png" %}" width="12" />
-              </a>
+   {% for stock in page_obj %}
+       <tr class="small" style="margin-bottom: 5px">
+          <td>
+             <a href="/watchlist/{{ stock.asx_code }}?next={{ request.path }}">
+             {% if stock.asx_code in watched %}
+                 <img src="{% static "star.png" %}" width="12" />
+             {% else %}
+                 <img src="{% static "empty-star.png" %}" width="12" />
+             {% endif %}
+           </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
+                 <img src="{% static "money.png" %}" width="12" />
+           </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
           </td>
+          <td>{{ stock.annual_dividend_yield |floatformat }}</td>
+          <td>{{ stock.last_price }}</td>
+          <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
+          <td align="right">{{ stock.volume }}&nbsp;&nbsp;</td>
+          <td align="right">{{ stock.eps|floatformat }}</td>
+          <td align="center">{{ stock.pe|floatformat }}</td>
+          <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+          <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
        </tr>
-       {% endfor %}
-   {% endif %}
-{% endfor %}
+       {% if 'virtual_purchases' in stock %}
+           {% for purchase in stock.virtual_purchases %}
+           <tr>
+              <td></td>
+              <td colspan="6" class="small">{{ purchase }}</td>
+              <td><a href="/delete/{{ purchase.buy_date|date:"Y-m-d"}}/{{ purchase.asx_code }}?next={{ request.path }}">
+                      <img src="{% static "trashcan.png" %}" width="12" />
+                  </a>
+              </td>
+           </tr>
+           {% endfor %}
+       {% endif %}
+   {% endfor %}
 </table>
+
+{% if page_obj %}
+<div class="pagination">
+    <span class="step-links">
+        {% if page_obj.has_previous %}
+            <a href="?page=1">&laquo; first</a>
+            <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+        </span>
+
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+    </span>
+</div>
+{% endif %}
 
 {% endblock %}

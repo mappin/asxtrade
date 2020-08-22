@@ -1,9 +1,21 @@
 import django.db.models as model
 from django.conf import settings
+from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from pylru import lrudecorator
 from datetime import datetime
+import re
+import pandas as pd
+
+def validate_stock(stock):
+    assert stock is not None
+    assert isinstance(stock, str) and len(stock) >= 3
+    assert re.match('^\w+$', stock)
+
+def validate_date(d):
+    assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
+    assert re.match('^\d{4}-\d{2}-\d{2}$', d)
 
 class Quotation(model.Model):
     _id = ObjectIdField()
@@ -154,10 +166,14 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(watch_list)))
     return watch_list
 
-def latest_quotation_date():
-    all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
+def all_available_dates():
+    # use ANZ to quickly search the db by limiting the stocks searched
+    return sorted(Quotation.objects.mongo_distinct('fetch_date', { 'asx_code': 'ANZ' }),
                                  key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
-    return all_available_dates[-1]
+
+def latest_quotation_date():
+    d = all_available_dates()
+    return d[-1]
 
 def latest(stock):
     latest_date = latest_quotation_date()
@@ -223,3 +239,30 @@ def user_purchases(user):
         purchases[code].append(purchase)
     print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
+
+def quotes_as_at(date, companies):
+    """
+    Report quotes for the specified companies which are present for date (YYYY-mm-dd)
+    Results are a dict of dicts keyed by stock code with all ASX data as the value
+    """
+    assert len(date) >= 8
+    # here we use a dict to give to the template: so we can augment user_purchases
+    # into the template ie. not just model objects given to the template. Doing
+    # it this way makes it easier to display other items in the template by mutating the results after this call
+    results = { hit.asx_code: model_to_dict(hit) for hit in Quotation.objects.filter(fetch_date=date) \
+                               .filter(asx_code__in=companies) \
+                               .order_by('asx_code') }
+    assert isinstance(results, dict)
+    return results
+
+def as_dataframe(iterable):
+    """
+    Convert model instances to a pandas dataframe and return it. If 'fetch_date' is a column,
+    then it is automagically converted to a DateTime (and sorted by this date)
+    """
+    rows = [model_to_dict(rec) for rec in iterable]
+    df = pd.DataFrame.from_records(rows)
+    if 'fetch_date' in df.columns:
+        df['fetch_date'] = pd.to_datetime(df['fetch_date'])
+        df = df.sort_values(by='fetch_date')
+    return df
