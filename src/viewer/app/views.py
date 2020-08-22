@@ -172,52 +172,59 @@ def all_stocks(request):
    }
    return render(request, "all_stocks.html", context=context)
 
+def rs_ratio(up, down, issue_warning=False):
+    if abs(down) < 1e-50:
+        rs = 0.0
+        if issue_warning:
+            print("WARNING: no relative strength data - plot may be inaccurate")
+    else:
+        rs = up / down
+    rsi = 100. - 100./(1. + rs)
+    return (rs, rsi)
+
 def relative_strength(prices, n=14):
-    """
-    compute the n period relative strength indicator
-    http://stockcharts.com/school/doku.php?id=chart_school:glossary_r#relativestrengthindex
-    http://www.investopedia.com/terms/r/rsi.asp
-    """
-    deltas = np.diff(prices)
-    seed = deltas[:n+1]
-    up = seed[seed >= 0].sum()/n
-    down = -seed[seed < 0].sum() / n
-    if abs(down) < 1e-6 :
-        raise Http404("Relative strength not available due to no prices")
-    rs = up / down
-    rsi = np.zeros_like(prices)
-    rsi[:n] = 100. - 100./(1. + rs)
+    # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
+    assert n > 0
+    assert prices is not None and len(prices) >= n
 
-    for i in range(n, len(prices)):
-        delta = deltas[i - 1]  # cause the diff is 1 shorter
+    # Get the difference in price from previous step
+    delta = prices.diff()
 
-        if delta > 0:
-            upval = delta
-            downval = 0.
-        else:
-            upval = 0.
-            downval = -delta
+    # Get rid of the first row, which is NaN since it did not have a previous
+    # row to calculate the differences
+    delta = delta[1:]
 
-        up = (up*(n - 1) + upval)/n
-        down = (down*(n - 1) + downval)/n
+    # Make the positive gains (up) and negative gains (down) Series
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
 
-        rs = up/down
-        rsi[i] = 100. - 100./(1. + rs)
+    # Calculate the EWMA
+    roll_up1 = up.ewm(span=n).mean()
+    roll_down1 = down.abs().ewm(span=n).mean()
 
+    # Calculate the RSI based on EWMA
+    rs = roll_up1 / roll_down1
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    rsi.at[len(rsi)+1] = np.nan # ensure data series are the same length for matplotlib
+    assert len(rsi) == len(prices)
     return rsi
 
-def make_sector_momentum_plot(dataframe):
+def make_sector_momentum_plot(dataframe, sector_name):
+    assert len(sector_name) > 0
+    assert len(dataframe) > 0
+
     fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
     timeline = dataframe['date']
     # now do the plot
     for name, ax, linecolour, title in zip(['n_pos', 'n_neg', 'n_unchanged'],
                                            axes,
                                            ['darkgreen', 'red', 'grey'],
-                                           ['Stocks up over 5% in past 90 days', "Stocks down over 5% in past 90 days", "Remaining stocks"]):
+                                           ['{} stocks up >5%'.format(sector_name), "{} stocks down >5%".format(sector_name), "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
         ax.plot(timeline, dataframe[name].rolling(30).mean(), color=linecolour)
         ax.set_ylabel('', fontsize=8)
-        ax.set_title(name)
+        ax.set_title(title, fontsize=8)
 
         # Remove the automatic x-axis label from all but the bottom subplot
         if ax != axes[-1]:
@@ -246,7 +253,7 @@ def make_rsi_plot(stock_code, dataframe):
 
     # plot the relative strength indicator
     prices = pd.to_numeric(dataframe['last_price'], errors='coerce').to_numpy()
-    rsi = relative_strength(prices)
+    rsi = relative_strength(dataframe['last_price'])
     fillcolor = 'darkgoldenrod'
 
     timeline = dataframe.fetch_date
@@ -358,10 +365,10 @@ def assess_cumulative_change(day, cum_price_change, start_prices, threshold=0.05
 
     n_pos = n_neg = n_unchanged = 0
     for code, cum_change in cum_price_change.items():
-        price_threshold = threshold * start_prices[code]
-        if cum_change > price_threshold:
+        trigger = threshold * start_prices[code]
+        if cum_change > trigger:
             n_pos += 1
-        elif cum_change < 0 and abs(cum_change) > price_threshold:
+        elif cum_change < 0 and abs(cum_change) > trigger:
             n_neg += 1
         else:
             n_unchanged += 1
@@ -396,6 +403,7 @@ def analyse_sector(sector_name, initialisation_period_in_days=30):
 
         all_quotes.append(assess_cumulative_change(day, cum_price_change, start_prices))
 
+    #print(all_quotes[0])
     sector_df = pd.DataFrame.from_records(all_quotes[initialisation_period_in_days:]) # skip initialisation period
     #print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
@@ -436,7 +444,7 @@ def show_stock(request, stock=None):
    if cache_hit is None or cache_hit.is_outdated():
        sector_df = analyse_sector(company_details.sector_name)
        #print(sector_df)
-       fig = make_sector_momentum_plot(sector_df)
+       fig = make_sector_momentum_plot(sector_df, company_details.sector_name)
        sector_b64 = plot_as_base64(fig).decode('utf-8')
        plt.close(fig)
        update_image_cache(tag, sector_b64)
