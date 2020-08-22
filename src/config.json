@@ -8,7 +8,9 @@
        "host": "pi1",
        "port": 27017,
        "user": "rw",
-       "password": "$PASSWORD", 
+       "password": "$PASSWORD",
        "db": "asxtrade"
-   }
+   },
+   "exclude_stocks_without_details": false,
+   "exclude_zero_volume_stocks": false,
 }
