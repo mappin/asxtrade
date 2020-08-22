@@ -15,6 +15,8 @@ class SectorSearchForm(forms.Form):
        return results
 
     sector = forms.ChoiceField(choices=asx_sectors, required=True, validators=[is_not_blank])
+    best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")
+    worst10 = forms.BooleanField(required=False, label="Worst 10 performers (past 3 months)")
 
 
 class DividendSearchForm(forms.Form):

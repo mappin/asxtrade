@@ -80,7 +80,18 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        all_available_dates = sorted(Quotation.objects.mongo_distinct('fetch_date'),
                                     key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
        wanted_companies = CompanyDetails.objects.filter(sector_name=self.sector_name)
-       wanted_stocks = [wc.asx_code for wc in wanted_companies]
+       wanted_stocks = set([wc.asx_code for wc in wanted_companies])
+
+       if 'best10' in kwargs or 'worst10' in kwargs:
+           sector_df, b10, w10 = analyse_sector(self.sector_name)
+           wanted = set()
+           print(b10)
+           if kwargs.get('best10', False):
+               wanted = wanted.union(b10.index)
+           if kwargs.get('worst10', False):
+               wanted = wanted.union(w10.index)
+           wanted_stocks = wanted_stocks.intersection(wanted)
+           # FALLTHRU...
        self.as_at_date = all_available_dates[-1]
        print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
@@ -358,7 +369,7 @@ def plot_as_base64(fig):
     b64data = base64.b64encode(buf.read())
     return b64data
 
-def assess_cumulative_change(day, cum_price_change, start_prices, threshold=0.05): # 5% threshold is considered momentum
+def assess_cumulative_change(day, cum_price_change, start_prices, threshold=0.10): # 10% movement threshold to be considered momentum
     assert len(day) > 0
     assert isinstance(cum_price_change, dict)
     assert isinstance(start_prices, dict)
@@ -403,11 +414,16 @@ def analyse_sector(sector_name, initialisation_period_in_days=30):
 
         all_quotes.append(assess_cumulative_change(day, cum_price_change, start_prices))
 
+    print("Found {} stocks with cumulative changes (expected {})".format(len(cum_price_change), len(sector_stocks)))
+    pct_change = pd.Series(cum_price_change) / pd.Series(start_prices) * 100.0
+    best10_pct = pct_change.nlargest(10)
+    worst10_pct = pct_change.nsmallest(10)
+
     #print(all_quotes[0])
     sector_df = pd.DataFrame.from_records(all_quotes[initialisation_period_in_days:]) # skip initialisation period
     #print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
-    return sector_df
+    return (sector_df, best10_pct, worst10_pct)
 
 def update_image_cache(tag, base64_data, valid_days=7): # cache for a week by default
     assert base64_data is not None
@@ -442,7 +458,7 @@ def show_stock(request, stock=None):
    tag = "sector_momentum-{}".format(company_details.sector_name)
    cache_hit = ImageCache.objects.filter(tag=tag).first()
    if cache_hit is None or cache_hit.is_outdated():
-       sector_df = analyse_sector(company_details.sector_name)
+       sector_df, b10, w10 = analyse_sector(company_details.sector_name)
        #print(sector_df)
        fig = make_sector_momentum_plot(sector_df, company_details.sector_name)
        sector_b64 = plot_as_base64(fig).decode('utf-8')
