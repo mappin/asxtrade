@@ -210,7 +210,10 @@ def make_sector_momentum_plot(dataframe):
     fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
     timeline = dataframe['date']
     # now do the plot
-    for name, ax, linecolour in zip(['n_pos', 'n_neg', 'n_unchanged'], axes, ['darkgreen', 'red', 'grey']):
+    for name, ax, linecolour, title in zip(['n_pos', 'n_neg', 'n_unchanged'],
+                                           axes,
+                                           ['darkgreen', 'red', 'grey'],
+                                           ['Stocks up over 5% in past 90 days', "Stocks down over 5% in past 90 days", "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
         ax.plot(timeline, dataframe[name].rolling(30).mean(), color=linecolour)
         ax.set_ylabel('', fontsize=8)
@@ -348,7 +351,7 @@ def plot_as_base64(fig):
     b64data = base64.b64encode(buf.read())
     return b64data
 
-def assess_stocks_in_sector(day, cum_price_change, start_prices, threshold=0.05): # 5% threshold is considered momentum
+def assess_cumulative_change(day, cum_price_change, start_prices, threshold=0.05): # 5% threshold is considered momentum
     assert len(day) > 0
     assert isinstance(cum_price_change, dict)
     assert isinstance(start_prices, dict)
@@ -365,13 +368,14 @@ def assess_stocks_in_sector(day, cum_price_change, start_prices, threshold=0.05)
     return { 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged }
 
 @lrudecorator(10)
-def analyse_sector(sector_name):
+def analyse_sector(sector_name, initialisation_period_in_days=30):
     assert isinstance(sector_name, str) and len(sector_name) > 0
 
-    sector_stocks = [c.asx_code for c in CompanyDetails.objects.filter(sector_name=sector_name)]
-    start_date = datetime.today() - timedelta(days=90)
+    sector = CompanyDetails.objects.filter(sector_name=sector_name)
+    sector_stocks = [c.asx_code for c in sector]
+    start_date = datetime.today() - timedelta(days=90+initialisation_period_in_days) # extra 30 days for the numbers to settle
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, datetime.today())]
-    assert len(all_dates) >= 80
+    assert len(all_dates) >= 80 + initialisation_period_in_days * 0.8
     print("Found {} stocks in sector {}".format(len(sector_stocks), sector_name))
     all_quotes = []
     start_prices = {}
@@ -387,16 +391,17 @@ def analyse_sector(sector_name):
             if not code in start_prices:
                 start_prices[code] = quote.last_price
                 cum_price_change[code] = 0.0
-            cum_price_change[code] += quote.change_price
+            else:
+                cum_price_change[code] += quote.change_price
 
-        all_quotes.append(assess_stocks_in_sector(day, cum_price_change, start_prices))
+        all_quotes.append(assess_cumulative_change(day, cum_price_change, start_prices))
 
-    sector_df = pd.DataFrame.from_records(all_quotes)
+    sector_df = pd.DataFrame.from_records(all_quotes[initialisation_period_in_days:]) # skip initialisation period
     #print(sector_df)
     sector_df['date'] = pd.to_datetime(sector_df['date'])
     return sector_df
 
-def update_image_cache(tag, base64_data, n_days=7): # cache for a week by default
+def update_image_cache(tag, base64_data, valid_days=7): # cache for a week by default
     assert base64_data is not None
     assert len(tag) > 0
     now = datetime.utcnow()
@@ -404,13 +409,12 @@ def update_image_cache(tag, base64_data, n_days=7): # cache for a week by defaul
         "base64": base64_data,
         "tag": tag,
         "last_updated": now,
-        "valid_until": now + timedelta(days=n_days),
+        "valid_until": now + timedelta(days=valid_days),
     }
     ImageCache.objects.update_or_create(tag=tag, defaults=defaults)
 
 def show_stock(request, stock=None):
-   stock_regex = re.compile('^\w+$')
-   assert stock_regex.match(stock)
+   validate_stock(stock)
 
    # make stock momentum plot
    quotes = Quotation.objects.filter(asx_code=stock).exclude(last_price__isnull=True)
