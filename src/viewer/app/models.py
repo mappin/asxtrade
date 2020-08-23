@@ -4,7 +4,7 @@ from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from pylru import lrudecorator
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import pandas as pd
 
@@ -228,6 +228,18 @@ class ImageCache(model.Model):
     class Meta:
         managed = True
         db_table = "image_cache"
+
+def update_image_cache(tag, base64_data, valid_days=7): # cache for a week by default
+    assert base64_data is not None
+    assert len(tag) > 0
+    now = datetime.utcnow()
+    defaults = {
+        "base64": base64_data,
+        "tag": tag,
+        "last_updated": now,
+        "valid_until": now + timedelta(days=valid_days),
+    }
+    ImageCache.objects.update_or_create(tag=tag, defaults=defaults)
 
 def user_purchases(user):
     assert user is not None

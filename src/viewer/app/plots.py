@@ -48,7 +48,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True):
         for j_idx, j in enumerate(dates):
            text = ax.text(j_idx, i_idx, int(df.iloc[i_idx, j_idx]),
                        ha="center", va="center", color="w")
-
+    ax.grid(False)
     plt.plot()
     return plt.gcf()
 
