@@ -55,10 +55,28 @@ class Quotation(model.Model):
     objects = DjongoManager() # convenient access to mongo API
 
     def percent_change(self):
+        if self.is_error():
+            return 0.0
+
         # since the ASX uses a string field, we auto-convert to float on the fly
         pc = self.change_in_percent.rstrip('%')
         pc = pc.replace(',', '')
         return float(pc)
+
+    def is_error(self):
+        if self.error_code is None:
+            return False
+        return len(self.error_code) > 0
+
+    def volume_as_millions(self):
+        """
+        Return the volume as a formatted string (rounded to 2 decimal place)
+        represent the millions of dollars transacted for a given quote
+        """
+        if self.is_error():
+            return ""
+
+        return "{:.2f}".format(self.volume * self.last_price / 1000000.0)
 
     class Meta:
        db_table = 'asx_prices'
@@ -217,7 +235,7 @@ def company_quotes(stock_codes):
     will return the latest price associated with each supplied stock code and the
     date as a list of tuples: (quotation, date)
     """
-    ret = [latest_quote(company) for company in stock_codes]
+    ret = [latest_quote(company)[0] for company in stock_codes]
     return ret
 
 class VirtualPurchase(model.Model):

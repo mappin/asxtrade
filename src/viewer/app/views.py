@@ -61,9 +61,10 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
            # FALLTHRU...
        self.as_at_date = all_dates[-1]
        print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
-       results = Quotation.objects.filter(fetch_date=self.as_at_date) \
+       results = [stock_as_dict(q) for q in Quotation.objects.filter(fetch_date=self.as_at_date) \
                                   .filter(asx_code__in=wanted_stocks) \
-                                  .order_by(*self.ordering)
+                                  .exclude(error_code='id-or-code-invalid') \
+                                  .order_by(*self.ordering)]
        return results
 
 sector_search = SectorSearchView.as_view()
@@ -220,16 +221,8 @@ def market_sentiment(request):
 def show_watched(request):
     matching_companies = user_watchlist(request.user)
     print("Showing results for {} companies".format(len(matching_companies)))
-    quotes = company_quotes(matching_companies)
+    stocks = company_quotes(matching_companies)
     purchases = user_purchases(request.user)
-    stocks = []
-    for q, date in quotes:
-        stock = model_to_dict(q)
-        stocks.append(stock)
-        key = q.asx_code
-        if key in purchases:
-            stock['virtual_purchases'] = purchases[key]
-    #print(results.values())
 
     # paginate results for 50 stocks per page
     paginator = Paginator(stocks, 50)
@@ -246,10 +239,11 @@ def show_watched(request):
         plt.close(fig)
 
     context = {
-         "most_recent_date": quotes[0][1],
+         "most_recent_date": latest_quotation_date('ANZ'),
          "page_obj": page_obj,
          "title": "Stocks you are watching",
          "watched": user_watchlist(request.user),
+         "virtual_purchases": purchases,
          "sentiment_heatmap": sentiment_heatmap_data,
          "sentiment_heatmap_title": "Watched stock sentiment heatmap: past {} days".format(n_days)
     }
