@@ -6,9 +6,13 @@ import numpy as np
 import pandas as pd
 import base64
 import io
+from collections import Counter
 
 def plot_as_base64(fig):
-    #convert graph into dtring buffer and then we convert 64 bit code into image
+    """
+    Convert supplied figure into string buffer and then return as base64-encoded data
+    for insertion into a page as a context attribute
+    """
     assert fig is not None
     buf = io.BytesIO()
     fig.savefig(buf, format='png')
@@ -16,13 +20,35 @@ def plot_as_base64(fig):
     b64data = base64.b64encode(buf.read())
     return b64data
 
-def make_market_sentiment_plot(data_series):
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(9, 4), sharey=True)
-    bp = ax.violinplot(data_series, widths=0.9)
-    labels = [ds.name for ds in data_series]
-    ax.set_xticks(np.arange(1, len(labels) + 1))
-    ax.set_xticklabels(labels)
-    ax.set_xlim(0.25, len(labels) + 0.75)
+def make_sentiment_plot(sentiment_df, exclude_zero_bin=True):
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8), sharey=True)
+    data = {}
+    dates = []
+    for column in filter(lambda c: c.startswith("bin_"), sentiment_df.columns):
+        c = Counter(sentiment_df[column])
+        date = column[4:]
+        dates.append(date)
+        data[date] = c
+    df = pd.DataFrame.from_records(data)
+    bins, labels = price_change_bins()
+    df = df.reindex(reversed(labels))
+    if exclude_zero_bin:
+        df = df.drop('0.0')
+    df = df.fillna(0)
+    ax.imshow(df, aspect='auto')
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(dates)))
+    ax.set_yticks(np.arange(len(sentiment_df)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(dates)
+    bins = list(df.index)
+    ax.set_yticklabels(bins)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    for i_idx, i in enumerate(bins):
+        for j_idx, j in enumerate(dates):
+           text = ax.text(j_idx, i_idx, int(df.iloc[i_idx, j_idx]),
+                       ha="center", va="center", color="w")
+
     plt.plot()
     return plt.gcf()
 

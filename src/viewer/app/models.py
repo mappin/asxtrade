@@ -56,7 +56,7 @@ class Quotation(model.Model):
 
     def percent_change(self):
         # since the ASX uses a string field, we auto-convert to float on the fly
-        pc = self.change_in_percent.strip('%')
+        pc = self.change_in_percent.rstrip('%')
         pc = pc.replace(',', '')
         return float(pc)
 
@@ -254,6 +254,29 @@ def quotes_as_at(date, companies):
                                .order_by('asx_code') }
     assert isinstance(results, dict)
     return results
+
+def latest_quote(companies):
+    """
+    If a company is currently suspended it may not have a price at the moment. This function
+    will return the latest price associated with each supplied stock code and the
+    date as a list of tuples: (quotation, date)
+    """
+    ret = []
+    all_dates = all_available_dates()
+    n = 0
+    n_dates = len(all_dates)
+    for company in companies:
+        n += 1
+        for idx in range(n_dates):
+            try_date = all_dates[-(1+idx)]
+            obj = Quotation.objects.filter({ 'asx_code': company,
+                                             'fetch_date': try_date }).first()
+            if obj is not None:
+                ret.append((obj, try_date))
+                break  # done with this stock, get next stock
+
+    print("Wanted {} latest quotations, got {}".format(n, len(ret)))
+    return ret
 
 def as_dataframe(iterable):
     """

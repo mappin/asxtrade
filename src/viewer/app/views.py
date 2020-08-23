@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
-from django.views.generic import FormView, TemplateView
+from django.views.generic import FormView
 from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -8,7 +8,7 @@ from django.views.generic.list import MultipleObjectTemplateResponseMixin, Multi
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import relative_strength, analyse_sector, analyse_market
+from app.analysis import relative_strength, analyse_sector, heatmap_market
 from app.plots import *
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
@@ -185,18 +185,17 @@ def show_stock(request, stock=None):
    return render(request, "stock_view.html", context=context)
 
 def market_sentiment(request):
-    all_data_series = analyse_market(n_days=7)
-    fig = make_market_sentiment_plot(all_data_series)
+    n_days = 7
+    sentiment_bin_df, top10, bottom10, n_stocks = heatmap_market(n_days) # need to capture at least last 5 trading days, no matter what day it is run on
+    fig = make_sentiment_plot(sentiment_bin_df)
     sentiment_data = plot_as_base64(fig)
     plt.close(fig)
-    top10 = { series.name: series.nlargest(n=10) for series in all_data_series }
-    bottom10 = { series.name: series.nsmallest(n=10) for series in all_data_series }
-    #print(top10)
+
     context = {
        'sentiment_data': sentiment_data.decode('utf-8'),
-       'n_days': len(all_data_series),
-       'n_stocks_plotted': max([len(series) for series in all_data_series]),
-       'best_ten': top10,
+       'n_days': n_days,
+       'n_stocks_plotted': n_stocks,
+       'best_ten': top10, # NB: each day
        'worst_ten': bottom10,
     }
     return render(request, 'market_sentiment_view.html', context=context)

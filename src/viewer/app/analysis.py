@@ -105,40 +105,41 @@ def relative_strength(prices, n=14):
     assert len(rsi) == len(prices)
     return rsi
 
+def price_change_bins():
+    """
+    Return the bins and their label as a tuple for heatmap_market() to use and the
+    plotting code
+    """
+    bins = [-1000.0, -100.0, -10.0, -5.0, -3.0, -2.0, -1.0, -1e-6, 0.0,
+            1e-6, 1.0, 2.0, 3.0, 5.0, 10.0, 100.0, 1000.0]
+    labels = ["{}".format(b) for b in bins[1:]]
+    return (bins, labels)
+
 @lrudecorator(2)
-def analyse_market(n_days=7):
+def heatmap_market(n_days=7):
     assert n_days > 0
     today = datetime.today()
-    start_date = today - timedelta(days=n_days + 1) # +1 for today inclusive
+    start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today)]
     assert len(all_dates) == 7
-    df = pd.DataFrame(columns=['date', 'asx_code', 'change_in_percent'])
-    all_quotes = {}
-    all_stocks = set()
+    rows = []
     for date in all_dates:
         quotes = Quotation.objects.filter(fetch_date=date) \
                                   .exclude(change_price__isnull=True) \
                                   .exclude(error_code='id-or-code-invalid') \
                                   .exclude(change_in_percent__isnull=True)
-        #print("Obtained {} quotes for {}".format(len(quotes), date))
-        daily_quotes = { q.asx_code: q.percent_change() for q in quotes }
-        for_plotting = {}
-        for k,v in daily_quotes.items():
-            if abs(v) > 1.0: # exclude boring movements from the plot
-                for_plotting[k] = v
-                all_stocks.add(k)
-        if len(for_plotting.keys()) > 10: # ignore days where nothing happens
-            all_quotes[date] = for_plotting
-
-    # every pandas data series must have the same keys in it or a plotting error will occur
-    all_series = []
-    for date in filter(lambda k: k in all_quotes, all_dates):
-        d = all_quotes[date]
-        assert isinstance(d, dict)
-        for k in all_stocks:
-            if not k in d:
-                d.update({ k: 0 })
-        series = pd.Series(all_quotes[date], name=date)
-        all_series.append(series)
-
-    return all_series
+        for q in quotes:
+            rows.append({ 'date': date, 'asx_code': q.asx_code, 'change_in_percent': q.percent_change() })
+    df = pd.DataFrame.from_records(rows)
+    df = df.pivot(index='asx_code', columns='date', values='change_in_percent').fillna(0.0)
+    assert len(df.columns) >= 4 # permit one public holiday, really expect 5
+    n_stocks = len(df)
+    top10 = {}
+    bottom10 = {}
+    bins, labels = price_change_bins()
+    for date in df.columns:
+        top10[date] = df[date].nlargest(10)
+        bottom10[date] = df[date].nsmallest(10)
+        df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
+    # both bin assignments and raw values are returned in df
+    return (df, top10, bottom10, n_stocks)
