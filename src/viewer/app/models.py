@@ -3,7 +3,7 @@ from django.conf import settings
 from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
-from pylru import lrudecorator
+import pylru
 from datetime import datetime, timedelta
 import re
 import pandas as pd
@@ -166,15 +166,24 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(watch_list)))
     return watch_list
 
+date_cache = pylru.lrucache(1000)
+
 def all_available_dates(reference_stock='ANZ'):
-    # use ANZ to quickly search the db by limiting the stocks searched
-    return sorted(Quotation.objects.mongo_distinct('fetch_date', { 'asx_code': reference_stock }),
-                                 key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+    global date_cache
+
+    if reference_stock in date_cache:
+        return date_cache[reference_stock]
+
+    # use reference_stock to quickly search the db by limiting the stocks searched
+    dates = Quotation.objects.mongo_distinct('fetch_date', { 'asx_code': reference_stock })
+    ret = sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+    date_cache[reference_stock] = ret
+    return ret
 
 def sector_stocks(sector_name):
     assert isinstance(sector_name, str) and len(sector_name) > 0
-    sector = CompanyDetails.objects.filter(sector_name=sector_name)
-    sector_stocks = [c.asx_code for c in sector]
+    all_details = CompanyDetails.objects.filter(sector_name=sector_name)
+    sector_stocks = [c.asx_code for c in all_details]
     return sector_stocks
 
 def desired_dates(n_days, today=None): # today is provided as keyword arg for testing
@@ -202,13 +211,13 @@ def latest_price(stock):
     q, as_at = latest_quote(stock)
     return q.last_price
 
-def company_quotes(companies):
+def company_quotes(stock_codes):
     """
     If a company is currently suspended it may not have a price at the moment. This function
     will return the latest price associated with each supplied stock code and the
     date as a list of tuples: (quotation, date)
     """
-    ret = [latest_quote(company) for company in companies]
+    ret = [latest_quote(company) for company in stock_codes]
     return ret
 
 class VirtualPurchase(model.Model):
