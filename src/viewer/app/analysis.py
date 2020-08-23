@@ -1,4 +1,4 @@
-from app.models import Quotation, CompanyDetails
+from app.models import Quotation, CompanyDetails, sector_stocks, desired_dates
 from datetime import datetime, timedelta
 from pylru import lrudecorator
 import pandas as pd
@@ -20,7 +20,7 @@ def cumulative_change_summary(day, cum_price_change, start_prices, threshold=0.0
             n_unchanged += 1
     return { 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged }
 
-# since companies is a list, it is unhashable, which means we cant use the decorator here
+# since companies is possibly a list, it is unhashable, which means we cant use the decorator here
 #@lrudecorator(10)
 def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigger=5):
     """
@@ -33,8 +33,7 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
     assert n_days > 0
     assert initialisation_period >= 0
 
-    start_date = datetime.today() - timedelta(days=n_days+initialisation_period) # extra 30 days for the numbers to settle
-    dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, datetime.today())]
+    dates = desired_dates(n_days + initialisation_period)
     assert len(dates) >= n_days // 7 * 5 + initialisation_period // 7 * 5 - 10 # 10 is leeway for public holidays etc. (or missing data)
     print("Acquiring data for {} stocks over {} days".format(len(companies), len(dates)))
 
@@ -72,10 +71,8 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
 
 @lrudecorator(10)
 def analyse_sector(sector_name, **kwargs):
-    assert isinstance(sector_name, str) and len(sector_name) > 0
-    sector = CompanyDetails.objects.filter(sector_name=sector_name)
-    sector_stocks = [c.asx_code for c in sector]
-    return analyse_companies(sector_stocks, **kwargs)
+    ss = sector_stocks(sector_name)
+    return analyse_companies(ss, **kwargs)
 
 def relative_strength(prices, n=14):
     # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
@@ -114,17 +111,6 @@ def price_change_bins():
             1e-6, 1.0, 2.0, 3.0, 5.0, 10.0, 100.0, 1000.0]
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
-
-def desired_dates(n_days):
-    """
-    Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings
-    """
-    assert n_days > 0
-    today = datetime.today()
-    start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
-    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
-    assert len(all_dates) == n_days
-    return all_dates
 
 @lrudecorator(10)
 def heatmap_sector(sector_name, n_days=7):

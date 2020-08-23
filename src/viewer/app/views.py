@@ -109,7 +109,7 @@ class CompanySearch(DividendYieldSearch):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
             return Quotation.objects.none()
 
-        self.as_at_date = latest_quotation_date()
+        self.as_at_date = latest_quotation_date('ANZ')
         matching_companies = set()
         wanted_name = kwargs.get('name', '')
         wanted_activity = kwargs.get('activity', '')
@@ -216,18 +216,19 @@ def market_sentiment(request):
 def show_watched(request):
     matching_companies = user_watchlist(request.user)
     print("Showing results for {} companies".format(len(matching_companies)))
-    as_at = latest_quotation_date()
-    results = quotes_as_at(as_at, matching_companies)
+    quotes = company_quotes(matching_companies)
     purchases = user_purchases(request.user)
-
-    for key, stock in results.items():
+    stocks = []
+    for q, date in quotes:
+        stock = model_to_dict(q)
+        stocks.append(stock)
+        key = q.asx_code
         if key in purchases:
-            assert isinstance(stock, dict)
             stock['virtual_purchases'] = purchases[key]
     #print(results.values())
 
     # paginate results for 50 stocks per page
-    paginator = Paginator(list(results.values()), 50)
+    paginator = Paginator(stocks, 50)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.page(page_number)
 
@@ -241,7 +242,7 @@ def show_watched(request):
         plt.close(fig)
 
     context = {
-         "most_recent_date": as_at,
+         "most_recent_date": quotes[0][1],
          "page_obj": page_obj,
          "title": "Stocks you are watching",
          "watched": user_watchlist(request.user),

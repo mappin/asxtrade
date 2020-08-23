@@ -166,23 +166,50 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(watch_list)))
     return watch_list
 
-def all_available_dates():
+def all_available_dates(reference_stock='ANZ'):
     # use ANZ to quickly search the db by limiting the stocks searched
-    return sorted(Quotation.objects.mongo_distinct('fetch_date', { 'asx_code': 'ANZ' }),
+    return sorted(Quotation.objects.mongo_distinct('fetch_date', { 'asx_code': reference_stock }),
                                  key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
 
-def latest_quotation_date():
-    d = all_available_dates()
+def sector_stocks(sector_name):
+    assert isinstance(sector_name, str) and len(sector_name) > 0
+    sector = CompanyDetails.objects.filter(sector_name=sector_name)
+    sector_stocks = [c.asx_code for c in sector]
+    return sector_stocks
+
+def desired_dates(n_days, today=None): # today is provided as keyword arg for testing
+    """
+    Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings
+    """
+    assert n_days > 0
+    if today is None:
+        today = datetime.now()
+    start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
+    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
+    assert len(all_dates) == n_days
+    return all_dates
+
+def latest_quotation_date(reference_stock):
+    d = all_available_dates(reference_stock=reference_stock)
     return d[-1]
 
-def latest(stock):
-    latest_date = latest_quotation_date()
+def latest_quote(stock):
+    latest_date = latest_quotation_date(reference_stock=stock)
     obj = Quotation.objects.get(asx_code=stock, fetch_date=latest_date)
-    return (obj.last_price, latest_date)
+    return (obj, latest_date)
 
 def latest_price(stock):
-    price, as_at = latest(stock)
-    return price
+    q, as_at = latest_quote(stock)
+    return q.last_price
+
+def company_quotes(companies):
+    """
+    If a company is currently suspended it may not have a price at the moment. This function
+    will return the latest price associated with each supplied stock code and the
+    date as a list of tuples: (quotation, date)
+    """
+    ret = [latest_quote(company) for company in companies]
+    return ret
 
 class VirtualPurchase(model.Model):
     user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)
@@ -251,44 +278,6 @@ def user_purchases(user):
         purchases[code].append(purchase)
     print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
-
-def quotes_as_at(date, companies):
-    """
-    Report quotes for the specified companies which are present for date (YYYY-mm-dd)
-    Results are a dict of dicts keyed by stock code with all ASX data as the value
-    """
-    assert len(date) >= 8
-    # here we use a dict to give to the template: so we can augment user_purchases
-    # into the template ie. not just model objects given to the template. Doing
-    # it this way makes it easier to display other items in the template by mutating the results after this call
-    results = { hit.asx_code: model_to_dict(hit) for hit in Quotation.objects.filter(fetch_date=date) \
-                               .filter(asx_code__in=companies) \
-                               .order_by('asx_code') }
-    assert isinstance(results, dict)
-    return results
-
-def latest_quote(companies):
-    """
-    If a company is currently suspended it may not have a price at the moment. This function
-    will return the latest price associated with each supplied stock code and the
-    date as a list of tuples: (quotation, date)
-    """
-    ret = []
-    all_dates = all_available_dates()
-    n = 0
-    n_dates = len(all_dates)
-    for company in companies:
-        n += 1
-        for idx in range(n_dates):
-            try_date = all_dates[-(1+idx)]
-            obj = Quotation.objects.filter({ 'asx_code': company,
-                                             'fetch_date': try_date }).first()
-            if obj is not None:
-                ret.append((obj, try_date))
-                break  # done with this stock, get next stock
-
-    print("Wanted {} latest quotations, got {}".format(n, len(ret)))
-    return ret
 
 def as_dataframe(iterable):
     """
