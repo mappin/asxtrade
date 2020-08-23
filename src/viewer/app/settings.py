@@ -88,6 +88,17 @@ DATABASES = {
             'username': 'rw',
             'password': os.getenv('PASSWORD'),
         }
+    },
+    'TEST': {
+        'ENGINE': 'djongo',
+        'NAME': 'djongo_test',
+        'ENFORCE_SCHEMA': False,
+        'CLIENT': {
+            'host': 'pi1',
+            'port': 27017,
+            'username': 'test',
+            'password': 'Dev',
+        }
     }
 }
 
