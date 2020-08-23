@@ -7,6 +7,10 @@ def is_not_blank(value):
     if value == None or len(value) < 1 or len(value.strip()) < 1:
         raise ValidationError("Invalid value - cannot be blank")
 
+def is_valid_sector(value):
+    return list(CompanyDetails.objects.mongo_distinct('sector_name')).count(value) > 0
+
+
 class SectorSearchForm(forms.Form):
     @lrudecorator(1)
     def asx_sectors():
@@ -14,7 +18,7 @@ class SectorSearchForm(forms.Form):
        results = [(sector, sector) for sector in all_sectors]
        return results
 
-    sector = forms.ChoiceField(choices=asx_sectors, required=True, validators=[is_not_blank])
+    sector = forms.ChoiceField(choices=asx_sectors, required=True, validators=[is_not_blank, is_valid_sector])
     best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")
     worst10 = forms.BooleanField(required=False, label="Worst 10 performers (past 3 months)")
 

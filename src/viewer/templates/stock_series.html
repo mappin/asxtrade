@@ -1,0 +1,16 @@
+{% load static %}
+
+{% comment Assumes a variable series (eg. top10/bottom 10) with stocks is to be emitted 5 items per table row %}{% endcomment %}
+<tr><td class="small">{{ date }}</td><td>
+{% for index, value in series.items %}
+        <a href="/watchlist/{{ index }}?next={{ request.path }}">
+          {% if index in watched %}
+              <img src="{% static "star.png" %}" width="12" />
+          {% else %}
+              <img src="{% static "empty-star.png" %}" width="12" />
+          {% endif %}
+        </a>
+        <a href="/show/{{ index }}">{{ index }}<span class="small" style="color: gray">&nbsp;{{ value }}%&nbsp;</span>&nbsp;</a>
+        {% if forloop.counter == 5 %}</td></tr><tr><td></td><td>{% endif %}
+{% endfor %}
+</td></tr>

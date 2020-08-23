@@ -1,10 +1,12 @@
 {% load static %}
 {% block stock_list %}
-<p>Prices current as at {{ most_recent_date }}.
+
+<div class="unimportant">Prices current as at {{ most_recent_date }}.
 {% if sector %}
    Only stocks in {{ sector }} are displayed.
 {% endif %}
-</p>
+</div>
+
 <table style="width: 100%">
    <tr>
       <th>ASX Code</th>
@@ -74,11 +76,10 @@
 </div>
 {% endif %}
 
-{% if sector_sentiment %}
-    <div class="sector_heatmap">
-    <h2>Recent sentiment for {{ sector }}</h2>
-
-    <img src="data:image/png;base64, {{ sector_sentiment }}" />
+{% if sentiment_heatmap %}
+    <div class="sentiment-heatmap">
+    <h2>{{ sentiment_heatmap_title }}</h2>
+    <img src="data:image/png;base64, {{ sentiment_heatmap }}" />
     </div>
 {% endif %}
 {% endblock %}

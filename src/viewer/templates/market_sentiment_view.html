@@ -6,25 +6,17 @@
 
 <h2>Top 10 each day</h2>
 
-<table>
+<table width="60%">
 {% for date, series in best_ten.items %}
-   <tr><td class="small">{{ date }}</td><td>
-   {% for index, val in series.items %}
-       <a href="/show/{{ index }}">{{ index }}&nbsp;</a>
-   {% endfor %}
-   </td></tr>
+   {% include "stock_series.html" %}
 {% endfor %}
 </table>
 
 <h2>Bottom 10 each day</h2>
 
-<table>
+<table width="60%">
 {% for date, series in worst_ten.items %}
-   <tr><td class="small">{{ date }}</td><td>
-   {% for index, val in series.items %}
-       <a href="/show/{{ index }}">{{ index }}&nbsp;</a>
-   {% endfor %}
-   </td></tr>
+    {% include "stock_series.html" %}
 {% endfor %}
 </table>
 

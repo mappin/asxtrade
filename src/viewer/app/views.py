@@ -33,7 +33,8 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
             'sector': self.sector_name,
             'most_recent_date': self.as_at_date,
             'watched': user_watchlist(self.request.user),
-            'sector_sentiment': sentiment_data,
+            'sentiment_heatmap': sentiment_data,
+            'sentiment_heatmap_title': "Recent sentiment for {}: past {} days".format(self.sector_name, n_days)
         })
         return super().render_to_response(context)
 
@@ -193,6 +194,7 @@ def show_stock(request, stock=None):
    }
    return render(request, "stock_view.html", context=context)
 
+@login_required
 def market_sentiment(request):
     n_days = 7
     sentiment_bin_df, top10, bottom10, n_stocks = heatmap_market(n_days) # need to capture at least last 5 trading days, no matter what day it is run on
@@ -206,6 +208,7 @@ def market_sentiment(request):
        'n_stocks_plotted': n_stocks,
        'best_ten': top10, # NB: each day
        'worst_ten': bottom10,
+       'watched': user_watchlist(request.user)
     }
     return render(request, 'market_sentiment_view.html', context=context)
 
@@ -222,14 +225,28 @@ def show_watched(request):
             assert isinstance(stock, dict)
             stock['virtual_purchases'] = purchases[key]
     #print(results.values())
+
+    # paginate results for 50 stocks per page
     paginator = Paginator(list(results.values()), 50)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.page(page_number)
+
+    # add sentiment heatmap amongst watched stocks
+    n_days = 14
+    sector_heatmap_data = None
+    if len(matching_companies) > 0:
+        sentiment_bin_df, top10, bottom10, n_stocks = heatmap_companies(matching_companies, n_days=n_days)
+        fig = make_sentiment_plot(sentiment_bin_df)
+        sentiment_heatmap_data = plot_as_base64(fig).decode('utf-8')
+        plt.close(fig)
+
     context = {
          "most_recent_date": as_at,
          "page_obj": page_obj,
          "title": "Stocks you are watching",
          "watched": user_watchlist(request.user),
+         "sentiment_heatmap": sentiment_heatmap_data,
+         "sentiment_heatmap_title": "Watched stock sentiment heatmap: past {} days".format(n_days)
     }
     return render(request, 'all_stocks.html', context=context)
 

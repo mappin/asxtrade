@@ -116,10 +116,13 @@ def price_change_bins():
     return (bins, labels)
 
 def desired_dates(n_days):
+    """
+    Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings
+    """
     assert n_days > 0
     today = datetime.today()
     start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
-    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today)]
+    all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
     assert len(all_dates) == n_days
     return all_dates
 
@@ -127,7 +130,11 @@ def desired_dates(n_days):
 def heatmap_sector(sector_name, n_days=7):
     sector = CompanyDetails.objects.filter(sector_name=sector_name)
     sector_stocks = [c.asx_code for c in sector]
-    queryset = Quotation.objects.filter(asx_code__in=sector_stocks)
+    return heatmap_companies(sector_stocks, n_days=n_days)
+
+def heatmap_companies(companies, n_days=7):
+    assert len(companies) > 0
+    queryset = Quotation.objects.filter(asx_code__in=companies)
     return heatmap_sentiment(queryset, n_days)
 
 @lrudecorator(2)
@@ -140,7 +147,7 @@ def heatmap_sentiment(queryset, n_days):
     all_dates = desired_dates(n_days)
     rows = []
     for date in all_dates:
-        qs = queryset.all()
+        qs = queryset.all() # clone a fresh copy of queryset
         quotes = qs.filter(fetch_date=date) \
                    .exclude(change_price__isnull=True) \
                    .exclude(error_code='id-or-code-invalid') \
