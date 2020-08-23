@@ -44,8 +44,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        assert 'sector' in kwargs and len(kwargs['sector']) > 0
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
-       wanted_companies = CompanyDetails.objects.filter(sector_name=self.sector_name)
-       wanted_stocks = set([wc.asx_code for wc in wanted_companies])
+       wanted_stocks = sector_stocks(self.sector_name)
 
        if any(['best10' in kwargs, 'worst10' in kwargs]):
            sector_df, b10, w10 = analyse_sector(self.sector_name)
@@ -85,17 +84,22 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
-       if kwargs == {}:
-           return Quotation.objects.none()
+        if kwargs == {}:
+            return Quotation.objects.none()
+        print(kwargs)
+        self.as_at_date = latest_quotation_date('ANZ')
+        min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
+        max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
+        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
+                              .filter(annual_dividend_yield__gte=min_yield) \
+                              .filter(annual_dividend_yield__lte=max_yield)
+        if 'min_pe' in kwargs:
+            results = results.filter(pe__gte=kwargs.get('min_pe'))
+        if 'max_pe' in kwargs:
+            results = results.filter(pe__lt=kwargs.get('max_pe'))
 
-       self.as_at_date = latest_quotation_date()
-       min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
-       max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
-       results = Quotation.objects.filter(fetch_date=self.as_at_date) \
-                                  .filter(annual_dividend_yield__gte=min_yield) \
-                                  .filter(annual_dividend_yield__lte=max_yield) \
-                                  .order_by(*self.ordering)
-       return results
+        results = results.order_by(*self.ordering)
+        return results
 
 dividend_search = DividendYieldSearch.as_view()
 
