@@ -86,7 +86,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     def get_queryset(self, **kwargs):
         if kwargs == {}:
             return Quotation.objects.none()
-        print(kwargs)
+
         self.as_at_date = latest_quotation_date('ANZ')
         min_yield = kwargs.get('min_yield') if 'min_yield' in kwargs else 0.0
         max_yield = kwargs.get('max_yield') if 'max_yield' in kwargs else 10000.0
@@ -169,8 +169,8 @@ def show_stock(request, stock=None):
        raise Http404("No company details for {}".format(stock))
    df = as_dataframe(quotes)
    #print(df['last_price'])
-   if len(df) == 0:
-       raise Http404("No price quotes for {}".format(stock))
+   if len(df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+       raise Http404("Insufficient price quotes for {}".format(stock))
    fig = make_rsi_plot(stock, df)
    rsi_data = plot_as_base64(fig)
    plt.close(fig)
