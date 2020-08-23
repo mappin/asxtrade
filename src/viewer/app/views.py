@@ -21,10 +21,19 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     as_at_date = None
 
     def render_to_response(self, context):
+        n_days = 7
+        if len(self.sector_name) > 0:
+            sentiment_bin_df, top10, bottom10, n_stocks = heatmap_sector(self.sector_name, n_days)
+            fig = make_sentiment_plot(sentiment_bin_df)
+            sentiment_data = plot_as_base64(fig).decode('utf-8')
+            plt.close(fig)
+        else:
+            sector_sentiment = None
         context.update({ # NB: we use update() to not destroy page_obj
             'sector': self.sector_name,
             'most_recent_date': self.as_at_date,
-            'watched': user_watchlist(self.request.user)
+            'watched': user_watchlist(self.request.user),
+            'sector_sentiment': sentiment_data,
         })
         return super().render_to_response(context)
 

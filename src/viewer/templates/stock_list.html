@@ -74,4 +74,11 @@
 </div>
 {% endif %}
 
+{% if sector_sentiment %}
+    <div class="sector_heatmap">
+    <h2>Recent sentiment for {{ sector }}</h2>
+
+    <img src="data:image/png;base64, {{ sector_sentiment }}" />
+    </div>
+{% endif %}
 {% endblock %}

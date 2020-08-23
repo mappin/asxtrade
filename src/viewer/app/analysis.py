@@ -115,19 +115,36 @@ def price_change_bins():
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
 
-@lrudecorator(2)
-def heatmap_market(n_days=7):
+def desired_dates(n_days):
     assert n_days > 0
     today = datetime.today()
     start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today)]
-    assert len(all_dates) == 7
+    assert len(all_dates) == n_days
+    return all_dates
+
+@lrudecorator(10)
+def heatmap_sector(sector_name, n_days=7):
+    sector = CompanyDetails.objects.filter(sector_name=sector_name)
+    sector_stocks = [c.asx_code for c in sector]
+    queryset = Quotation.objects.filter(asx_code__in=sector_stocks)
+    return heatmap_sentiment(queryset, n_days)
+
+@lrudecorator(2)
+def heatmap_market(n_days=7):
+    queryset = Quotation.objects.all()
+    return heatmap_sentiment(queryset, n_days)
+
+def heatmap_sentiment(queryset, n_days):
+    assert queryset is not None
+    all_dates = desired_dates(n_days)
     rows = []
     for date in all_dates:
-        quotes = Quotation.objects.filter(fetch_date=date) \
-                                  .exclude(change_price__isnull=True) \
-                                  .exclude(error_code='id-or-code-invalid') \
-                                  .exclude(change_in_percent__isnull=True)
+        qs = queryset.all()
+        quotes = qs.filter(fetch_date=date) \
+                   .exclude(change_price__isnull=True) \
+                   .exclude(error_code='id-or-code-invalid') \
+                   .exclude(change_in_percent__isnull=True)
         for q in quotes:
             rows.append({ 'date': date, 'asx_code': q.asx_code, 'change_in_percent': q.percent_change() })
     df = pd.DataFrame.from_records(rows)
