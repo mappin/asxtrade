@@ -1,4 +1,5 @@
 {% load static %}
+{% load myfilters %}
 {% block stock_list %}
 
 <div class="unimportant">Prices current as at {{ most_recent_date }}.
@@ -13,7 +14,7 @@
       <th>Annual yield</th>
       <th>Price ($AUD)</th>
       <th>Day change</th>
-      <th>Volume</th>
+      <th>Volume ($AUD Mil.)</th>
       <th>EPS</th>
       <th>Price/Earnings</th>
       <th>Year high price</th>
@@ -35,14 +36,14 @@
           <td>{{ stock.annual_dividend_yield |floatformat }}</td>
           <td>{{ stock.last_price }}</td>
           <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
-          <td align="right">{{ stock.volume }}&nbsp;&nbsp;</td>
+          <td align="center">{{ stock.volume_as_millions }}</td>
           <td align="right">{{ stock.eps|floatformat }}</td>
           <td align="center">{{ stock.pe|floatformat }}</td>
           <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
           <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
        </tr>
-       {% if 'virtual_purchases' in stock %}
-           {% for purchase in stock.virtual_purchases %}
+       {% if stock.asx_code in virtual_purchases %}
+           {% for purchase in virtual_purchases|get_item:stock.asx_code %}
            <tr>
               <td></td>
               <td colspan="6" class="small">{{ purchase }}</td>
