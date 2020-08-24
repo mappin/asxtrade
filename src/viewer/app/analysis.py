@@ -1,4 +1,4 @@
-from app.models import Quotation, CompanyDetails, sector_stocks, desired_dates, company_quotes
+from app.models import Quotation, CompanyDetails, all_sector_stocks, desired_dates, company_quotes, all_quotes
 from datetime import datetime, timedelta
 from pylru import lrudecorator
 import pandas as pd
@@ -20,8 +20,6 @@ def cumulative_change_summary(day, cum_price_change, start_prices, threshold=0.0
             n_unchanged += 1
     return { 'date': day, 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged }
 
-# since companies is possibly a list, it is unhashable, which means we cant use the decorator here
-#@lrudecorator(10)
 def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigger=5):
     """
     Return a pandas dataframe with n_days of data for the specified stock codes (all going well!)
@@ -29,7 +27,6 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
     Returns a tuple (sector_df, best10, worst10) with the sector_df['date'] column as a pandas datetime instance
     """
     assert len(companies) > 0
-    assert isinstance(companies[0], str) and len(companies[0]) >= 3
     assert n_days > 0
     assert initialisation_period >= 0
 
@@ -37,7 +34,7 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
     assert len(dates) >= n_days // 7 * 5 + initialisation_period // 7 * 5 - 10 # 10 is leeway for public holidays etc. (or missing data)
     print("Acquiring data for {} stocks over {} days".format(len(companies), len(dates)))
 
-    all_quotes = []
+    aq = []
     start_prices = {}
     cum_price_change = {}
     t = pct_trigger / 100.0
@@ -50,7 +47,7 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
             else:
                 cum_price_change[code] += quote.change_price
 
-        all_quotes.append(cumulative_change_summary(day, cum_price_change,
+        aq.append(cumulative_change_summary(day, cum_price_change,
                                                     start_prices, threshold=t))
 
     print("Found {} stocks with changes (expected {})".format(len(cum_price_change), len(companies)))
@@ -58,16 +55,11 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
     best10_pct = pct_change.nlargest(10)
     worst10_pct = pct_change.nsmallest(10)
 
-    #print(all_quotes[0])
-    sector_df = pd.DataFrame.from_records(all_quotes[initialisation_period:]) # skip data in initialisation period
+    #print(aq[0])
+    sector_df = pd.DataFrame.from_records(aq[initialisation_period:]) # skip data in initialisation period
     sector_df['date'] = pd.to_datetime(sector_df['date'])
     #print(sector_df)
     return (sector_df, best10_pct, worst10_pct)
-
-@lrudecorator(10)
-def analyse_sector(sector_name, **kwargs):
-    ss = sector_stocks(sector_name)
-    return analyse_companies(ss, **kwargs)
 
 def relative_strength(prices, n=14):
     # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
@@ -107,35 +99,38 @@ def price_change_bins():
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
 
-@lrudecorator(10)
-def heatmap_sector(sector_name, n_days=7):
-    sector = CompanyDetails.objects.filter(sector_name=sector_name)
-    sector_stocks = [c.asx_code for c in sector]
-    return heatmap_companies(sector_stocks, n_days=n_days)
-
 def heatmap_companies(companies, n_days=7):
-    assert len(companies) > 0
-    queryset = Quotation.objects.filter(asx_code__in=companies)
-    return heatmap_sentiment(queryset, n_days)
+    all_dates = desired_dates(n_days)
+    queryset = all_quotes(companies, all_dates=all_dates)
+    return heatmap_sentiment(queryset, all_dates)
 
 @lrudecorator(2)
 def heatmap_market(n_days=7):
-    queryset = Quotation.objects.all()
-    return heatmap_sentiment(queryset, n_days)
-
-def heatmap_sentiment(queryset, n_days):
-    assert queryset is not None
     all_dates = desired_dates(n_days)
+    queryset = all_quotes(None, all_dates=all_dates)
+    return heatmap_sentiment(queryset, all_dates)
+
+def heatmap_sentiment(queryset, all_dates):
+    """
+    Given a django queryset instance (required since further filtering will be performed)
+    compute a dataframe ready for heatmapping of the quotations based using the percentage change on a daily basis.
+    A tuple (dataframe, best10, worst10, n_stocks) is returned. n_days of data is used for all calculations.
+    """
+    assert queryset is not None
+    assert all_dates is not None and len(all_dates) >= 1
     rows = []
     for date in all_dates:
         qs = queryset.all() # clone a fresh copy of queryset
+
+        # although the supplied queryset might have filters, we ensure that we dont try to plot bad data
         quotes = qs.filter(fetch_date=date) \
                    .exclude(change_price__isnull=True) \
-                   .exclude(error_code='id-or-code-invalid') \
+                   .exclude(error_code="id-or-code-invalid") \
                    .exclude(change_in_percent__isnull=True)
         for q in quotes:
             rows.append({ 'date': date, 'asx_code': q.asx_code, 'change_in_percent': q.percent_change() })
     df = pd.DataFrame.from_records(rows)
+    #print(df)
     df = df.pivot(index='asx_code', columns='date', values='change_in_percent').fillna(0.0)
     assert len(df.columns) >= 4 # permit one public holiday, really expect 5
     n_stocks = len(df)

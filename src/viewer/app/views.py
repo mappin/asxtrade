@@ -8,7 +8,7 @@ from django.views.generic.list import MultipleObjectTemplateResponseMixin, Multi
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import relative_strength, analyse_sector, heatmap_market
+from app.analysis import relative_strength, analyse_companies, heatmap_market
 from app.plots import *
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
@@ -23,7 +23,8 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     def render_to_response(self, context):
         n_days = 7
         if len(self.sector_name) > 0:
-            sentiment_bin_df, top10, bottom10, n_stocks = heatmap_sector(self.sector_name, n_days)
+            companies = all_sector_stocks(self.sector_name)
+            sentiment_bin_df, top10, bottom10, n_stocks = heatmap_companies(companies, n_days)
             fig = make_sentiment_plot(sentiment_bin_df)
             sentiment_data = plot_as_base64(fig).decode('utf-8')
             plt.close(fig)
@@ -44,10 +45,9 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        assert 'sector' in kwargs and len(kwargs['sector']) > 0
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
-       wanted_stocks = set(sector_stocks(self.sector_name))
-
+       wanted_stocks = set(all_sector_stocks(self.sector_name))
        if any(['best10' in kwargs, 'worst10' in kwargs]):
-           sector_df, b10, w10 = analyse_sector(self.sector_name)
+           sector_df, b10, w10 = analyse_companies(wanted_stocks)
            wanted = set()
            restricted = False
            if kwargs.get('best10', False):
@@ -127,9 +127,8 @@ class CompanySearch(DividendYieldSearch):
             matching_companies.update([hit.asx_code for hit in \
                                        CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity)])
         print("Showing results for {} companies".format(len(matching_companies)))
-        results = Quotation.objects.filter(fetch_date=self.as_at_date) \
-                                   .filter(asx_code__in=matching_companies) \
-                                   .order_by(*self.ordering)
+        results = company_quotes(matching_companies, required_date=self.as_at_date, filter_bad=True)
+        results = results.order_by(*self.ordering)
         return results
 
 company_search = CompanySearch.as_view()
@@ -161,7 +160,7 @@ def show_stock(request, stock=None):
    validate_stock(stock)
 
    # make stock momentum plot
-   quotes = Quotation.objects.filter(asx_code=stock).exclude(last_price__isnull=True)
+   quotes = all_quotes([ stock ])
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
@@ -178,7 +177,8 @@ def show_stock(request, stock=None):
    tag = "sector_momentum-{}".format(company_details.sector_name)
    cache_hit = ImageCache.objects.filter(tag=tag).first()
    if cache_hit is None or cache_hit.is_outdated():
-       sector_df, b10, w10 = analyse_sector(company_details.sector_name)
+       wanted_stocks = set(all_sector_stocks(company_details.sector_name))
+       sector_df, b10, w10 = analyse_companies(wanted_stocks)
        #print(sector_df)
        fig = make_sector_momentum_plot(sector_df, company_details.sector_name)
        sector_b64 = plot_as_base64(fig).decode('utf-8')
