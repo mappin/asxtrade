@@ -184,9 +184,14 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(watch_list)))
     return watch_list
 
-date_cache = pylru.lrucache(1000)
+date_cache = pylru.lrucache(100)
 
 def all_available_dates(reference_stock='ANZ'):
+    """
+    Returns a sorted list of available dates where the reference stock has a price. stocks
+    which are suspended/delisted may have limited dates. The list is sorted from oldest to newest (ascending sort)
+    As this is a frequently used query, an LRU cache is implemented to avoid hitting the database too much.
+    """
     global date_cache
 
     if reference_stock in date_cache:
@@ -198,11 +203,13 @@ def all_available_dates(reference_stock='ANZ'):
     date_cache[reference_stock] = ret
     return ret
 
-def sector_stocks(sector_name):
-    assert isinstance(sector_name, str) and len(sector_name) > 0
-    all_details = CompanyDetails.objects.filter(sector_name=sector_name)
-    sector_stocks = [c.asx_code for c in all_details]
-    return sector_stocks
+def all_sector_stocks(sector_name):
+    """
+    Return a queryset with all stocks in the specified sector
+    """
+    assert sector_name is not None and len(sector_name) > 0
+    stocks = CompanyDetails.objects.filter(sector_name=sector_name).values_list('asx_code', flat=True)
+    return stocks
 
 def desired_dates(n_days, today=None): # today is provided as keyword arg for testing
     """
@@ -216,33 +223,69 @@ def desired_dates(n_days, today=None): # today is provided as keyword arg for te
     assert len(all_dates) == n_days
     return all_dates
 
-def latest_quotation_date(reference_stock):
-    d = all_available_dates(reference_stock=reference_stock)
+def latest_quotation_date(stock):
+    d = all_available_dates(reference_stock=stock)
     return d[-1]
 
-def latest_quote(stock):
-    latest_date = latest_quotation_date(reference_stock=stock)
-    obj = Quotation.objects.get(asx_code=stock, fetch_date=latest_date)
-    return (obj, latest_date)
+def latest_quote(stocks):
+    """
+    If stocks is a str, retrieves the latest quote and returns a tuple (Quotation, latest_date).
+    If stocks is None, returns a tuple (queryset, latest_date) of all stocks.
+    If stocks is an iterable, returns a tuple (queryset, latest_date) of selected stocks
+    """
+    if isinstance(stocks, str):
+        latest_date = latest_quotation_date(stocks)
+        obj = Quotation.objects.get(asx_code=stocks, fetch_date=latest_date)
+        return (obj, latest_date)
+    else:
+        latest_date = latest_quotation_date('ANZ')
+        qs = Quotation.objects.filter(fetch_date=latest_date)
+        if stocks is not None:
+            if len(stocks) == 1:
+                qs = qs.filter(asx_code=stocks[0])
+            else:
+                qs = qs.filter(asx_code__in=stocks)
+        return (qs, latest_date)
 
-def latest_price(stock):
-    q, as_at = latest_quote(stock)
-    return q.last_price
+def all_quotes(stock_codes, filter_bad=True, all_dates=None):
+    """
+    Return a queryset of the specified Quotation's for the specified stocks,
+    regardless of time. Since must be specified in YYYY-mm-dd format (inclusive).
+    stock_codes may be None in which case no filtering based on code is done (ie. all)
+    """
+    if stock_codes is None:
+        ret = Quotation.objects.all()
+    elif len(stock_codes) == 1: # use a more efficient ORM/SQL query if we can
+        ret = Quotation.objects.filter(asx_code=stock_codes[0])
+    else:
+        ret = Quotation.objects.filter(asx_code__in=list(stock_codes))
 
-def company_quotes(stock_codes, required_date=None):
+    if all_dates is not None:
+        for ad in all_dates:
+            validate_date(ad)
+        ret = ret.filter(fetch_date__in=all_dates)
+
+    if filter_bad:
+        ret = ret.exclude(last_price__isnull=True) \
+                 .exclude(error_code="id-or-code-invalid")
+    return ret
+
+def company_quotes(stock_codes, required_date=None, filter_bad=True):
     """
     If a company is currently suspended it may not have a price at the moment. This function
     will return a list of Quotation objects at the latest trading date. If required_date is specified (in YYYY-mm-dd format)
-    then the return result will be a QuerySet at the specified date with invalid records removed.
+    then the return result will be a single day QuerySet. Invalid records removed iff filter_bad.
     """
     if required_date is None:
-        ret = [latest_quote(company)[0] for company in stock_codes]
+        ret = latest_quote(stock_codes)[0]
     else:
         validate_date(required_date)
         ret = Quotation.objects.filter(fetch_date=required_date) \
-                               .filter(asx_code__in=stock_codes) \
-                               .exclude(error_code='id-or-code-invalid') \
-                               .filter(change_price__isnull=False)
+                               .filter(asx_code__in=stock_codes)
+        if filter_bad:
+            ret = ret.exclude(error_code='id-or-code-invalid') \
+                     .exclude(last_price__isnull=True) \
+                     .exclude(change_price__isnull=True)
     return ret
 
 class VirtualPurchase(model.Model):
@@ -257,7 +300,8 @@ class VirtualPurchase(model.Model):
 
     def current_price(self):
         assert self.n > 0
-        p = latest_price(self.asx_code)
+        q, as_at = latest_quote(self.asx_code)
+        p = q.last_price
         buy_price = self.price_at_buy_date
         if buy_price > 0:
             pct_move = (p / buy_price) * 100.0 - 100.0
