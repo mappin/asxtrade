@@ -44,7 +44,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        assert 'sector' in kwargs and len(kwargs['sector']) > 0
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
-       wanted_stocks = sector_stocks(self.sector_name)
+       wanted_stocks = set(sector_stocks(self.sector_name))
 
        if any(['best10' in kwargs, 'worst10' in kwargs]):
            sector_df, b10, w10 = analyse_sector(self.sector_name)
@@ -61,10 +61,8 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
            # FALLTHRU...
        self.as_at_date = all_dates[-1]
        print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
-       results = [stock_as_dict(q) for q in Quotation.objects.filter(fetch_date=self.as_at_date) \
-                                  .filter(asx_code__in=wanted_stocks) \
-                                  .exclude(error_code='id-or-code-invalid') \
-                                  .order_by(*self.ordering)]
+       results = company_quotes(wanted_stocks, required_date=self.as_at_date)
+       results = results.order_by(*self.ordering)
        return results
 
 sector_search = SectorSearchView.as_view()
@@ -272,7 +270,8 @@ def toggle_watched(request, stock=None):
 def buy_virtual_stock(request, stock=None, amount=5000.0):
     validate_stock(stock)
     assert amount > 0.0
-    cur_price, latest_date = latest(stock)
+    quote, latest_date = latest_quote(stock)
+    cur_price = quote.last_price
     if cur_price >= 1e-6:
         vp = VirtualPurchase(asx_code=stock, user=request.user,
                              buy_date=latest_date, price_at_buy_date=cur_price,

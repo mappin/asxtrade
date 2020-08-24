@@ -229,13 +229,20 @@ def latest_price(stock):
     q, as_at = latest_quote(stock)
     return q.last_price
 
-def company_quotes(stock_codes):
+def company_quotes(stock_codes, required_date=None):
     """
     If a company is currently suspended it may not have a price at the moment. This function
-    will return the latest price associated with each supplied stock code and the
-    date as a list of tuples: (quotation, date)
+    will return a list of Quotation objects at the latest trading date. If required_date is specified (in YYYY-mm-dd format)
+    then the return result will be a QuerySet at the specified date with invalid records removed.
     """
-    ret = [latest_quote(company)[0] for company in stock_codes]
+    if required_date is None:
+        ret = [latest_quote(company)[0] for company in stock_codes]
+    else:
+        validate_date(required_date)
+        ret = Quotation.objects.filter(fetch_date=required_date) \
+                               .filter(asx_code__in=stock_codes) \
+                               .exclude(error_code='id-or-code-invalid') \
+                               .filter(change_price__isnull=False)
     return ret
 
 class VirtualPurchase(model.Model):

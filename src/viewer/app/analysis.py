@@ -1,4 +1,4 @@
-from app.models import Quotation, CompanyDetails, sector_stocks, desired_dates
+from app.models import Quotation, CompanyDetails, sector_stocks, desired_dates, company_quotes
 from datetime import datetime, timedelta
 from pylru import lrudecorator
 import pandas as pd
@@ -42,12 +42,7 @@ def analyse_companies(companies, n_days=90, initialisation_period=30, pct_trigge
     cum_price_change = {}
     t = pct_trigger / 100.0
     for day in sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-        daily_sector_quotes = Quotation.objects \
-                                     .filter(fetch_date=day) \
-                                     .filter(asx_code__in=companies) \
-                                     .filter(change_price__isnull=False)
-
-        for quote in daily_sector_quotes:
+        for quote in company_quotes(companies, required_date=day):
             code = quote.asx_code
             if not code in start_prices:
                 start_prices[code] = quote.last_price
