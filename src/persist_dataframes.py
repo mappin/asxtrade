@@ -17,8 +17,12 @@ def dates_of_month(month, year):
     return days
 
 def clean_value(value):
+    """
+    To ensure the computed dataframe is consistently typed all values are
+    co-erced to float or we die trying...
+    """
     if isinstance(value, (int, float)):
-        return value
+        return float(value)
     # else str...
     value = value.rstrip('%')
     value = value.replace(',', '')
@@ -39,7 +43,7 @@ def load_prices(db, field_name, month, year):
               field_name: clean_value(row[field_name])}
               for row in db.asx_prices.find({ 'fetch_date': { "$in": days_of_month }, field_name: { "$exists": True } }, { 'asx_code': 1, field_name: 1, 'fetch_date': 1})]
     if len(rows) == 0:
-        return pd.DataFrame(columns=['fetch_date', 'asx_code', field_name])
+        return pd.DataFrame(columns=['fetch_date', 'asx_code', field_name]) # return dummy dataframe if empty month
     df = pd.DataFrame.from_records(rows)
     df = df.pivot(index='asx_code', columns='fetch_date', values=field_name)
     return df
@@ -53,9 +57,8 @@ def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-do
              df.to_parquet(fp, compression='gzip', index=True)
              fp.seek(0)
              bytes = fp.read()
-             tag = "{}-{}-{}-{}".format(field_name, month, year, market)
-             db.market_quote_cache.find_one_and_update({ 'tag': tag, 'scope': scope},
-                 { "$set": {
+             tag = "{}-{:02d}-{}-{}".format(field_name, month, year, market)
+             db.market_quote_cache.update_one({ 'tag': tag, 'scope': scope}, { "$set": {
                      'tag': tag, 'status': status,
                      'last_updated': datetime.utcnow(),
                      'field': field_name,
@@ -65,7 +68,7 @@ def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-do
                      'n_stocks': len(df),
                      'dataframe_format': 'parquet',
                      'dataframe': Binary(bytes), # NB: always parquet format
-                 }})
+                 }}, upsert=True)
 
 if __name__ == "__main__":
    a = argparse.ArgumentParser(description="Construct and ingest db.asx_prices into parquet format month-by-month and persist to mongo")
