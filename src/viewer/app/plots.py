@@ -83,8 +83,10 @@ def make_sector_momentum_plot(dataframe, sector_name):
                                            ['darkgreen', 'red', 'grey'],
                                            ['{} stocks up >5%'.format(sector_name), "{} stocks down >5%".format(sector_name), "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
-        ax.plot(timeline, dataframe[name].rolling(14).mean(), color=linecolour)
+        series = dataframe[name].rolling(14).mean()
+        ax.plot(timeline, series, color=linecolour)
         ax.set_ylabel('', fontsize=8)
+        ax.set_ylim(0, max(series.fillna(0))+10)
         ax.set_title(title, fontsize=8)
 
         # Remove the automatic x-axis label from all but the bottom subplot
@@ -202,4 +204,7 @@ def make_rsi_plot(stock_code, dataframe):
         ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
 
     plt.xticks(fontsize=8)
-    return plt.gcf()
+    fig = plt.gcf()
+    rsi_data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return rsi_data
