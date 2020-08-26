@@ -16,6 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from app.views import *
+from django.conf import settings
 
 urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
@@ -24,10 +25,18 @@ urlpatterns = [
     path('search/by-sector', sector_search),
     path('search/by-yield', dividend_search),
     path('search/by-company', company_search),
-    path('show/<str:stock>', show_stock, name='show'),
-    path('watched', show_watched),
+    path('show/increasing-eps', show_increasing_eps_stocks),  # NB: order important here! 
+    path('show/watched', show_watched, name='show-watched'),
+    path('show/<str:stock>', show_stock, name='show-stock'),
     path('watchlist/<str:stock>', toggle_watched),
     path('purchase/<str:stock>', buy_virtual_stock),
     path('delete/<str:buy_date>/<str:stock>', delete_virtual_stock),
     path('stats/market-sentiment', market_sentiment)
 ]
+
+
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns = [
+        path('__debug__/', include(debug_toolbar.urls)),
+    ] + urlpatterns

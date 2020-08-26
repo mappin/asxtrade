@@ -6,6 +6,7 @@ from djongo.models.json import JSONField
 import pylru
 from datetime import datetime, timedelta
 import re
+import io
 import pandas as pd
 
 def validate_stock(stock):
@@ -148,7 +149,7 @@ class CompanyDetails(model.Model):
     latest_annual_reports = JSONField()
     previous_close_price = model.FloatField()
     average_daily_volume = model.IntegerField()
-    number_of_shared = model.IntegerField()
+    number_of_shares = model.IntegerField()
     suspended = model.BooleanField()
     indices = JSONField()
     primary_share_code = model.TextField()
@@ -180,9 +181,9 @@ class Watchlist(model.Model):
         db_table = "user_watchlist"
 
 def user_watchlist(user):
-    watch_list = set([hit.asx_code for hit in Watchlist.objects.filter(user=user)])
-    print("Found {} stocks in user watchlist".format(len(watch_list)))
-    return watch_list
+    hits = Watchlist.objects.filter(user=user).values_list('asx_code', flat=True)
+    print("Found {} stocks in user watchlist".format(hits.count()))
+    return set(hits)
 
 date_cache = pylru.lrucache(100)
 
@@ -208,7 +209,9 @@ def all_sector_stocks(sector_name):
     Return a queryset with all stocks in the specified sector
     """
     assert sector_name is not None and len(sector_name) > 0
-    stocks = CompanyDetails.objects.filter(sector_name=sector_name).values_list('asx_code', flat=True)
+    stocks = CompanyDetails.objects.order_by('asx_code') \
+                                   .filter(sector_name=sector_name) \
+                                   .values_list('asx_code', flat=True)
     return stocks
 
 def desired_dates(n_days, today=None): # today is provided as keyword arg for testing
@@ -226,6 +229,17 @@ def desired_dates(n_days, today=None): # today is provided as keyword arg for te
 def latest_quotation_date(stock):
     d = all_available_dates(reference_stock=stock)
     return d[-1]
+
+def all_quotes(stock, all_dates=None):
+    assert len(stock) >= 3
+    if all_dates is None:
+        all_dates = desired_dates(30)
+    quotes = Quotation.objects.filter(asx_code=stock) \
+                              .filter(fetch_date__in=all_dates) \
+                              .exclude(error_code="id-or-code-invalid")
+    rows = [model_to_dict(quote) for quote in quotes]
+    df = pd.DataFrame.from_records(rows)
+    return df
 
 def latest_quote(stocks):
     """
@@ -247,46 +261,86 @@ def latest_quote(stocks):
                 qs = qs.filter(asx_code__in=stocks)
         return (qs, latest_date)
 
-def all_quotes(stock_codes, filter_bad=True, all_dates=None):
-    """
-    Return a queryset of the specified Quotation's for the specified stocks,
-    regardless of time. Since must be specified in YYYY-mm-dd format (inclusive).
-    stock_codes may be None in which case no filtering based on code is done (ie. all)
-    """
-    if stock_codes is None:
-        ret = Quotation.objects.all()
-    elif len(stock_codes) == 1: # use a more efficient ORM/SQL query if we can
-        ret = Quotation.objects.filter(asx_code=stock_codes[0])
-    else:
-        ret = Quotation.objects.filter(asx_code__in=list(stock_codes))
+def make_superdf(required_tags, stock_codes):
+    assert required_tags is not None and len(required_tags) >= 1
+    assert stock_codes is None or len(stock_codes) > 0
+    dataframes = MarketDataCache.objects.filter(tag__in=required_tags, dataframe_format="parquet") \
+                                        .values_list('dataframe', flat=True)
+    superdf = None
+    n = 0
+    for parquet_bytes in dataframes:
+        n += 1
+        with io.BytesIO(parquet_bytes) as fp:
+            df = pd.read_parquet(fp)
+            if len(df) == 0:  # skip empty frames: not that persist_dataframes.py has a bug where the matrix has wrong/index columns when empty so be careful not to merge them!
+                continue
+            # remove rows which are not relevant before merge to speed things...
+            if stock_codes is not None:
+                #print("Before {}".format(len(df)))
+                df = df.reindex(tuple(stock_codes))
+                #print("After {} (had {} stocks)".format(len(df), len(stock_codes)))
+            #print(df)
+            if superdf is None:
+                superdf = df
+            else:
+                superdf = superdf.merge(df, how='outer', left_index=True, right_index=True)
+    return (superdf, n)
 
-    if all_dates is not None:
-        for ad in all_dates:
-            validate_date(ad)
-        ret = ret.filter(fetch_date__in=all_dates)
+def increasing_eps(stock_codes, past_n_days=300):
+    all_dates = desired_dates(past_n_days)
+    required_tags = set(["eps-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates])
+    # NB: we dont care here if some tags cant be found
+    df, n = make_superdf(required_tags, stock_codes)
+    # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
+    # at least 2c per share positive max(eps) is required to be considered significant
+    increasing_eps_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.02]
+    return increasing_eps_stocks
 
-    if filter_bad:
-        ret = ret.exclude(last_price__isnull=True) \
-                 .exclude(error_code="id-or-code-invalid")
-    return ret
+def company_prices(stock_codes, all_dates=None, field_name='last_price'):
+    """
+    Return a dataframe with the required companies (iff quoted) over the
+    specified dates. By default last_price is provided.
+    """
+    if all_dates is None:
+        all_dates = [ datetime.strftime(datetime.now(), "%Y-%m-%d") ]
 
-def company_quotes(stock_codes, required_date=None, filter_bad=True):
-    """
-    If a company is currently suspended it may not have a price at the moment. This function
-    will return a list of Quotation objects at the latest trading date. If required_date is specified (in YYYY-mm-dd format)
-    then the return result will be a single day QuerySet. Invalid records removed iff filter_bad.
-    """
-    if required_date is None:
-        ret = latest_quote(stock_codes)[0]
-    else:
-        validate_date(required_date)
-        ret = Quotation.objects.filter(fetch_date=required_date) \
-                               .filter(asx_code__in=stock_codes)
-        if filter_bad:
-            ret = ret.exclude(error_code='id-or-code-invalid') \
-                     .exclude(last_price__isnull=True) \
-                     .exclude(change_price__isnull=True)
-    return ret
+    required_tags = set()
+    for date in all_dates:
+        validate_date(date)
+        yyyy = date[0:4]
+        mm = date[5:7]
+        required_tags.add("{}-{}-{}-asx".format(field_name, mm, yyyy))
+
+    # construct a "super" dataframe from the constituent parquet data
+    superdf, n_dataframes = make_superdf(required_tags, stock_codes)
+    if n_dataframes != len(required_tags):
+        raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(len(dataframes), required_tags))
+    return superdf
+
+class MarketDataCache(model.Model):
+    #{ "_id" : ObjectId("5f44c54457d4bb6dfe6b998f"), "scope" : "all-downloaded",
+    #"tag" : "change_price-05-2020-asx", "dataframe_format" : "parquet",
+    #"field" : "change_price", "last_updated" : ISODate("2020-08-25T08:01:08.804Z"),
+    #"market" : "asx", "n_days" : 3, "n_stocks" : 0,
+    #"sha256" : "75d0ad7e057621e6a73508a178615bcc436d97110bcc484f1cfb7d478475abc5",
+    #"size_in_bytes" : 2939, "status" : "INCOMPLETE" }
+    size_in_bytes = model.IntegerField()
+    status = model.TextField()
+    tag = model.TextField()
+    dataframe_format = model.TextField()
+    field = model.TextField()
+    last_updated = model.DateTimeField()
+    market = model.TextField()
+    n_days = model.IntegerField()
+    n_stocks = model.IntegerField()
+    sha256 = model.TextField()
+    _id = ObjectIdField()
+    scope = model.TextField()
+    dataframe = model.BinaryField()
+
+    class Meta:
+        managed = False # table is managed by persist_dataframes.py
+        db_table = "market_quote_cache"
 
 class VirtualPurchase(model.Model):
     user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)

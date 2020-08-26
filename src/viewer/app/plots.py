@@ -20,7 +20,7 @@ def plot_as_base64(fig):
     b64data = base64.b64encode(buf.read())
     return b64data
 
-def make_sentiment_plot(sentiment_df, exclude_zero_bin=True):
+def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8), sharey=True)
     data = {}
     dates = []
@@ -44,13 +44,32 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True):
     bins = list(df.index)
     ax.set_yticklabels(bins)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    for i_idx, i in enumerate(bins):
-        for j_idx, j in enumerate(dates):
-           text = ax.text(j_idx, i_idx, int(df.iloc[i_idx, j_idx]),
-                       ha="center", va="center", color="w")
+    if plot_text_labels:
+        for i_idx, i in enumerate(bins):
+            for j_idx, j in enumerate(dates):
+               text = ax.text(j_idx, i_idx, int(df.iloc[i_idx, j_idx]),
+                           ha="center", va="center", color="w")
     ax.grid(False)
     plt.plot()
     return plt.gcf()
+
+def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None):
+    if bins is None:
+        bins, labels = price_change_bins()
+    if all_dates is None:
+        all_dates = desired_dates(30)
+    df = company_prices(companies, all_dates=all_dates, field_name=field_name) # by default change_in_percent will be used
+    n_stocks = len(df)
+    top10 = {}
+    bottom10 = {}
+    for date in df.columns:
+        top10[date] = df[date].nlargest(10)
+        bottom10[date] = df[date].nsmallest(10)
+        df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
+    fig = make_sentiment_plot(df, plot_text_labels=False)
+    sentiment_data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return (sentiment_data, df, top10, bottom10, n_stocks)
 
 def make_sector_momentum_plot(dataframe, sector_name):
     assert len(sector_name) > 0
@@ -64,7 +83,7 @@ def make_sector_momentum_plot(dataframe, sector_name):
                                            ['darkgreen', 'red', 'grey'],
                                            ['{} stocks up >5%'.format(sector_name), "{} stocks down >5%".format(sector_name), "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
-        ax.plot(timeline, dataframe[name].rolling(30).mean(), color=linecolour)
+        ax.plot(timeline, dataframe[name].rolling(14).mean(), color=linecolour)
         ax.set_ylabel('', fontsize=8)
         ax.set_title(title, fontsize=8)
 
@@ -73,7 +92,10 @@ def make_sector_momentum_plot(dataframe, sector_name):
             ax.set_xlabel('')
     plt.xticks(fontsize=8, rotation=30)
     plt.plot()
-    return plt.gcf()
+    ret = plt.gcf()
+    data = plot_as_base64(ret).decode('utf-8')
+    plt.close(fig)
+    return data
 
 def make_rsi_plot(stock_code, dataframe):
     plt.rc('axes', grid=True)
@@ -96,9 +118,10 @@ def make_rsi_plot(stock_code, dataframe):
     # plot the relative strength indicator
     prices = pd.to_numeric(dataframe['last_price'], errors='coerce').to_numpy()
     rsi = relative_strength(dataframe['last_price'])
+    #print(len(rsi))
     fillcolor = 'darkgoldenrod'
 
-    timeline = dataframe.fetch_date
+    timeline = dataframe['fetch_date']
     ax1.plot(timeline, rsi, color=fillcolor)
     ax1.axhline(70, color='darkgreen')
     ax1.axhline(30, color='darkgreen')
