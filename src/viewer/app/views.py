@@ -184,8 +184,6 @@ def show_stock(request, stock=None):
        raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(df)))
    #print(df)
    fig = make_rsi_plot(stock, df)
-   rsi_data = plot_as_base64(fig)
-   plt.close(fig)
 
    # show sector performance over past 3 months
    all_dates = desired_dates(120)
@@ -196,23 +194,22 @@ def show_stock(request, stock=None):
    rows = []
    cum_sum = {}
    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-       for stock, daily_change in cip[day].iteritems():
-           if not stock in cum_sum:
-               cum_sum[stock] = 0.0
+       for asx_code, daily_change in cip[day].iteritems():
+           if not asx_code in cum_sum:
+               cum_sum[asx_code] = 0.0
            else:
-               cum_sum[stock] += daily_change
+               cum_sum[asx_code] += daily_change
        n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
        n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
        n_unchanged = len(cip) - n_pos - n_neg
        rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
 
    df = pd.DataFrame.from_records(rows)
-
    sector_momentum_data = make_sector_momentum_plot(df, company_details.sector_name)
 
    # populate template and render HTML page with context
    context = {
-       'rsi_data': rsi_data.decode('utf-8'),
+       'rsi_data': fig,
        'asx_code': stock,
        'securities': securities,
        'cd': company_details,
