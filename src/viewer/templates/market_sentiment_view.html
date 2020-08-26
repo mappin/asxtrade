@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Market sentiment over past week</h2>
+<h2>{{ title }}</h2>
 <img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
 
 <h2>Top 10 each day</h2>

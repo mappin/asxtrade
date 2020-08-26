@@ -8,8 +8,9 @@ from django.views.generic.list import MultipleObjectTemplateResponseMixin, Multi
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import relative_strength, analyse_companies, heatmap_market
+from app.analysis import relative_strength
 from app.plots import *
+import pylru
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = SectorSearchForm
@@ -19,23 +20,18 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
     sector_name = None
     as_at_date = None
+    sentiment_data = None
+    n_days = 30
 
     def render_to_response(self, context):
-        n_days = 7
-        if len(self.sector_name) > 0:
-            companies = all_sector_stocks(self.sector_name)
-            sentiment_bin_df, top10, bottom10, n_stocks = heatmap_companies(companies, n_days)
-            fig = make_sentiment_plot(sentiment_bin_df)
-            sentiment_data = plot_as_base64(fig).decode('utf-8')
-            plt.close(fig)
-        else:
-            sector_sentiment = None
         context.update({ # NB: we use update() to not destroy page_obj
             'sector': self.sector_name,
             'most_recent_date': self.as_at_date,
-            'watched': user_watchlist(self.request.user),
-            'sentiment_heatmap': sentiment_data,
-            'sentiment_heatmap_title': "Recent sentiment for {}: past {} days".format(self.sector_name, n_days)
+            'sentiment_heatmap': self.sentiment_data,
+            'watched': user_watchlist(self.request.user), # to highlight top10/bottom10 bookmarks correctly
+            'best_ten': self.top10,
+            'worst_ten': self.bottom10,
+            'sentiment_heatmap_title': "Recent sentiment for {}: past {} days".format(self.sector_name, self.n_days)
         })
         return super().render_to_response(context)
 
@@ -46,22 +42,28 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
        wanted_stocks = set(all_sector_stocks(self.sector_name))
+       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, desired_dates(self.n_days))
+       self.top10 = top10
+       self.bottom10 = bottom10
        if any(['best10' in kwargs, 'worst10' in kwargs]):
-           sector_df, b10, w10 = analyse_companies(wanted_stocks)
            wanted = set()
            restricted = False
+           overall_performance = df.sum(axis=1)
            if kwargs.get('best10', False):
-               wanted = wanted.union(b10.index)
+               wanted = wanted.union(overall_performance.nlargest(10).index)
                restricted = True
            if kwargs.get('worst10', False):
-               wanted = wanted.union(w10.index)
+               wanted = wanted.union(overall_performance.nsmallest(10).index)
                restricted = True
            if restricted:
                wanted_stocks = wanted_stocks.intersection(wanted)
            # FALLTHRU...
        self.as_at_date = all_dates[-1]
+
        print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
-       results = company_quotes(wanted_stocks, required_date=self.as_at_date)
+       self.wanted_stocks = wanted_stocks
+       results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=self.as_at_date) \
+                                  .exclude(error_code='id-or-code-invalid')
        results = results.order_by(*self.ordering)
        return results
 
@@ -76,9 +78,19 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     as_at_date = None
 
     def render_to_response(self, context):
+        qs = context['paginator'].object_list.all()
+        qs = list(qs.values_list('asx_code', flat=True))
+        if len(qs) == 0:
+            sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
+        else:
+            sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(qs)
         context.update({
            'most_recent_date': self.as_at_date,
-           'watched': user_watchlist(self.request.user)
+           'sentiment_heatmap': sentiment_data,
+           'watched': self.request.user, # to ensure bookmarks are correct
+           'best_ten': top10,
+           'worst_ten': bottom10,
+           'sentiment_heatmap_title': "Selected stock sentiment: {} total stocks".format(n_stocks),
         })
         return super().render_to_response(context)
 
@@ -98,6 +110,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
             results = results.filter(pe__lt=kwargs.get('max_pe'))
 
         results = results.order_by(*self.ordering)
+
         return results
 
 dividend_search = DividendYieldSearch.as_view()
@@ -112,7 +125,6 @@ class CompanySearch(DividendYieldSearch):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
             return Quotation.objects.none()
 
-        self.as_at_date = latest_quotation_date('ANZ')
         matching_companies = set()
         wanted_name = kwargs.get('name', '')
         wanted_activity = kwargs.get('activity', '')
@@ -127,7 +139,8 @@ class CompanySearch(DividendYieldSearch):
             matching_companies.update([hit.asx_code for hit in \
                                        CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity)])
         print("Showing results for {} companies".format(len(matching_companies)))
-        results = company_quotes(matching_companies, required_date=self.as_at_date, filter_bad=True)
+        self.as_at_date = latest_quotation_date('ANZ')
+        results, latest_date = latest_quote(tuple(matching_companies))
         results = results.order_by(*self.ordering)
         return results
 
@@ -156,36 +169,46 @@ def all_stocks(request):
    }
    return render(request, "all_stocks.html", context=context)
 
+@login_required
 def show_stock(request, stock=None):
+   """
+   Displays a view of a single stock via the stock_view.html template and associated state
+   """
    validate_stock(stock)
-
-   # make stock momentum plot
-   quotes = all_quotes([ stock ])
+   df = all_quotes(stock)
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
        raise Http404("No company details for {}".format(stock))
-   df = as_dataframe(quotes)
-   #print(df['last_price'])
    if len(df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-       raise Http404("Insufficient price quotes for {}".format(stock))
+       raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(df)))
+   #print(df)
    fig = make_rsi_plot(stock, df)
    rsi_data = plot_as_base64(fig)
    plt.close(fig)
 
    # show sector performance over past 3 months
-   tag = "sector_momentum-{}".format(company_details.sector_name)
-   cache_hit = ImageCache.objects.filter(tag=tag).first()
-   if cache_hit is None or cache_hit.is_outdated():
-       wanted_stocks = set(all_sector_stocks(company_details.sector_name))
-       sector_df, b10, w10 = analyse_companies(wanted_stocks)
-       #print(sector_df)
-       fig = make_sector_momentum_plot(sector_df, company_details.sector_name)
-       sector_b64 = plot_as_base64(fig).decode('utf-8')
-       plt.close(fig)
-       update_image_cache(tag, sector_b64)
-   else:
-       sector_b64 = cache_hit.base64
+   all_dates = desired_dates(120)
+   sector_companies = all_sector_stocks(company_details.sector_name)
+   cip = company_prices(sector_companies, all_dates=all_dates, field_name='change_in_percent')
+   cip = cip.fillna(0.0)
+   #print(cip)
+   rows = []
+   cum_sum = {}
+   for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
+       for stock, daily_change in cip[day].iteritems():
+           if not stock in cum_sum:
+               cum_sum[stock] = 0.0
+           else:
+               cum_sum[stock] += daily_change
+       n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
+       n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
+       n_unchanged = len(cip) - n_pos - n_neg
+       rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
+
+   df = pd.DataFrame.from_records(rows)
+
+   sector_momentum_data = make_sector_momentum_plot(df, company_details.sector_name)
 
    # populate template and render HTML page with context
    context = {
@@ -193,59 +216,81 @@ def show_stock(request, stock=None):
        'asx_code': stock,
        'securities': securities,
        'cd': company_details,
-       'sector_past3months_data': sector_b64,
+       'sector_momentum_plot': sector_momentum_data,
    }
    return render(request, "stock_view.html", context=context)
 
 @login_required
 def market_sentiment(request):
-    n_days = 7
-    sentiment_bin_df, top10, bottom10, n_stocks = heatmap_market(n_days) # need to capture at least last 5 trading days, no matter what day it is run on
-    fig = make_sentiment_plot(sentiment_bin_df)
-    sentiment_data = plot_as_base64(fig)
-    plt.close(fig)
+    n_days = 21
+    all_dates = desired_dates(n_days)
+    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates)
 
     context = {
-       'sentiment_data': sentiment_data.decode('utf-8'),
+       'sentiment_data': sentiment_heatmap_data,
        'n_days': n_days,
-       'n_stocks_plotted': n_stocks,
+       'n_stocks_plotted': n,
        'best_ten': top10, # NB: each day
        'worst_ten': bottom10,
-       'watched': user_watchlist(request.user)
+       'watched': user_watchlist(request.user),
+       'title': "Market sentiment over past {} days".format(n_days)
     }
     return render(request, 'market_sentiment_view.html', context=context)
 
 @login_required
-def show_watched(request):
-    matching_companies = user_watchlist(request.user)
+def show_increasing_eps_stocks(request):
+    matching_companies = increasing_eps(None)
+    return show_matching_companies(matching_companies,
+                "Stocks with increasing EPS over past 300 days",
+                "Sentiment for selected stocks",
+                user_purchases(request.user),
+                request
+    )
+
+def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request):
+    """
+    Support function to public-facing views to eliminate code redundancy
+    """
+    assert len(matching_companies) > 0
+    assert isinstance(title, str) and isinstance(heatmap_title, str)
+
     print("Showing results for {} companies".format(len(matching_companies)))
-    stocks = company_quotes(matching_companies)
-    purchases = user_purchases(request.user)
+    stocks_queryset, date = latest_quote(matching_companies)
+    stocks_queryset = stocks_queryset.order_by('asx_code')
 
     # paginate results for 50 stocks per page
-    paginator = Paginator(stocks, 50)
+    paginator = Paginator(stocks_queryset, 50)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.page(page_number)
 
     # add sentiment heatmap amongst watched stocks
     n_days = 14
-    sector_heatmap_data = None
-    if len(matching_companies) > 0:
-        sentiment_bin_df, top10, bottom10, n_stocks = heatmap_companies(matching_companies, n_days=n_days)
-        fig = make_sentiment_plot(sentiment_bin_df)
-        sentiment_heatmap_data = plot_as_base64(fig).decode('utf-8')
-        plt.close(fig)
+    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(matching_companies, all_dates=desired_dates(n_days))
 
     context = {
          "most_recent_date": latest_quotation_date('ANZ'),
          "page_obj": page_obj,
-         "title": "Stocks you are watching",
+         "title": title,
          "watched": user_watchlist(request.user),
-         "virtual_purchases": purchases,
+         "best_ten": top10,
+         "worst_ten": bottom10,
+         "virtual_purchases": user_purchases,
          "sentiment_heatmap": sentiment_heatmap_data,
-         "sentiment_heatmap_title": "Watched stock sentiment heatmap: past {} days".format(n_days)
+         "sentiment_heatmap_title": "{}: past {} days".format(heatmap_title, n_days)
     }
     return render(request, 'all_stocks.html', context=context)
+
+@login_required
+def show_watched(request):
+    matching_companies = user_watchlist(request.user)
+    purchases = user_purchases(request.user)
+
+    return show_matching_companies(matching_companies,
+               "Stocks you are watching",
+               "Watched stock recent sentiment",
+               purchases,
+               request
+    )
 
 def redirect_to_next(request, fallback_next='/'):
     # redirect will trigger a redraw which will show the purchase since next will be the same page

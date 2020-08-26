@@ -2,10 +2,9 @@
 {% load myfilters %}
 {% block stock_list %}
 
-<div class="unimportant">Prices current as at {{ most_recent_date }}.
-{% if sector %}
-   Only stocks in {{ sector }} are displayed.
-{% endif %}
+<div class="unimportant">
+{% if most_recent_date %}Prices current as at {{ most_recent_date }}.{% endif %}
+{% if sector %}Only stocks in {{ sector }} are displayed.{% endif %}
 </div>
 
 <table style="width: 100%">
@@ -83,4 +82,24 @@
     <img src="data:image/png;base64, {{ sentiment_heatmap }}" />
     </div>
 {% endif %}
+
+
+{% if best_ten %}
+<h2>Top 10 each day</h2>
+
+<table width="60%">
+{% for date, series in best_ten.items %}
+   {% include "stock_series.html" %}
+{% endfor %}
+</table>
+
+<h2>Bottom 10 each day</h2>
+
+<table width="60%">
+{% for date, series in worst_ten.items %}
+    {% include "stock_series.html" %}
+{% endfor %}
+</table>
+{% endif %}
+
 {% endblock %}
