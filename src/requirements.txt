@@ -1,5 +1,0 @@
-pandas
-xlrd
-olefile
-requests
-great_expectations
