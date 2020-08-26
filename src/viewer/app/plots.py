@@ -43,7 +43,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     ax.set_xticklabels(dates)
     bins = list(df.index)
     ax.set_yticklabels(bins)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    plt.setp(ax.get_xticklabels(), fontsize=8, rotation=45, ha="right", rotation_mode="anchor")
     if plot_text_labels:
         for i_idx, i in enumerate(bins):
             for j_idx, j in enumerate(dates):
