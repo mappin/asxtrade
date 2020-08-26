@@ -7,6 +7,7 @@ import pandas as pd
 import numpy
 from datetime import datetime, date
 import calendar
+import hashlib
 
 def dates_of_month(month, year):
     assert month >= 1 and month <= 12
@@ -43,17 +44,19 @@ def load_prices(db, field_name, month, year):
               field_name: clean_value(row[field_name])}
               for row in db.asx_prices.find({ 'fetch_date': { "$in": days_of_month }, field_name: { "$exists": True } }, { 'asx_code': 1, field_name: 1, 'fetch_date': 1})]
     if len(rows) == 0:
-        return pd.DataFrame(columns=['fetch_date', 'asx_code', field_name]) # return dummy dataframe if empty month
+        df = pd.DataFrame(columns=['fetch_date', 'asx_code', field_name]) # return dummy dataframe if empty
+        # FALLTHRU
     df = pd.DataFrame.from_records(rows)
     df = df.pivot(index='asx_code', columns='fetch_date', values=field_name)
     return df
 
 def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-downloaded'):
-    for field_name in ['change_in_percent', 'last_price', 'change_price']:
+    for field_name in ['change_in_percent', 'last_price', 'change_price', 'volume', 'eps', 'pe']:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
         df = load_prices(db, field_name, month, year)
 
         with io.BytesIO() as fp:
+             # NB: if this fails it may be because you are using fastparquet which doesnt (yet) support BytesIO. Use eg. pyarrow
              df.to_parquet(fp, compression='gzip', index=True)
              fp.seek(0)
              bytes = fp.read()
@@ -67,6 +70,8 @@ def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-do
                      'n_days': len(df.columns),
                      'n_stocks': len(df),
                      'dataframe_format': 'parquet',
+                     'size_in_bytes': len(bytes),
+                     'sha256': hashlib.sha256(bytes).hexdigest(),
                      'dataframe': Binary(bytes), # NB: always parquet format
                  }}, upsert=True)
 
