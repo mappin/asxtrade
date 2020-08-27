@@ -25,11 +25,12 @@ urlpatterns = [
     path('search/by-sector', sector_search),
     path('search/by-yield', dividend_search),
     path('search/by-company', company_search),
-    path('show/increasing-eps', show_increasing_eps_stocks),  # NB: order important here! 
+    path('show/increasing-eps', show_increasing_eps_stocks),  # NB: order important here!
     path('show/watched', show_watched, name='show-watched'),
     path('show/<str:stock>', show_stock, name='show-stock'),
     path('watchlist/<str:stock>', toggle_watched),
     path('purchase/<str:stock>', buy_virtual_stock),
+    path('delete/<str:stock>', delete_stock),
     path('delete/<str:buy_date>/<str:stock>', delete_virtual_stock),
     path('stats/market-sentiment', market_sentiment)
 ]
