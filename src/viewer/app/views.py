@@ -22,6 +22,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     as_at_date = None
     sentiment_data = None
     n_days = 30
+    n_top_bottom = 20
 
     def render_to_response(self, context):
         context.update({ # NB: we use update() to not destroy page_obj
@@ -29,6 +30,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
             'most_recent_date': self.as_at_date,
             'sentiment_heatmap': self.sentiment_data,
             'watched': user_watchlist(self.request.user), # to highlight top10/bottom10 bookmarks correctly
+            'n_top_bottom': self.n_top_bottom,
             'best_ten': self.top10,
             'worst_ten': self.bottom10,
             'sentiment_heatmap_title': "Recent sentiment for {}: past {} days".format(self.sector_name, self.n_days)
@@ -42,18 +44,17 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
        wanted_stocks = set(all_sector_stocks(self.sector_name))
-       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, desired_dates(self.n_days))
+       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, desired_dates(self.n_days), n_top_bottom=self.n_top_bottom)
        self.top10 = top10
        self.bottom10 = bottom10
        if any(['best10' in kwargs, 'worst10' in kwargs]):
            wanted = set()
            restricted = False
-           overall_performance = df.sum(axis=1)
            if kwargs.get('best10', False):
-               wanted = wanted.union(overall_performance.nlargest(10).index)
+               wanted = wanted.union(top10.index)
                restricted = True
            if kwargs.get('worst10', False):
-               wanted = wanted.union(overall_performance.nsmallest(10).index)
+               wanted = wanted.union(bottom10.index)
                restricted = True
            if restricted:
                wanted_stocks = wanted_stocks.intersection(wanted)
@@ -76,18 +77,21 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     paginate_by = 50
     ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
     as_at_date = None
+    n_top_bottom = 20
 
     def render_to_response(self, context):
-        qs = context['paginator'].object_list.all()
+        qs = context['paginator'].object_list.all() # all() to get a fresh queryset instance
         qs = list(qs.values_list('asx_code', flat=True))
+
         if len(qs) == 0:
             sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
         else:
-            sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(qs)
+            sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(qs, n_top_bottom=self.n_top_bottom)
         context.update({
            'most_recent_date': self.as_at_date,
            'sentiment_heatmap': sentiment_data,
            'watched': user_watchlist(self.request.user), # to ensure bookmarks are correct
+           'n_top_bottom': self.n_top_bottom,
            'best_ten': top10,
            'worst_ten': bottom10,
            'sentiment_heatmap_title': "Selected stock sentiment: {} total stocks".format(n_stocks),
@@ -206,7 +210,7 @@ def show_stock(request, stock=None, sector_n_days=90):
        rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
 
    df = pd.DataFrame.from_records(rows)
-   sector_momentum_data = make_sector_momentum_plot(df, company_details.sector_name)
+   sector_momentum_data = make_momentum_plot(df, company_details.sector_name)
 
    # populate template and render HTML page with context
    context = {
@@ -223,14 +227,16 @@ def show_stock(request, stock=None, sector_n_days=90):
 def market_sentiment(request):
     validate_user(request.user)
     n_days = 21
+    n_top_bottom = 20
     all_dates = desired_dates(n_days)
-    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates)
+    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates, n_top_bottom=n_top_bottom)
 
     context = {
        'sentiment_data': sentiment_heatmap_data,
        'n_days': n_days,
        'n_stocks_plotted': n,
-       'best_ten': top10, # NB: each day
+       'n_top_bottom': n_top_bottom,
+       'best_ten': top10,
        'worst_ten': bottom10,
        'watched': user_watchlist(request.user),
        'title': "Market sentiment over past {} days".format(n_days)
@@ -265,14 +271,17 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
     page_obj = paginator.page(page_number)
 
     # add sentiment heatmap amongst watched stocks
-    n_days = 14
-    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(matching_companies, all_dates=desired_dates(n_days))
+    n_days = 30
+    n_top_bottom = 20
+    sentiment_heatmap_data, df, top10, bottom10, n = \
+        plot_heatmap(matching_companies, all_dates=desired_dates(n_days), n_top_bottom=n_top_bottom)
 
     context = {
          "most_recent_date": latest_quotation_date('ANZ'),
          "page_obj": page_obj,
          "title": title,
          "watched": user_watchlist(request.user),
+         'n_top_bottom': n_top_bottom,
          "best_ten": top10,
          "worst_ten": bottom10,
          "virtual_purchases": user_purchases,
