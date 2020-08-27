@@ -30,7 +30,7 @@
              {% endif %}
            </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
                  <img src="{% static "money.png" %}" width="12" />
-           </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
+           </a><a class="confirm-delete" href="/delete/{{ stock.asx_code }}?next={{ request.path }}"><img width="12" src="{% static "delete-stock.png" %}" />&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
           </td>
           <td>{{ stock.annual_dividend_yield |floatformat }}</td>
           <td>{{ stock.last_price }}</td>
