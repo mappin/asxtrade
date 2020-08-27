@@ -53,26 +53,25 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     plt.plot()
     return plt.gcf()
 
-def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None):
+def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None, n_top_bottom=10):
     if bins is None:
         bins, labels = price_change_bins()
     if all_dates is None:
         all_dates = desired_dates(30)
     df = company_prices(companies, all_dates=all_dates, field_name=field_name) # by default change_in_percent will be used
     n_stocks = len(df)
-    top10 = {}
-    bottom10 = {}
+    sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
+    top10 = sum.nlargest(n_top_bottom)
+    bottom10 = sum.nsmallest(n_top_bottom)
     for date in df.columns:
-        top10[date] = df[date].nlargest(10)
-        bottom10[date] = df[date].nsmallest(10)
         df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
     fig = make_sentiment_plot(df, plot_text_labels=False)
     sentiment_data = plot_as_base64(fig).decode('utf-8')
     plt.close(fig)
     return (sentiment_data, df, top10, bottom10, n_stocks)
 
-def make_sector_momentum_plot(dataframe, sector_name):
-    assert len(sector_name) > 0
+def make_momentum_plot(dataframe, descriptor):
+    assert len(descriptor) > 0
     assert len(dataframe) > 0
 
     fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
@@ -81,7 +80,7 @@ def make_sector_momentum_plot(dataframe, sector_name):
     for name, ax, linecolour, title in zip(['n_pos', 'n_neg', 'n_unchanged'],
                                            axes,
                                            ['darkgreen', 'red', 'grey'],
-                                           ['{} stocks up >5%'.format(sector_name), "{} stocks down >5%".format(sector_name), "Remaining stocks"]):
+                                           ['{} stocks up >5%'.format(descriptor), "{} stocks down >5%".format(descriptor), "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
         series = dataframe[name].rolling(14).mean()
         ax.plot(timeline, series, color=linecolour)
