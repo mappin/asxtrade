@@ -7,6 +7,7 @@
 {% if sector %}Only stocks in {{ sector }} are displayed.{% endif %}
 </div>
 
+{% if page_obj %}
 <table style="width: 100%">
    <tr>
       <th>ASX Code</th>
@@ -56,7 +57,6 @@
    {% endfor %}
 </table>
 
-{% if page_obj %}
 <div class="pagination">
     <span class="step-links">
         {% if page_obj.has_previous %}
@@ -84,22 +84,24 @@
 {% endif %}
 
 
-{% if best_ten %}
-<h2>Top 10 each day</h2>
+{% if best_ten is None %}
+<div class="unimportant">No top/bottom10 available.</div>
+{% else %}
+<h3>Top {{ n_top_bottom }}</h3>
 
 <table width="60%">
-{% for date, series in best_ten.items %}
-   {% include "stock_series.html" %}
-{% endfor %}
+   {% include "stock_series.html" with series=best_ten %}
 </table>
 
-<h2>Bottom 10 each day</h2>
+<h3>Bottom {{ n_top_bottom }}</h3>
 
 <table width="60%">
-{% for date, series in worst_ten.items %}
-    {% include "stock_series.html" %}
-{% endfor %}
+    {% include "stock_series.html" with series=worst_ten %}
 </table>
+{% endif %}
+
+{% if momentum is None %}
+
 {% endif %}
 
 {% endblock %}

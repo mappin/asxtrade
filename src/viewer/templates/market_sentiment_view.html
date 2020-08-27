@@ -4,20 +4,16 @@
 <h2>{{ title }}</h2>
 <img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
 
-<h2>Top 10 each day</h2>
+<h3>Top {{ n_top_bottom }}</h3>
 
 <table width="60%">
-{% for date, series in best_ten.items %}
-   {% include "stock_series.html" %}
-{% endfor %}
+   {% include "stock_series.html" with series=best_ten %}
 </table>
 
-<h2>Bottom 10 each day</h2>
+<h3>Bottom {{ n_top_bottom }}</h3>
 
 <table width="60%">
-{% for date, series in worst_ten.items %}
-    {% include "stock_series.html" %}
-{% endfor %}
+    {% include "stock_series.html" with series=worst_ten %}
 </table>
 
 {% endblock %}

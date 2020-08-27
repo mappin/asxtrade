@@ -10,7 +10,7 @@
               <img src="{% static "empty-star.png" %}" width="12" />
           {% endif %}
         </a>
-        <a href="/show/{{ index }}">{{ index }}<span class="small" style="color: gray">&nbsp;{{ value }}%&nbsp;</span>&nbsp;</a>
-        {% if forloop.counter == 5 %}</td></tr><tr><td></td><td>{% endif %}
+        <a href="/show/{{ index }}">{{ index }}<span class="small" style="color: gray">&nbsp;{{ value|floatformat }}%&nbsp;</span>&nbsp;</a>
+        {% if forloop.counter|divisibleby:5 %}</td></tr><tr><td></td><td>{% endif %}
 {% endfor %}
 </td></tr>
