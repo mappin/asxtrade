@@ -175,6 +175,7 @@ def show_stock(request, stock=None, sector_n_days=90):
    Displays a view of a single stock via the stock_view.html template and associated state
    """
    validate_stock(stock)
+   validate_user(request.user)
    df = all_quotes(stock)
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
@@ -220,6 +221,7 @@ def show_stock(request, stock=None, sector_n_days=90):
 
 @login_required
 def market_sentiment(request):
+    validate_user(request.user)
     n_days = 21
     all_dates = desired_dates(n_days)
     sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates)
@@ -237,11 +239,12 @@ def market_sentiment(request):
 
 @login_required
 def show_increasing_eps_stocks(request):
+    validate_user(request.user)
     matching_companies = increasing_eps(None)
     return show_matching_companies(matching_companies,
                 "Stocks with increasing EPS over past 300 days",
                 "Sentiment for selected stocks",
-                user_purchases(request.user),
+                None, # dont show purchases on this view
                 request
     )
 
@@ -280,6 +283,7 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
 
 @login_required
 def show_watched(request):
+    validate_user(request.user)
     matching_companies = user_watchlist(request.user)
     purchases = user_purchases(request.user)
 
@@ -291,16 +295,24 @@ def show_watched(request):
     )
 
 def redirect_to_next(request, fallback_next='/'):
+    """
+    Call this function in your view once you have deleted some database data: set the 'next' query href
+    param to where the redirect should go to. If not specified '/' will be assumed. Not permitted to
+    redirect to another site.
+    """
     # redirect will trigger a redraw which will show the purchase since next will be the same page
     assert request is not None
     if request.GET is not None:
-        return HttpResponseRedirect(request.GET.get('next', fallback_next))
+        next_href = request.GET.get('next', fallback_next)
+        assert next_href.startswith('/') # PARANOIA: must be same origin
+        return HttpResponseRedirect(next_href)
     else:
         return HttpResponseRedirect(fallback_next)
 
 @login_required
 def toggle_watched(request, stock=None):
     validate_stock(stock)
+    validate_user(request.user)
     current_watchlist = user_watchlist(request.user)
     if stock in current_watchlist: # remove from watchlist?
         Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
@@ -312,6 +324,7 @@ def toggle_watched(request, stock=None):
 @login_required
 def buy_virtual_stock(request, stock=None, amount=5000.0):
     validate_stock(stock)
+    validate_user(request.user)
     assert amount > 0.0
     quote, latest_date = latest_quote(stock)
     cur_price = quote.last_price
@@ -328,11 +341,21 @@ def buy_virtual_stock(request, stock=None, amount=5000.0):
     return redirect_to_next(request)
 
 @login_required
+def delete_stock(request, stock=None):
+    validate_stock(stock)
+    validate_user(request.user)
+    print("About to delete {} stock for {}".format(stock, request.user))
+    Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
+    VirtualPurchase.objects.filter(user=request.user, asx_code=stock).delete()
+    return redirect_to_next(request)
+
+@login_required
 def delete_virtual_stock(request, buy_date=None, stock=None):
     validate_stock(stock)
     validate_date(buy_date)
+    validate_user(request.user)
 
-    stocks_to_delete = VirtualPurchase.objects.filter(buy_date=buy_date, asx_code=stock)
+    stocks_to_delete = VirtualPurchase.objects.filter(user=request.user, buy_date=buy_date, asx_code=stock)
     print("Selected {} stocks to delete".format(len(stocks_to_delete)))
     stocks_to_delete.delete()
     return redirect_to_next(request)
