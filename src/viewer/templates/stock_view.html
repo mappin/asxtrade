@@ -5,16 +5,16 @@
 <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
 
 <h2 class="asxtrade">Information</h2>
-
+<div class="info-table">
 <table class="small" style="width: 60%">
      <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
      <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
      <tr><td>Indices</td><td>{%for i in indices %}{{ i|pprint }}{%endfor %}</td></tr>
      <tr><td>Website</td><td>{{ cd.web_address|urlize }}</td></tr>
 </table>
+</div>
 
-<h2 class="asxtrade">Available securities</h2>
-
+<div class="securities-table">
 <table style="width: 80%">
     <tr class="small">
       <th>ASX code</th>
@@ -33,9 +33,10 @@
     </tr>
 {% endfor %}
 </table>
+</div>
 
-<h2 class="asxtrade">Sector performance (past 3 months)</h2>
+<h2 class="asxtrade">{{ sector_momentum_title }}</h2>
 
-<img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="Sector performance over past 3 months - {{ asx_code }}">
+<img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
 
 {% endblock %}
