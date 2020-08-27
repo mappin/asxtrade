@@ -14,12 +14,12 @@
 
         <table><tr valign="top"><td>
         <div class="menubar">
-            <h3>Search</h3>
+            <h3>Find</h3>
             <ul>{% menu search %}
                 {% for item in menuitems %}<li><a href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
                 {% endfor %}
             </ul>
-            <h3>Statistics</h3>
+            <h3>Show</h3>
             <ul>{%menu stats %}
                 {% for item in menuitems %}<li><a href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
                 {% endfor %}
