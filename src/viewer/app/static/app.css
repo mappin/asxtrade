@@ -15,3 +15,8 @@ span.unimportant {
   color: grey;
   size: -2;
 }
+
+div.info-table {
+  margin-bottom: 10px;
+}
+

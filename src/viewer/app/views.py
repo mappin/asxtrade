@@ -87,7 +87,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
         context.update({
            'most_recent_date': self.as_at_date,
            'sentiment_heatmap': sentiment_data,
-           'watched': self.request.user, # to ensure bookmarks are correct
+           'watched': user_watchlist(self.request.user), # to ensure bookmarks are correct
            'best_ten': top10,
            'worst_ten': bottom10,
            'sentiment_heatmap_title': "Selected stock sentiment: {} total stocks".format(n_stocks),
@@ -170,7 +170,7 @@ def all_stocks(request):
    return render(request, "all_stocks.html", context=context)
 
 @login_required
-def show_stock(request, stock=None):
+def show_stock(request, stock=None, sector_n_days=90):
    """
    Displays a view of a single stock via the stock_view.html template and associated state
    """
@@ -186,7 +186,7 @@ def show_stock(request, stock=None):
    fig = make_rsi_plot(stock, df)
 
    # show sector performance over past 3 months
-   all_dates = desired_dates(120)
+   all_dates = desired_dates(sector_n_days)
    sector_companies = all_sector_stocks(company_details.sector_name)
    cip = company_prices(sector_companies, all_dates=all_dates, field_name='change_in_percent')
    cip = cip.fillna(0.0)
@@ -214,6 +214,7 @@ def show_stock(request, stock=None):
        'securities': securities,
        'cd': company_details,
        'sector_momentum_plot': sector_momentum_data,
+       'sector_momentum_title': "Stocks in {} and their performance over past {} days".format(company_details.sector_name, sector_n_days)
    }
    return render(request, "stock_view.html", context=context)
 
