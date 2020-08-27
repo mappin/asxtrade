@@ -407,6 +407,9 @@ def update_image_cache(tag, base64_data, valid_days=7): # cache for a week by de
     ImageCache.objects.update_or_create(tag=tag, defaults=defaults)
 
 def user_purchases(user):
+    """
+    Returns a dict: asx_code -> VirtualPurchase of the specified user's watchlist
+    """
     assert user is not None
     purchases = {}
     for purchase in VirtualPurchase.objects.filter(user=user):
@@ -416,15 +419,3 @@ def user_purchases(user):
         purchases[code].append(purchase)
     print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
-
-def as_dataframe(iterable):
-    """
-    Convert model instances to a pandas dataframe and return it. If 'fetch_date' is a column,
-    then it is automagically converted to a DateTime (and sorted by this date)
-    """
-    rows = [model_to_dict(rec) for rec in iterable]
-    df = pd.DataFrame.from_records(rows)
-    if 'fetch_date' in df.columns:
-        df['fetch_date'] = pd.to_datetime(df['fetch_date'])
-        df = df.sort_values(by='fetch_date')
-    return df
