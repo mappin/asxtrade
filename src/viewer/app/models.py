@@ -80,7 +80,7 @@ class Quotation(model.Model):
         Return the volume as a formatted string (rounded to 2 decimal place)
         represent the millions of dollars transacted for a given quote
         """
-        if self.is_error():
+        if any([self.is_error(), self.volume is None, self.last_price is None]):
             return ""
 
         return "{:.2f}".format(self.volume * self.last_price / 1000000.0)
