@@ -18,6 +18,12 @@ def validate_date(d):
     assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
     assert re.match('^\d{4}-\d{2}-\d{2}$', d)
 
+def validate_user(user):
+    assert user is not None
+    assert user.is_active
+    assert user.is_authenticated
+    assert not user.is_anonymous
+
 class Quotation(model.Model):
     _id = ObjectIdField()
     error_code = model.TextField(max_length=100) # ignore record iff set to non-empty
