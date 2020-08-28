@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{ asx_code }} - momentum</h2>
-<img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
 
 <h2 class="asxtrade">Information</h2>
+
 <div class="info-table">
 <table class="small" style="width: 60%">
      <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
@@ -35,7 +34,10 @@
 </table>
 </div>
 
-<h2 class="asxtrade">{{ sector_momentum_title }}</h2>
+<h3>Momentum</h3>
+<img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+
+<h3 class="asxtrade">{{ sector_momentum_title }}</h3>
 
 <img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
 

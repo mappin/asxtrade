@@ -4,6 +4,7 @@
 <h2>{{ title }}</h2>
 <img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
 
+{% if best_ten %}
 <h3>Top {{ n_top_bottom }}</h3>
 
 <table width="60%">
@@ -15,5 +16,6 @@
 <table width="60%">
     {% include "stock_series.html" with series=worst_ten %}
 </table>
+{% endif %}
 
 {% endblock %}
