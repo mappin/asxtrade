@@ -180,7 +180,7 @@ def show_stock(request, stock=None, sector_n_days=90):
    """
    validate_stock(stock)
    validate_user(request.user)
-   df = all_quotes(stock)
+   df = all_quotes(stock, all_dates=desired_dates(sector_n_days))
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
@@ -219,7 +219,7 @@ def show_stock(request, stock=None, sector_n_days=90):
        'securities': securities,
        'cd': company_details,
        'sector_momentum_plot': sector_momentum_data,
-       'sector_momentum_title': "Stocks in {} and their performance over past {} days".format(company_details.sector_name, sector_n_days)
+       'sector_momentum_title': "Stocks in {} and {} day performance".format(company_details.sector_name, sector_n_days)
    }
    return render(request, "stock_view.html", context=context)
 

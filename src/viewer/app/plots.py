@@ -54,6 +54,12 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     return plt.gcf()
 
 def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None, n_top_bottom=10):
+    """
+    Using field_name plot a data matrix as a heatmap by change_in_percent using the specified bins. If not
+    using change_in_percent as the field name, you may need to adjust the bins to the values being used.
+    The horizontal axis is the dates specified - past 30 days by default. Also computes top10/worst10 and
+    returns a tuple (plot, dataframe, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom items.
+    """
     if bins is None:
         bins, labels = price_change_bins()
     if all_dates is None:
@@ -65,17 +71,18 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     bottom10 = sum.nsmallest(n_top_bottom)
     for date in df.columns:
         df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
-    fig = make_sentiment_plot(df, plot_text_labels=False)
-    sentiment_data = plot_as_base64(fig).decode('utf-8')
+    fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
+    sentiment_plot = plot_as_base64(fig).decode('utf-8')
     plt.close(fig)
-    return (sentiment_data, df, top10, bottom10, n_stocks)
+    return (sentiment_plot, df, top10, bottom10, n_stocks)
 
 def make_momentum_plot(dataframe, descriptor):
     assert len(descriptor) > 0
     assert len(dataframe) > 0
 
     fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
-    timeline = dataframe['date']
+    timeline = pd.to_datetime(dataframe['date'])
+    locator, formatter = auto_dates()
     # now do the plot
     for name, ax, linecolour, title in zip(['n_pos', 'n_neg', 'n_unchanged'],
                                            axes,
@@ -87,16 +94,40 @@ def make_momentum_plot(dataframe, descriptor):
         ax.set_ylabel('', fontsize=8)
         ax.set_ylim(0, max(series.fillna(0))+10)
         ax.set_title(title, fontsize=8)
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
 
         # Remove the automatic x-axis label from all but the bottom subplot
         if ax != axes[-1]:
             ax.set_xlabel('')
-    plt.xticks(fontsize=8, rotation=30)
     plt.plot()
     ret = plt.gcf()
     data = plot_as_base64(ret).decode('utf-8')
     plt.close(fig)
     return data
+
+def auto_dates():
+    locator = mdates.AutoDateLocator()
+    formatter = mdates.ConciseDateFormatter(locator)
+    formatter.formats = ['%y',  # ticks are mostly years
+                         '%b',       # ticks are mostly months
+                         '%d',       # ticks are mostly days
+                         '%H:%M',    # hrs
+                         '%H:%M',    # min
+                         '%S.%f', ]  # secs
+    # these are mostly just the level above...
+    formatter.zero_formats = [''] + formatter.formats[:-1]
+    # ...except for ticks that are mostly hours, then it is nice to have
+    # month-day:
+    formatter.zero_formats[3] = '%d-%b'
+
+    formatter.offset_formats = ['',
+                                '%Y',
+                                '%b %Y',
+                                '%d %b %Y',
+                                '%d %b %Y',
+                                '%d %b %Y %H:%M', ]
+    return (locator, formatter)
 
 def make_rsi_plot(stock_code, dataframe):
     plt.rc('axes', grid=True)
@@ -115,6 +146,7 @@ def make_rsi_plot(stock_code, dataframe):
     ax2 = fig.add_axes(rect2, facecolor=axescolor, sharex=ax1)
     ax2t = ax2.twinx()
     ax3 = fig.add_axes(rect3, facecolor=axescolor, sharex=ax1)
+    fig.autofmt_xdate()
 
     # plot the relative strength indicator
     prices = pd.to_numeric(dataframe['last_price'], errors='coerce').to_numpy()
@@ -122,7 +154,7 @@ def make_rsi_plot(stock_code, dataframe):
     #print(len(rsi))
     fillcolor = 'darkgoldenrod'
 
-    timeline = dataframe['fetch_date']
+    timeline = pd.to_datetime(dataframe['fetch_date'])
     ax1.plot(timeline, rsi, color=fillcolor)
     ax1.axhline(70, color='darkgreen')
     ax1.axhline(30, color='darkgreen')
@@ -148,7 +180,7 @@ def make_rsi_plot(stock_code, dataframe):
     ma20 = dataframe.last_price.rolling(window=20).mean()
     ma200 = dataframe.last_price.rolling(window=200).mean()
 
-    timeline = timeline.to_list()
+    #timeline = timeline.to_list()
     linema20, = ax2.plot(timeline, ma20, color='blue', lw=2, label='MA (20)')
     linema200, = ax2.plot(timeline, ma200, color='red', lw=2, label='MA (200)')
 
@@ -191,16 +223,10 @@ def make_rsi_plot(stock_code, dataframe):
 
     ax3.set_yticks([])
     # turn off upper axis tick labels, rotate the lower ones, etc
+    locator, formatter = auto_dates()
     for ax in ax1, ax2, ax2t, ax3:
-        if ax != ax3:
-            for label in ax.get_xticklabels():
-                label.set_visible(False)
-        else:
-            for label in ax.get_xticklabels():
-                label.set_rotation(30)
-                label.set_horizontalalignment('right')
-
-        ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
 
     plt.xticks(fontsize=8)
     fig = plt.gcf()
