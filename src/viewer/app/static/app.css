@@ -11,6 +11,10 @@ div.menubar {
   margin-right: 25px;
 }
 
+tr.small {
+  font-size: 8pt;
+}
+
 span.unimportant {
   color: grey;
   size: -2;
@@ -19,4 +23,3 @@ span.unimportant {
 div.info-table {
   margin-bottom: 10px;
 }
-

@@ -14,7 +14,7 @@
 </div>
 
 <div class="securities-table">
-<table style="width: 80%">
+<table style="width: 90%">
     <tr class="small">
       <th>ASX code</th>
       <th>Company</th>
@@ -40,5 +40,9 @@
 <h3 class="asxtrade">{{ sector_momentum_title }}</h3>
 
 <img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
+
+<h3>{{ company_versus_sector_title }}<h3>
+
+<img class="company_versus_sector" src="data:image/png;base64, {{ company_versus_sector_plot }}" alt="{{ company_versus_sector_title }}">
 
 {% endblock %}
