@@ -191,13 +191,17 @@ def show_stock(request, stock=None, sector_n_days=90):
    fig = make_rsi_plot(stock, df)
 
    # show sector performance over past 3 months
-   all_dates = desired_dates(sector_n_days)
-   sector_companies = all_sector_stocks(company_details.sector_name)
+   window_size = 14 # since must have a full window before computing momentum
+   all_dates = desired_dates(sector_n_days+window_size)
+   sector = company_details.sector_name
+   sector_companies = all_sector_stocks(sector)
    cip = company_prices(sector_companies, all_dates=all_dates, field_name='change_in_percent')
    cip = cip.fillna(0.0)
-   #print(cip)
    rows = []
    cum_sum = {}
+   stock_versus_sector = []
+   # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
+   best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
        for asx_code, daily_change in cip[day].iteritems():
            if not asx_code in cum_sum:
@@ -208,9 +212,17 @@ def show_stock(request, stock=None, sector_n_days=90):
        n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
        n_unchanged = len(cip) - n_pos - n_neg
        rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
+       stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
+       stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
+       if stock != best_stock_in_sector:
+          stock_versus_sector.append({ 'group': '{} (best in {})'.format(best_stock_in_sector, sector), 'value': cum_sum[best_stock_in_sector], 'date': day})
 
    df = pd.DataFrame.from_records(rows)
-   sector_momentum_data = make_momentum_plot(df, company_details.sector_name)
+   sector_momentum_data = make_momentum_plot(df, sector, window_size=window_size)
+
+   # company versus sector performance
+   stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
+   c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
 
    # populate template and render HTML page with context
    context = {
@@ -219,15 +231,17 @@ def show_stock(request, stock=None, sector_n_days=90):
        'securities': securities,
        'cd': company_details,
        'sector_momentum_plot': sector_momentum_data,
-       'sector_momentum_title': "Stocks in {} and {} day performance".format(company_details.sector_name, sector_n_days)
+       'sector_momentum_title': "{} sector stocks: {} day performance".format(sector, sector_n_days),
+       'company_versus_sector_plot': c_vs_s_plot,
+       'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector)
    }
    return render(request, "stock_view.html", context=context)
 
 @login_required
-def market_sentiment(request):
+def market_sentiment(request, n_days=21, n_top_bottom=20):
     validate_user(request.user)
-    n_days = 21
-    n_top_bottom = 20
+    assert n_days > 0
+    assert n_top_bottom > 0
     all_dates = desired_dates(n_days)
     sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates, n_top_bottom=n_top_bottom)
 

@@ -1,11 +1,13 @@
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
+from plotnine import ggplot, theme_bw, geom_tile, geom_line, aes, theme, element_text, xlab, scale_y_discrete, ylab, geom_text
 from app.analysis import *
 import numpy as np
 import pandas as pd
 import base64
 import io
+from datetime import datetime
 from collections import Counter
 
 def plot_as_base64(fig):
@@ -21,37 +23,52 @@ def plot_as_base64(fig):
     return b64data
 
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 8), sharey=True)
-    data = {}
-    dates = []
+    rows = []
+    print("Sentiment plot: exclude zero bins? {} show text? {}".format(exclude_zero_bin, plot_text_labels))
+
     for column in filter(lambda c: c.startswith("bin_"), sentiment_df.columns):
         c = Counter(sentiment_df[column])
         date = column[4:]
-        dates.append(date)
-        data[date] = c
-    df = pd.DataFrame.from_records(data)
-    bins, labels = price_change_bins()
-    df = df.reindex(reversed(labels))
-    if exclude_zero_bin:
-        df = df.drop('0.0')
-    df = df.fillna(0)
-    ax.imshow(df, aspect='auto')
-    # We want to show all ticks...
-    ax.set_xticks(np.arange(len(dates)))
-    ax.set_yticks(np.arange(len(sentiment_df)))
-    # ... and label them with the respective list entries
-    ax.set_xticklabels(dates)
-    bins = list(df.index)
-    ax.set_yticklabels(bins)
-    plt.setp(ax.get_xticklabels(), fontsize=8, rotation=45, ha="right", rotation_mode="anchor")
+        for bin, val in c.items():
+            if exclude_zero_bin and (bin == '0.0' or not isinstance(bin, str)):
+                continue
+            bin = str(bin)
+            assert isinstance(bin, str)
+            val = int(val)
+            rows.append({ 'date': datetime.strptime(date, "%Y-%m-%d"), 'bin': bin, 'value': val })
+
+    df = pd.DataFrame.from_records(rows)
+    #print(df['bin'].unique())
+    order = ['-1000.0', '-100.0', '-10.0', '-5.0', '-3.0', '-2.0', '-1.0', '-1e-06',
+             '1e-06', '1.0', '2.0', '3.0', '5.0', '10.0', '100.0', '1000.0']
+    df['bin_ordered'] = pd.Categorical(df['bin'], categories=order)
+
+    plot = (ggplot(df, aes('date', 'bin_ordered', fill='value'))
+            + geom_tile(show_legend=False) + theme_bw()
+            + xlab("") + ylab("Percentage daily change")
+            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(10,5)))
     if plot_text_labels:
-        for i_idx, i in enumerate(bins):
-            for j_idx, j in enumerate(dates):
-               text = ax.text(j_idx, i_idx, int(df.iloc[i_idx, j_idx]),
-                           ha="center", va="center", color="w")
-    ax.grid(False)
-    plt.plot()
-    return plt.gcf()
+        plot = plot + geom_text(aes(label='value'), size=8, color="white")
+    fig = plot.draw()
+    return fig
+
+def plot_company_versus_sector(df, stock, sector):
+    assert isinstance(df, pd.DataFrame)
+    assert isinstance(stock, str)
+    assert isinstance(sector, str)
+    df['date'] = pd.to_datetime(df['date'])
+    #print(df)
+    plot = (ggplot(df, aes('date', 'value', group='group', color='group', fill='group'))
+            + geom_line(size=1.5)
+            + xlab('')
+            + ylab('Percentage change since start')
+            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(8,4))
+            + theme(subplots_adjust={'right': 0.8}) # large legend so leave room for it
+    )
+    fig = plot.draw()
+    data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return data
 
 def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None, n_top_bottom=10):
     """
@@ -69,6 +86,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
     top10 = sum.nlargest(n_top_bottom)
     bottom10 = sum.nsmallest(n_top_bottom)
+    print(bins)
     for date in df.columns:
         df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
     fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
@@ -76,7 +94,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     plt.close(fig)
     return (sentiment_plot, df, top10, bottom10, n_stocks)
 
-def make_momentum_plot(dataframe, descriptor):
+def make_momentum_plot(dataframe, descriptor, window_size=14):
     assert len(descriptor) > 0
     assert len(dataframe) > 0
 
@@ -89,7 +107,7 @@ def make_momentum_plot(dataframe, descriptor):
                                            ['darkgreen', 'red', 'grey'],
                                            ['{} stocks up >5%'.format(descriptor), "{} stocks down >5%".format(descriptor), "Remaining stocks"]):
         # use a moving average to smooth out 5-day trading weeks and see the trend
-        series = dataframe[name].rolling(14).mean()
+        series = dataframe[name].rolling(window_size).mean()
         ax.plot(timeline, series, color=linecolour)
         ax.set_ylabel('', fontsize=8)
         ax.set_ylim(0, max(series.fillna(0))+10)
@@ -222,7 +240,6 @@ def make_rsi_plot(stock_code, dataframe):
              transform=ax3.transAxes, fontsize=textsize)
 
     ax3.set_yticks([])
-    # turn off upper axis tick labels, rotate the lower ones, etc
     locator, formatter = auto_dates()
     for ax in ax1, ax2, ax2t, ax3:
         ax.xaxis.set_major_locator(locator)
