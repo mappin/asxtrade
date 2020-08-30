@@ -13,7 +13,7 @@
 </table>
 </div>
 
-<div class="securities-table">
+<div class="stock-securities">
 <table style="width: 90%">
     <tr class="small">
       <th>ASX code</th>
@@ -33,6 +33,11 @@
 {% endfor %}
 </table>
 </div>
+
+<h3>Key indicators</h3>
+
+<img class="stock-key-indicators" src="data:image/png; base64, {{ key_indicators_plot }}" alt="Key indicator plot"/>
+<p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
 
 <h3>Momentum</h3>
 <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">

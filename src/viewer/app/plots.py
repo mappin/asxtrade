@@ -1,7 +1,7 @@
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
-from plotnine import ggplot, theme_bw, geom_tile, geom_line, aes, theme, element_text, xlab, scale_y_discrete, ylab, geom_text
+from plotnine import ggplot, theme_bw, geom_tile, geom_line, aes, theme, element_text, facet_wrap, xlab, scale_y_discrete, ylab, geom_text
 from app.analysis import *
 import numpy as np
 import pandas as pd
@@ -51,6 +51,32 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
         plot = plot + geom_text(aes(label='value'), size=8, color="white")
     fig = plot.draw()
     return fig
+
+def plot_key_stock_indicators(df, stock):
+    assert isinstance(df, pd.DataFrame)
+    assert all(['eps' in df.columns, 'pe' in df.columns, 'annual_dividend_yield' in df.columns])
+
+    df['market_cap'] = df['market_cap'] / 1000000 # express in millions for a nicer scale
+    df['volume'] = df['last_price'] * df['volume'] / 1000000 # again, express as $(M)
+    plot_df = pd.melt(df, id_vars='fetch_date',
+                 value_vars=['pe', 'eps', 'annual_dividend_yield', 'volume', 'market_cap', 'last_price'],
+                 var_name='indicator',
+                 value_name='value')
+    plot_df['value'] = pd.to_numeric(plot_df['value'])
+    plot_df['fetch_date'] = pd.to_datetime(plot_df['fetch_date'])
+
+
+    plot = (ggplot(plot_df, aes('fetch_date', 'value', color='indicator'))
+            + geom_line(size=1.5, show_legend=False)
+            + facet_wrap('~ indicator', nrow=6, ncol=1, scales='free_y')
+            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(8,7))
+            + aes(ymin=0)
+            + xlab("") + ylab("")
+    )
+    fig = plot.draw()
+    data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return data
 
 def plot_company_versus_sector(df, stock, sector):
     assert isinstance(df, pd.DataFrame)
