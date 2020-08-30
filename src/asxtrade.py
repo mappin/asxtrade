@@ -100,7 +100,7 @@ def validate_prices(dataframe):
 
 def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True):
     assert isinstance(config, dict)
-    assert len(available_stocks) > 1000
+    assert len(available_stocks) > 10
 
     if ensure_indexes:
         db.asx_prices.create_index([('asx_code', pymongo.ASCENDING), ('fetch_date', pymongo.ASCENDING)], unique=True)
@@ -140,8 +140,12 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
 def available_stocks(db, config):
     assert config is not None
     # only variants which include ORDINARY FULLY PAID/STAPLED SECURITIES eg. SYD
-    ret = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': re.compile('.*ORDINARY.*') })
+    stocks = [re.compile('.*ORDINARY.*'), re.compile('^EXCHANGE\s+TRADED\s+FUND.*$')]
+    ret = set()
+    for security_type in stocks:
+       tmp = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': security_type })
                                               if db.asx_blacklist.find_one({'asx_code': r.get('asx_code') }) is None])
+       ret = ret.union(tmp)
     exclude_stocks_without_details = config.get('exclude_stocks_without_details', False)
     exclude_stocks_with_zero_volume = config.get('exclude_zero_volume_stocks', False)
     if exclude_stocks_without_details: # will exclude if True nearly 1000 securities, so use with care
@@ -149,11 +153,27 @@ def available_stocks(db, config):
         print("Eliminating securities without company details: found {} to check".format(len(ret)))
         ret = ret.intersection(details_stocks)
         # FALLTHRU...
-    print("Found {} available stocks on ASX...".format(len(ret)))
+    print("Found {} suitable stocks on ASX...".format(len(ret)))
     return sorted(ret)
 
+def update_blacklist(db, config):
+    assert db is not None
+    bad_codes = {}
+    for bad in db.asx_prices.find({ 'error_code': 'id-or-code-invalid'}):
+        asx_code = bad.get('asx_code')
+        if not asx_code in bad_codes:
+            bad_codes[asx_code] = set()
+        bad_codes[asx_code].add(bad['fetch_date'])
+    for_blacklisting = [code for code, dates in bad_codes.items() if len(dates) > 20]
+    print("Identified {} stocks for blacklisting with over 20 failed fetches".format(len(for_blacklisting)))
+    for code in for_blacklisting:
+        db.asx_blacklist.find_one_and_update({ 'asx_code': code },
+                        { '$set': { 'asx_code': code, 'reason': 'asxtrade.py says no' }}, 
+                        upsert=True)
+    print("Blacklist updated.")
+
 def update_company_details(db, available_stocks, config, ensure_indexes=False):
-    assert len(available_stocks) > 1000
+    assert len(available_stocks) > 10
     assert db is not None
     assert isinstance(config, dict)
     fetcher = get_fetcher()
@@ -188,6 +208,7 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Fetch and update data from ASX Research")
+    args.add_argument('--blacklist', help="Update blacklist table with dead stocks", action="store_true")
     args.add_argument('--config', help="Configuration file to use [config.json]", type=str, default="config.json")
     args.add_argument('--want-companies', help="Update companies list", action="store_true")
     args.add_argument('--want-isin', help="Update securities list", action="store_true")
@@ -207,6 +228,9 @@ if __name__ == "__main__":
         password = os.getenv(password[1:])
     mongo = pymongo.MongoClient(m.get('host'), m.get('port'), username=m.get('user'), password=password)
     db = mongo[m.get('db')]
+
+    if a.blacklist:
+        update_blacklist(db, config)
 
     if a.want_companies:
         print("**** UPDATING ASX COMPANIES")
