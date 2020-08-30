@@ -45,13 +45,14 @@ def load_prices(db, field_name, month, year):
               for row in db.asx_prices.find({ 'fetch_date': { "$in": days_of_month }, field_name: { "$exists": True } }, { 'asx_code': 1, field_name: 1, 'fetch_date': 1})]
     if len(rows) == 0:
         df = pd.DataFrame(columns=['fetch_date', 'asx_code', field_name]) # return dummy dataframe if empty
+        return df
         # FALLTHRU
     df = pd.DataFrame.from_records(rows)
     df = df.pivot(index='asx_code', columns='fetch_date', values=field_name)
     return df
 
 def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-downloaded'):
-    for field_name in ['change_in_percent', 'last_price', 'change_price', 'volume', 'eps', 'pe']:
+    for field_name in ['change_in_percent', 'last_price', 'change_price', 'volume', 'eps', 'pe', 'annual_dividend_yield']:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
         df = load_prices(db, field_name, month, year)
 
