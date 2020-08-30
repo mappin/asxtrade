@@ -180,15 +180,14 @@ def show_stock(request, stock=None, sector_n_days=90):
    """
    validate_stock(stock)
    validate_user(request.user)
-   df = all_quotes(stock, all_dates=desired_dates(sector_n_days))
+   all_stock_quotes_df  = all_quotes(stock, all_dates=desired_dates(sector_n_days))
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
        raise Http404("No company details for {}".format(stock))
-   if len(df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-       raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(df)))
-   #print(df)
-   fig = make_rsi_plot(stock, df)
+   if len(all_stock_quotes_df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+       raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(all_stock_quotes_df)))
+   fig = make_rsi_plot(stock, all_stock_quotes_df)
 
    # show sector performance over past 3 months
    window_size = 14 # since must have a full window before computing momentum
@@ -224,6 +223,9 @@ def show_stock(request, stock=None, sector_n_days=90):
    stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
    c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
 
+   # key indicator performance over past 90 days (for now): pe, eps, yield etc.
+   key_indicator_plot = plot_key_stock_indicators(all_stock_quotes_df, stock)
+
    # populate template and render HTML page with context
    context = {
        'rsi_data': fig,
@@ -233,7 +235,8 @@ def show_stock(request, stock=None, sector_n_days=90):
        'sector_momentum_plot': sector_momentum_data,
        'sector_momentum_title': "{} sector stocks: {} day performance".format(sector, sector_n_days),
        'company_versus_sector_plot': c_vs_s_plot,
-       'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector)
+       'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector),
+       'key_indicators_plot': key_indicator_plot,
    }
    return render(request, "stock_view.html", context=context)
 
