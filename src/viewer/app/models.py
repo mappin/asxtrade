@@ -302,6 +302,14 @@ def increasing_eps(stock_codes, past_n_days=300):
     increasing_eps_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.02]
     return increasing_eps_stocks
 
+def increasing_yield(stock_codes, past_n_days=300):
+    all_dates = desired_dates(past_n_days)
+    required_tags = set(["annual_dividend_yield-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates])
+    df, n = make_superdf(required_tags, stock_codes)
+    # ignore penny-ante stocks (must be at least 1c per share dividend)
+    increasing_yield_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.01]
+    return increasing_yield_stocks
+
 def company_prices(stock_codes, all_dates=None, field_name='last_price'):
     """
     Return a dataframe with the required companies (iff quoted) over the

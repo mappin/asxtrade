@@ -271,6 +271,17 @@ def show_increasing_eps_stocks(request):
                 request
     )
 
+@login_required
+def show_increasing_yield_stocks(request):
+    validate_user(request.user)
+    matching_companies = increasing_yield(None)
+    return show_matching_companies(matching_companies,
+                "Stocks with increasing yield over past 300 days",
+                "Sentiment for selected stocks",
+                None,
+                request
+    )
+
 def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request):
     """
     Support function to public-facing views to eliminate code redundancy
