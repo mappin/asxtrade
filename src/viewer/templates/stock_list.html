@@ -73,6 +73,11 @@
             <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
         {% endif %}
     </span>
+    {% if virtual_purchases %}
+    <span>
+        <a href="/show/purchase-performance" class="button">Show purchase performance</a>
+    </span>
+    {% endif %}
 </div>
 {% endif %}
 

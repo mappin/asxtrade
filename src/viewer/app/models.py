@@ -310,7 +310,7 @@ def increasing_yield(stock_codes, past_n_days=300):
     increasing_yield_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.01]
     return increasing_yield_stocks
 
-def company_prices(stock_codes, all_dates=None, field_name='last_price'):
+def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on_missing=True):
     """
     Return a dataframe with the required companies (iff quoted) over the
     specified dates. By default last_price is provided.
@@ -327,8 +327,8 @@ def company_prices(stock_codes, all_dates=None, field_name='last_price'):
 
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
-    if n_dataframes != len(required_tags):
-        raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(len(dataframes), required_tags))
+    if fail_on_missing and n_dataframes != len(required_tags):
+        raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(n_dataframes, required_tags))
     return superdf
 
 class MarketDataCache(model.Model):

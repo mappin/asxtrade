@@ -1,7 +1,7 @@
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
-from plotnine import ggplot, theme_bw, geom_tile, geom_line, aes, theme, element_text, facet_wrap, xlab, scale_y_discrete, ylab, geom_text
+import plotnine as p9
 from app.analysis import *
 import numpy as np
 import pandas as pd
@@ -43,12 +43,12 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
              '1e-06', '1.0', '2.0', '3.0', '5.0', '10.0', '100.0', '1000.0']
     df['bin_ordered'] = pd.Categorical(df['bin'], categories=order)
 
-    plot = (ggplot(df, aes('date', 'bin_ordered', fill='value'))
-            + geom_tile(show_legend=False) + theme_bw()
-            + xlab("") + ylab("Percentage daily change")
-            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(10,5)))
+    plot = (p9.ggplot(df, p9.aes('date', 'bin_ordered', fill='value'))
+            + p9.geom_tile(show_legend=False) + p9.theme_bw()
+            + p9.xlab("") + p9.ylab("Percentage daily change")
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(10,5)))
     if plot_text_labels:
-        plot = plot + geom_text(aes(label='value'), size=8, color="white")
+        plot = plot + p9.geom_text(aes(label='value'), size=8, color="white")
     fig = plot.draw()
     return fig
 
@@ -66,13 +66,28 @@ def plot_key_stock_indicators(df, stock):
     plot_df['fetch_date'] = pd.to_datetime(plot_df['fetch_date'])
 
 
-    plot = (ggplot(plot_df, aes('fetch_date', 'value', color='indicator'))
-            + geom_line(size=1.5, show_legend=False)
-            + facet_wrap('~ indicator', nrow=6, ncol=1, scales='free_y')
-            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(8,7))
-            + aes(ymin=0)
-            + xlab("") + ylab("")
+    plot = (p9.ggplot(plot_df, p9.aes('fetch_date', 'value', color='indicator'))
+            + p9.geom_line(size=1.5, show_legend=False)
+            + p9.facet_wrap('~ indicator', nrow=6, ncol=1, scales='free_y')
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8,7))
+        #    + p9.aes(ymin=0)
+            + p9.xlab("") + p9.ylab("")
     )
+    fig = plot.draw()
+    data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return data
+
+def plot_company_rank_by_sector(df):
+    assert isinstance(df, pd.DataFrame)
+    #assert 'sector' in df.columns
+    n_sectors = len(df['sector'].unique())
+    plot = (p9.ggplot(df, p9.aes('fetch_date', 'rank', group='asx_code', color='asx_code'))
+            + p9.geom_line()
+            + p9.xlab('')
+            + p9.facet_wrap('~sector', nrow=n_sectors, ncol=1)
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8, 20))
+           )
     fig = plot.draw()
     data = plot_as_base64(fig).decode('utf-8')
     plt.close(fig)
@@ -84,12 +99,12 @@ def plot_company_versus_sector(df, stock, sector):
     assert isinstance(sector, str)
     df['date'] = pd.to_datetime(df['date'])
     #print(df)
-    plot = (ggplot(df, aes('date', 'value', group='group', color='group', fill='group'))
-            + geom_line(size=1.5)
-            + xlab('')
-            + ylab('Percentage change since start')
-            + theme(axis_text_x = element_text(angle=30, size=7), figure_size=(8,4))
-            + theme(subplots_adjust={'right': 0.8}) # large legend so leave room for it
+    plot = (p9.ggplot(df, p9.aes('date', 'value', group='group', color='group', fill='group'))
+            + p9.geom_line(size=1.5)
+            + p9.xlab('')
+            + p9.ylab('Percentage change since start')
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8,4))
+            + p9.theme(subplots_adjust={'right': 0.8}) # large legend so leave room for it
     )
     fig = plot.draw()
     data = plot_as_base64(fig).decode('utf-8')
@@ -112,7 +127,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
     top10 = sum.nlargest(n_top_bottom)
     bottom10 = sum.nsmallest(n_top_bottom)
-    print(bins)
+    #print(bins)
     for date in df.columns:
         df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
     fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins

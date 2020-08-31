@@ -3,6 +3,16 @@ from datetime import datetime, timedelta
 import pylru
 import pandas as pd
 import numpy as np
+from collections import defaultdict
+
+def rank_cumulative_change(df, all_dates):
+    cum_sum = defaultdict(float)
+    for date in filter(lambda k: k in df.columns, all_dates):
+        for code, price_change in df[date].fillna(0.0).iteritems():
+            cum_sum[code] += price_change
+        rank = pd.Series(cum_sum).rank(method='first', ascending=False)
+        df[date] = rank
+    return df
 
 def relative_strength(prices, n=14):
     # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
