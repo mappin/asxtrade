@@ -78,15 +78,18 @@ def plot_key_stock_indicators(df, stock):
     plt.close(fig)
     return data
 
-def plot_company_rank_by_sector(df):
+def plot_company_rank(df):
     assert isinstance(df, pd.DataFrame)
     #assert 'sector' in df.columns
-    n_sectors = len(df['sector'].unique())
-    plot = (p9.ggplot(df, p9.aes('fetch_date', 'rank', group='asx_code', color='asx_code'))
-            + p9.geom_line()
+    n_bin = len(df['bin'].unique())
+    plot = (p9.ggplot(df, p9.aes('date', 'rank', group='asx_code', color='sector'))
+            + p9.geom_smooth(span=0.3, se=False)
+            + p9.geom_text(p9.aes(label='asx_code', x='x', y='y'), nudge_x=1.2, size=6, show_legend=False)
             + p9.xlab('')
-            + p9.facet_wrap('~sector', nrow=n_sectors, ncol=1)
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8, 20))
+            + p9.facet_wrap('~bin', nrow=n_bin, ncol=1, scales="free_y")
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7),
+                       figure_size=(8, 20),
+                       subplots_adjust={'right': 0.8})
            )
     fig = plot.draw()
     data = plot_as_base64(fig).decode('utf-8')
@@ -103,8 +106,7 @@ def plot_company_versus_sector(df, stock, sector):
             + p9.geom_line(size=1.5)
             + p9.xlab('')
             + p9.ylab('Percentage change since start')
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8,4))
-            + p9.theme(subplots_adjust={'right': 0.8}) # large legend so leave room for it
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8,4), subplots_adjust={'right': 0.8})
     )
     fig = plot.draw()
     data = plot_as_base64(fig).decode('utf-8')

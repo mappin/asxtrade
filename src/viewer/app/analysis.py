@@ -12,6 +12,25 @@ def rank_cumulative_change(df, all_dates):
             cum_sum[code] += price_change
         rank = pd.Series(cum_sum).rank(method='first', ascending=False)
         df[date] = rank
+
+    all_available_dates = df.columns
+    avgs = df.mean(axis=1) # NB: do this BEFORE adding columns...
+    assert len(avgs) == len(df)
+    df['x'] = all_available_dates[-1]
+    df['y'] = df[all_available_dates[-1]]
+
+    bins = ['top', 'bin2', 'bin3', 'bin4', 'bin5', 'bottom']
+    average_rank_binned = pd.cut(avgs, len(bins), bins)
+    assert len(average_rank_binned) == len(df)
+    df['bin'] = average_rank_binned
+    df['asx_code'] = df.index
+    df['sector'] = [CompanyDetails.objects.get(asx_code=code).sector_name for code in df.index]
+    df = pd.melt(df, id_vars=['asx_code', 'bin', 'sector', 'x', 'y'],
+                     var_name='date',
+                     value_name='rank',
+                     value_vars=all_available_dates)
+    df['date'] = pd.to_datetime(df['date'], format="%Y-%m-%d")
+    df['x'] = pd.to_datetime(df['x'], format="%Y-%m-%d")
     return df
 
 def relative_strength(prices, n=14):

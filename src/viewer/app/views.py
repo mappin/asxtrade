@@ -289,14 +289,7 @@ def show_virtual_purchase_performance(request):
     all_dates = desired_dates(300)
     cip = company_prices(watchlist_stocks, all_dates=all_dates, field_name='change_in_percent', fail_on_missing=False)
     cip = rank_cumulative_change(cip, all_dates=all_dates)
-    available_dates = cip.columns
-    cip['asx_code'] = cip.index
-    cip = cip.melt(id_vars='asx_code', value_vars=available_dates, value_name='rank')
-    sectors_by_stocks = pd.Series({ code: CompanyDetails.objects.get(asx_code=code).sector_name for code in watchlist_stocks }, name='sector')
-    #print(sectors_by_stocks)
-    cip['fetch_date'] = pd.to_datetime(cip['fetch_date'])
-    cip = cip.merge(sectors_by_stocks, left_on='asx_code', right_index=True)
-    rank_by_sector_plot = plot_company_rank_by_sector(cip)
+    rank_by_sector_plot = plot_company_rank(cip)
     context = {
         'rank_by_sector_plot': rank_by_sector_plot,
         'rank_by_sector_title': 'Watchlist companies by performance rank (past 300 days)'
