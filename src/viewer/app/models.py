@@ -327,7 +327,8 @@ def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on
 
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
-    if fail_on_missing and n_dataframes != len(required_tags):
+    # on the first of the month, we dont have data yet so we permit one missing tag for this reason
+    if fail_on_missing and n_dataframes < len(required_tags) - 1:
         raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(n_dataframes, required_tags))
     return superdf
 

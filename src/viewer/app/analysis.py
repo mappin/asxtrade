@@ -3,7 +3,24 @@ from datetime import datetime, timedelta
 import pylru
 import pandas as pd
 import numpy as np
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
+
+def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
+    trends = {}  # stock -> (slope, nrmse) pairs
+    for stock in watchlist_stocks:
+        series = cumulative_change_df.loc[stock]
+        n = len(series)
+        series30 = series[-30:]
+        coefficients, residuals, _, _, _ = np.polyfit(range(n), series, 1, full=True)
+        coeff30, resid30, _, _, _ = np.polyfit(range(len(series30)), series30, 1, full=True)
+        mse = residuals[0] / n
+        nrmse = np.sqrt(mse) / (series.max() - series.min())
+        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): # ignore stocks which are barely moving either way
+            pass
+        else:
+            trends[stock] = (coefficients[0], nrmse, '{:.2f}'.format(coeff30[0]) if not np.isnan(coeff30[0]) else '')
+    # sort by ascending overall slope (regardless of NRMSE)
+    return OrderedDict(sorted(trends.items(), key=lambda t: t[1][0]))
 
 def rank_cumulative_change(df, all_dates):
     cum_sum = defaultdict(float)
