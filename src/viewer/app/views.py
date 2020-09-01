@@ -283,18 +283,26 @@ def show_increasing_yield_stocks(request):
     )
 
 @login_required
-def show_virtual_purchase_performance(request):
+def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
     all_dates = desired_dates(300)
     cip = company_prices(watchlist_stocks, all_dates=all_dates, field_name='change_in_percent', fail_on_missing=False)
-    cip = rank_cumulative_change(cip, all_dates=all_dates)
-    rank_by_sector_plot = plot_company_rank(cip)
+    trends = calculate_trends(cip, watchlist_stocks, all_dates)
+    # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
+    cip = rank_cumulative_change(cip.filter(trends.keys(), axis='index'), all_dates=all_dates)
+    trending_companies_plot = plot_company_rank(cip)
     context = {
-        'rank_by_sector_plot': rank_by_sector_plot,
-        'rank_by_sector_title': 'Watchlist companies by performance rank (past 300 days)'
+        'watchlist_trends': trends,
+        'trending_companies_plot': trending_companies_plot,
+        'trending_companies_plot_title': 'Trending watchlist companies by rank (past 300 days)'
     }
-    return render(request, 'purchase-performance.html', context=context)
+    return render(request, 'trends.html', context=context)
+
+@login_required
+def show_purchase_performance(request):
+    validate_user(request.user)
+    assert False
 
 def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request):
     """

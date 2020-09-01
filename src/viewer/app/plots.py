@@ -48,7 +48,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
             + p9.xlab("") + p9.ylab("Percentage daily change")
             + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(10,5)))
     if plot_text_labels:
-        plot = plot + p9.geom_text(aes(label='value'), size=8, color="white")
+        plot = plot + p9.geom_text(p9.aes(label='value'), size=8, color="white")
     fig = plot.draw()
     return fig
 
