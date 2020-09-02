@@ -183,8 +183,6 @@ def show_stock(request, stock=None, sector_n_days=90):
    all_stock_quotes_df  = all_quotes(stock, all_dates=desired_dates(sector_n_days))
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
-   if company_details is None:
-       raise Http404("No company details for {}".format(stock))
    if len(all_stock_quotes_df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
        raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(all_stock_quotes_df)))
    fig = make_rsi_plot(stock, all_stock_quotes_df)
@@ -259,6 +257,17 @@ def market_sentiment(request, n_days=21, n_top_bottom=20):
        'title': "Market sentiment over past {} days".format(n_days)
     }
     return render(request, 'market_sentiment_view.html', context=context)
+
+@login_required
+def show_etfs(request):
+    validate_user(request.user)
+    matching_codes = all_etfs()
+    return show_matching_companies(matching_codes,
+        "Exchange Traded funds over past 300 days",
+        "Sentiment for ETFs",
+        None,
+        request
+    )
 
 @login_required
 def show_increasing_eps_stocks(request):

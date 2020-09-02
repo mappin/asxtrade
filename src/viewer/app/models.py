@@ -292,6 +292,11 @@ def make_superdf(required_tags, stock_codes):
                 superdf = superdf.merge(df, how='outer', left_index=True, right_index=True)
     return (superdf, n)
 
+def all_etfs():
+    etf_codes = [s.asx_code for s in Security.objects.filter(security_name='EXCHANGE TRADED FUND UNITS FULLY PAID')]
+    print("Found {} ETF codes".format(len(etf_codes)))
+    return etf_codes
+
 def increasing_eps(stock_codes, past_n_days=300):
     all_dates = desired_dates(past_n_days)
     required_tags = set(["eps-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates])

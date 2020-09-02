@@ -5,33 +5,41 @@
 <h2 class="asxtrade">Information</h2>
 
 <div class="info-table">
+{% if cd is None %}
+     <p>No company details available. ETF?</p>
+{% else %}
 <table class="small" style="width: 60%">
      <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
      <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
-     <tr><td>Indices</td><td>{%for i in indices %}{{ i|pprint }}{%endfor %}</td></tr>
+     <tr><td>Indices</td><td>{% for i in indices %}{{ i|pprint }}{% endfor %}</td></tr>
      <tr><td>Website</td><td>{{ cd.web_address|urlize }}</td></tr>
 </table>
+{% endif %}
 </div>
 
 <div class="stock-securities">
-<table style="width: 90%">
-    <tr class="small">
-      <th>ASX code</th>
-      <th>Company</th>
-      <th>Security code</th>
-      <th>Description</th>
-      <th>Last updated</th>
-    </tr>
-{% for s in securities %}
-    <tr class="small" style="margin-bottom: 5px">
-      <td>{{ s.asx_code }}</td>
-      <td>{{ s.company_name }}</td>
-      <td>{{ s.asx_isin_code }}</td>
-      <td>{{ s.security_name }}</td>
-      <td>{{ s.last_updated }}</td>
-    </tr>
-{% endfor %}
-</table>
+{% if securities is None %}
+    <p>No security information available.</p>
+{% else %}
+    <table style="width: 90%">
+        <tr class="small">
+          <th>ASX code</th>
+          <th>Company</th>
+          <th>Security code</th>
+          <th>Description</th>
+          <th>Last updated</th>
+        </tr>
+    {% for s in securities %}
+        <tr class="small" style="margin-bottom: 5px">
+          <td>{{ s.asx_code }}</td>
+          <td>{{ s.company_name }}</td>
+          <td>{{ s.asx_isin_code }}</td>
+          <td>{{ s.security_name }}</td>
+          <td>{{ s.last_updated }}</td>
+        </tr>
+    {% endfor %}
+    </table>
+{% endif %}
 </div>
 
 <h3>Key indicators</h3>
