@@ -39,6 +39,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
 
     def get_queryset(self, **kwargs):
        if kwargs == {}:
+           self.top10 = self.bottom10 = None
            return Quotation.objects.none()
        assert 'sector' in kwargs and len(kwargs['sector']) > 0
        self.sector_name = kwargs['sector']
@@ -167,6 +168,7 @@ def all_stocks(request):
    page_number = request.GET.get('page', 1)
    page_obj = paginator.get_page(page_number)
    context = {
+       "title": "ASX stocks by dividend yield",
        "page_obj": page_obj,
        "most_recent_date": ymd,
        "watched": user_watchlist(request.user)
