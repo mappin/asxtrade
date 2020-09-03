@@ -3,27 +3,39 @@
 <html>
     <head>
         <title>ASX Viewer</title>
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
-        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap-theme.min.css">
         <link rel="stylesheet" href="{% static "app.css" %}">
         <script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
         <script type="text/javascript" src="{% static "site.js" %}" ></script>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
     <body>
-        <div class="page-header">
-            <h1><a href="/">ASX Viewer</a></h1>
-        </div>
+          <nav class="navbar navbar-expand-sm bg-light">
+              <ul class="navbar-nav">
+                <li class="nav-item">
+                  <a class="nav-link" href="/">ASX Viewer</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="#">Help</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="#">Logout</a>
+                </li>
+              </ul>
+          </nav>
 
         <table><tr valign="top"><td>
         <div class="menubar">
             <h3>Find</h3>
-            <ul>{% menu search %}
-                {% for item in menuitems %}<li><a href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
+            <ul class="nav flex-column">{% menu search %}
+                {% for item in menuitems %}<li class="nav-item"><a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
                 {% endfor %}
             </ul>
             <h3>Show</h3>
-            <ul>{%menu stats %}
-                {% for item in menuitems %}<li><a href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
+            <ul class="nav flex-column">{%menu stats %}
+                {% for item in menuitems %}<li class="nav-item"><a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
                 {% endfor %}
             </ul>
         </div>

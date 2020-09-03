@@ -2,10 +2,12 @@
 {% load myfilters %}
 {% block stock_list %}
 
-<div class="unimportant">
-{% if most_recent_date %}Prices current as at {{ most_recent_date }}.{% endif %}
-{% if sector %}Only stocks in {{ sector }} are displayed.{% endif %}
-</div>
+{% if most_recent_date or sector %}
+    <div class="alert alert-secondary">
+    {% if most_recent_date %}Prices current as at {{ most_recent_date }}.{% endif %}
+    {% if sector %}Only stocks in {{ sector }} are displayed.{% endif %}
+    </div>
+{% endif %}
 
 {% if page_obj %}
 <table style="width: 100%">
@@ -60,8 +62,8 @@
 <div class="pagination">
     <span class="step-links">
         {% if page_obj.has_previous %}
-            <a href="?page=1">&laquo; first</a>
-            <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+            <a href="?page=1" class="btn btn-primary">&laquo; first</a>
+            <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-primary">previous</a>
         {% endif %}
 
         <span class="current">
@@ -69,13 +71,13 @@
         </span>
 
         {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}">next</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+            <a href="?page={{ page_obj.next_page_number }}" class="btn btn-primary">next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-primary">last &raquo;</a>
         {% endif %}
     </span>
     {% if virtual_purchases %}
     <span>
-        <a href="/show/trends" class="button">Show trends</a>&nbsp;<a href="/show/purchase-performance" class="button">Show purchase performance</a>
+        &nbsp;<a href="/show/trends" class="btn btn-primary">Show trends</a>&nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Show purchase performance</a>
     </span>
     {% endif %}
 </div>
