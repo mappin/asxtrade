@@ -5,6 +5,14 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict, OrderedDict
 
+def as_css_class(thirty_day_slope, three_hundred_day_slope):
+    if thirty_day_slope > 0.0 and three_hundred_day_slope < 0.0:
+        return "recent-upward-trend"
+    elif thirty_day_slope < 0.0 and three_hundred_day_slope > 0.0:
+        return "recent-downward-trend"
+    else:
+        return "none"
+
 def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
     trends = {}  # stock -> (slope, nrmse) pairs
     for stock in watchlist_stocks:
@@ -18,7 +26,10 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
         if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): # ignore stocks which are barely moving either way
             pass
         else:
-            trends[stock] = (coefficients[0], nrmse, '{:.2f}'.format(coeff30[0]) if not np.isnan(coeff30[0]) else '')
+            trends[stock] = (coefficients[0],
+                             nrmse,
+                             '{:.2f}'.format(coeff30[0]) if not np.isnan(coeff30[0]) else '',
+                             as_css_class(coeff30[0], coefficients[0]))
     # sort by ascending overall slope (regardless of NRMSE)
     return OrderedDict(sorted(trends.items(), key=lambda t: t[1][0]))
 

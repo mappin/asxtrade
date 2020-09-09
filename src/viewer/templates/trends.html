@@ -8,11 +8,11 @@
 <table style="width: 60%">
     <tr><th>Stock</th><th>Overall slope</th><th>NRMSE</th><th>30 day slope</th></tr>
     {% for stock, tuple in watchlist_trends.items %}
-        <tr>
-          <td><a href="/show/{{ stock }}">{{ stock }}</a></td>
-          <td>{{ tuple.0 |floatformat }}</td>
-          <td>{{ tuple.1 |floatformat }}</td>
-          <td>{{ tuple.2 }}</td>
+        <tr class="{{ tuple.3 }}">
+            <td><a href="/show/{{ stock }}">{{ stock }}</a></td>
+            <td>{{ tuple.0 |floatformat }}</td>
+            <td>{{ tuple.1 |floatformat }}</td>
+            <td>{{ tuple.2 }}</td>
         </tr>
     {% endfor %}
 </table>
