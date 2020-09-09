@@ -54,3 +54,8 @@ a.button {
 }
 
 a.button:active { border-style: inset; }
+
+/* nice colours for row backgrounds in stock trends table */
+tr.recent-downward-trend { background: #ff6961; }
+tr.recent-upward-trend { background: #c2ffe2; }
+tr.none { background: white; }
