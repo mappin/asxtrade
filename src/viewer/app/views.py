@@ -1,16 +1,40 @@
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
-from django.views.generic import FormView
+from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django import forms
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
+from bson.objectid import ObjectId
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from app.analysis import relative_strength
 from app.plots import *
 import pylru
+
+
+def info(request, msg):
+    assert request is not None
+    assert len(msg) > 0
+    messages.info(request, msg, extra_tags="alert alert-secondary", fail_silently=True)
+
+def warning(request, msg):
+    assert request is not None
+    assert len(msg) > 0
+    messages.warning(request, msg, extra_tags="alert alert-warning", fail_silently=True)
+
+def add_messages(request, context):
+    assert request is not None
+    assert context is not None
+    as_at = context.get('most_recent_date', None)
+    sector = context.get('sector', None)
+    if as_at:
+        info(request, 'Prices current as at {}.'.format(as_at))
+    if sector:
+        info(request, "Only stocks from {} are shown.".format(sector))
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = SectorSearchForm
@@ -33,8 +57,10 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
             'n_top_bottom': self.n_top_bottom,
             'best_ten': self.top10,
             'worst_ten': self.bottom10,
+            'title': 'Find by company sector',
             'sentiment_heatmap_title': "Recent sentiment for {}: past {} days".format(self.sector_name, self.n_days)
         })
+        add_messages(self.request, context)
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
@@ -83,8 +109,8 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     def render_to_response(self, context):
         qs = context['paginator'].object_list.all() # all() to get a fresh queryset instance
         qs = list(qs.values_list('asx_code', flat=True))
-
         if len(qs) == 0:
+            warning(self.request, "No stocks to report")
             sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
         else:
             sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(qs, n_top_bottom=self.n_top_bottom)
@@ -95,8 +121,10 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
            'n_top_bottom': self.n_top_bottom,
            'best_ten': top10,
            'worst_ten': bottom10,
+           'title': 'Find by dividend yield or P/E',
            'sentiment_heatmap_title': "Selected stock sentiment: {} total stocks".format(n_stocks),
         })
+        add_messages(self.request, context)
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
@@ -126,23 +154,17 @@ class CompanySearch(DividendYieldSearch):
     action_url = "/search/by-company"
     paginate_by = 50
 
+    def render_to_response(self, context, **kwargs):
+        result = super().render_to_response(context, **kwargs)
+        context['title'] = 'Find by company name or activity'
+        return result
+
     def get_queryset(self, **kwargs):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
             return Quotation.objects.none()
-
-        matching_companies = set()
         wanted_name = kwargs.get('name', '')
         wanted_activity = kwargs.get('activity', '')
-        if len(wanted_name) > 0:
-            # match by company name first...
-            matching_companies.update([hit.asx_code for hit in
-                                       CompanyDetails.objects.filter(name_full__icontains=wanted_name)])
-            # but also matching codes
-            matching_companies.update([hit.asx_code for hit in
-                                       CompanyDetails.objects.filter(asx_code__icontains=wanted_name)])
-        if len(wanted_activity) > 0:
-            matching_companies.update([hit.asx_code for hit in \
-                                       CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity)])
+        matching_companies = find_named_companies(wanted_name, wanted_activity)
         print("Showing results for {} companies".format(len(matching_companies)))
         self.as_at_date = latest_quotation_date('ANZ')
         results, latest_date = latest_quote(tuple(matching_companies))
@@ -246,6 +268,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20):
     assert n_days > 0
     assert n_top_bottom > 0
     all_dates = desired_dates(n_days)
+    print(all_dates)
     sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates, n_top_bottom=n_top_bottom)
 
     context = {
@@ -349,6 +372,7 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
          "sentiment_heatmap": sentiment_heatmap_data,
          "sentiment_heatmap_title": "{}: past {} days".format(heatmap_title, n_days)
     }
+    add_messages(request, context)
     return render(request, 'all_stocks.html', context=context)
 
 @login_required
@@ -391,41 +415,69 @@ def toggle_watched(request, stock=None):
         w.save()
     return redirect_to_next(request)
 
-@login_required
-def buy_virtual_stock(request, stock=None, amount=5000.0):
-    validate_stock(stock)
-    validate_user(request.user)
-    assert amount > 0.0
-    quote, latest_date = latest_quote(stock)
-    cur_price = quote.last_price
-    if cur_price >= 1e-6:
-        vp = VirtualPurchase(asx_code=stock, user=request.user,
-                             buy_date=latest_date, price_at_buy_date=cur_price,
-                             amount=amount, n=int(amount / cur_price))
-        vp.save()
-        print("Purchased {} as at {}: {} shares at {} each".format(vp.asx_code, latest_date, vp.n, vp.price_at_buy_date))
-    else:
-        print("WARNING: cant buy {} as its price is zero".format(stock))
-        # do nothing in this case...
-        pass
-    return redirect_to_next(request)
+class BuyVirtualStock(LoginRequiredMixin, CreateView):
+    model = VirtualPurchase
+    success_url = '/show/watched'
+    form_class = forms.models.modelform_factory(VirtualPurchase, 
+                        fields=['asx_code', 'buy_date', 'price_at_buy_date', 'amount', 'n'],
+                        widgets={"asx_code": forms.TextInput(attrs={'readonly': 'readonly'})})
 
-@login_required
-def delete_stock(request, stock=None):
-    validate_stock(stock)
-    validate_user(request.user)
-    print("About to delete {} stock for {}".format(stock, request.user))
-    Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
-    VirtualPurchase.objects.filter(user=request.user, asx_code=stock).delete()
-    return redirect_to_next(request)
+    def form_valid(self, form):
+        req = self.request
+        self.object = form.save(commit=False)
+        self.object.user = req.user
+        self.object.save()
 
-@login_required
-def delete_virtual_stock(request, buy_date=None, stock=None):
-    validate_stock(stock)
-    validate_date(buy_date)
-    validate_user(request.user)
+        info(req, "Saved purchase of {}".format(self.kwargs.get('stock')))
+        return super().form_valid(form)
 
-    stocks_to_delete = VirtualPurchase.objects.filter(user=request.user, buy_date=buy_date, asx_code=stock)
-    print("Selected {} stocks to delete".format(len(stocks_to_delete)))
-    stocks_to_delete.delete()
-    return redirect_to_next(request)
+    def get_context_data(self, **kwargs):
+        result = super().get_context_data(**kwargs)
+        result['title'] = "Add {} purchase to watchlist".format(self.kwargs.get('stock'))
+        return result
+
+    def get_initial(self, **kwargs):
+        stock = self.kwargs.get('stock')
+        amount = self.kwargs.get('amount', 5000.0)
+        user = self.request.user
+        validate_stock(stock)
+        validate_user(user)
+        quote, latest_date = latest_quote(stock)
+        cur_price = quote.last_price
+        if cur_price >= 1e-6:
+            return { 'asx_code': stock, 'user': user,
+                     'buy_date': latest_date, 'price_at_buy_date': cur_price,
+                     'amount': amount, 'n': int(amount / cur_price) }
+        else:
+            warning(self.request, "Cannot buy {} as its price is zero/unknown".format(stock))
+            return {}
+
+buy_virtual_stock = BuyVirtualStock.as_view()
+
+class MyObjectMixin:
+    """
+    Retrieve the object by mongo _id for use by CRUD CBV views for VirtualPurchase's
+    """
+    def get_object(self, queryset=None):
+        slug = self.kwargs.get('slug')
+        purchase = VirtualPurchase.objects.mongo_find_one({ '_id': ObjectId(slug) })
+        #print(purchase)
+        purchase['id'] = purchase['_id']
+        purchase.pop('_id', None)
+        return VirtualPurchase(**purchase)
+
+class EditVirtualStock(LoginRequiredMixin, MyObjectMixin, UpdateView):
+    model = VirtualPurchase
+    success_url = '/show/watched'
+    form_class = forms.models.modelform_factory(VirtualPurchase,
+                        fields=['asx_code', 'buy_date', 'price_at_buy_date', 'amount', 'n'], 
+                        widgets={"asx_code": forms.TextInput(attrs={ 'readonly': 'readonly' }), 
+                                 "buy_date": forms.DateInput()})
+
+edit_virtual_stock = EditVirtualStock.as_view()
+
+class DeleteVirtualPurchaseView(LoginRequiredMixin, MyObjectMixin, DeleteView):
+    model = VirtualPurchase
+    success_url = '/show/watched'
+
+delete_virtual_stock = DeleteVirtualPurchaseView.as_view()

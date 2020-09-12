@@ -175,6 +175,7 @@ class CompanyDetails(model.Model):
         db_table = "asx_company_details"
 
 class Watchlist(model.Model):
+    id = ObjectIdField(unique=True, db_column="_id")
     # record stocks of interest to the user
     user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)
     asx_code = model.TextField()
@@ -231,6 +232,21 @@ def desired_dates(n_days, today=None): # today is provided as keyword arg for te
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
     assert len(all_dates) == n_days
     return all_dates
+
+def find_named_companies(wanted_name, wanted_activity):
+    ret = set()
+    if len(wanted_name) > 0:
+        # match by company name first...
+        ret.update(CompanyDetails.objects.filter(name_full__icontains=wanted_name).values_list('asx_code', flat=True))
+        # but also matching codes
+        ret.update(CompanyDetails.objects.filter(asx_code__icontains=wanted_name).values_list('asx_code', flat=True))
+        # and if the code has no details, we try another method to find them... by checking all codes seen on the most recent date
+        latest_date = latest_quotation_date('ANZ')
+        ret.update(Quotation.objects.filter(asx_code__icontains=wanted_name).values_list('asx_code', flat=True))
+
+    if len(wanted_activity) > 0:
+        ret.update(CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity).values_list('asx_code', flat=True))
+    return ret
 
 def latest_quotation_date(stock):
     d = all_available_dates(reference_stock=stock)
@@ -329,9 +345,14 @@ def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on
         yyyy = date[0:4]
         mm = date[5:7]
         required_tags.add("{}-{}-{}-asx".format(field_name, mm, yyyy))
-
+    which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
+
+    # drop columns not present in all_dates to ensure we are giving just the results requested
+    cols_to_drop = [date for date in superdf.columns if date not in which_cols]
+    superdf = superdf.drop(columns=cols_to_drop)
+
     # on the first of the month, we dont have data yet so we permit one missing tag for this reason
     if fail_on_missing and n_dataframes < len(required_tags) - 1:
         raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(n_dataframes, required_tags))
@@ -363,8 +384,9 @@ class MarketDataCache(model.Model):
         db_table = "market_quote_cache"
 
 class VirtualPurchase(model.Model):
+    id = ObjectIdField(unique=True, db_column='_id')
     user = model.ForeignKey(settings.AUTH_USER_MODEL, on_delete=model.CASCADE)
-    asx_code = model.TextField()
+    asx_code = model.TextField(max_length=10)
     buy_date = model.DateField()
     price_at_buy_date = model.FloatField()
     amount = model.FloatField() # dollar value purchased (assumes no fees)
