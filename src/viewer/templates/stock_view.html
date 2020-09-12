@@ -1,61 +1,64 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="row">
+    <div class="col-md-auto">
+        <h3>Information</h3>
 
-<h2 class="asxtrade">Information</h2>
+        <div class="info-table">
+        {% if cd is None %}
+              <p>No company details available. ETF?</p>
+        {% else %}
+              <table class="small" style="width: 60%">
+                   <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
+                   <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
+                   <tr><td>Indices</td><td>{% for i in indices %}{{ i|pprint }}{% endfor %}</td></tr>
+                   <tr><td>Website</td><td>{{ cd.web_address|urlize }}</td></tr>
+              </table>
+        {% endif %}
+        </div>
 
-<div class="info-table">
-{% if cd is None %}
-     <p>No company details available. ETF?</p>
-{% else %}
-<table class="small" style="width: 60%">
-     <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
-     <tr><td>Principal activity</td><td>{{ cd.principal_activities }}</td></tr>
-     <tr><td>Indices</td><td>{% for i in indices %}{{ i|pprint }}{% endfor %}</td></tr>
-     <tr><td>Website</td><td>{{ cd.web_address|urlize }}</td></tr>
-</table>
-{% endif %}
+        <div class="stock-securities">
+        {% if securities is None %}
+            <p>No security information available.</p>
+        {% else %}
+            <table style="width: 90%">
+                <tr class="small">
+                  <th>ASX code</th>
+                  <th>Company</th>
+                  <th>Security code</th>
+                  <th>Description</th>
+                  <th>Last updated</th>
+                </tr>
+            {% for s in securities %}
+                <tr class="small" style="margin-bottom: 5px">
+                  <td>{{ s.asx_code }}</td>
+                  <td>{{ s.company_name }}</td>
+                  <td>{{ s.asx_isin_code }}</td>
+                  <td>{{ s.security_name }}</td>
+                  <td>{{ s.last_updated }}</td>
+                </tr>
+            {% endfor %}
+            </table>
+        {% endif %}
+        </div>
+
+        <h3>Key indicators</h3>
+
+        <img class="stock-key-indicators" src="data:image/png; base64, {{ key_indicators_plot }}" alt="Key indicator plot"/>
+        <p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
+
+        <h3>Momentum</h3>
+        <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+
+        <h3 class="asxtrade">{{ sector_momentum_title }}</h3>
+
+        <img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
+
+        <h3>{{ company_versus_sector_title }}<h3>
+
+        <img class="company_versus_sector" src="data:image/png;base64, {{ company_versus_sector_plot }}" alt="{{ company_versus_sector_title }}">
+
+    </div>
 </div>
-
-<div class="stock-securities">
-{% if securities is None %}
-    <p>No security information available.</p>
-{% else %}
-    <table style="width: 90%">
-        <tr class="small">
-          <th>ASX code</th>
-          <th>Company</th>
-          <th>Security code</th>
-          <th>Description</th>
-          <th>Last updated</th>
-        </tr>
-    {% for s in securities %}
-        <tr class="small" style="margin-bottom: 5px">
-          <td>{{ s.asx_code }}</td>
-          <td>{{ s.company_name }}</td>
-          <td>{{ s.asx_isin_code }}</td>
-          <td>{{ s.security_name }}</td>
-          <td>{{ s.last_updated }}</td>
-        </tr>
-    {% endfor %}
-    </table>
-{% endif %}
-</div>
-
-<h3>Key indicators</h3>
-
-<img class="stock-key-indicators" src="data:image/png; base64, {{ key_indicators_plot }}" alt="Key indicator plot"/>
-<p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
-
-<h3>Momentum</h3>
-<img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
-
-<h3 class="asxtrade">{{ sector_momentum_title }}</h3>
-
-<img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
-
-<h3>{{ company_versus_sector_title }}<h3>
-
-<img class="company_versus_sector" src="data:image/png;base64, {{ company_versus_sector_plot }}" alt="{{ company_versus_sector_title }}">
-
 {% endblock %}

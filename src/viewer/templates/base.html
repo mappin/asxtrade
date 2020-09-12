@@ -8,6 +8,11 @@
         <link rel="stylesheet" href="{% static "app.css" %}">
         <script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+        
+        <!-- XDSoft DateTimePicker -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css" integrity="sha256-DOS9W6NR+NFe1fUhEE0PGKY/fubbUCnOfTje2JMDw3Y=" crossorigin="anonymous" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js" integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
+
         <script type="text/javascript" src="{% static "site.js" %}" ></script>
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
@@ -42,12 +47,31 @@
       </td><td>
         <div class="content container">
             <div class="row">
-                <div class="col-md-auto">
-                {% block content %}
-                {% endblock %}
-                </div>
+                {%if title %}<h3>{{ title }}</h3>{% endif %}
             </div>
+
+            {% block searchform %}
+            {% endblock %}
+
+            <div class="row mt-2">
+                {% block notices %}
+                    {% if messages %}
+                        <ul class="messages">
+                        {% for message in messages %}
+                              <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>
+                                 {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}Important: {% endif %}
+                                 {{ message }}
+                              </li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endblock %}
+            </div>
+
+            {% block content %}
+            {% endblock %}
         </div>
+
       </td></tr>
     </body>
 </html>

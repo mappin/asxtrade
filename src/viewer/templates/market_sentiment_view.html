@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{ title }}</h2>
 <img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
 
 {% if best_ten is None %}

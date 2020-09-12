@@ -2,113 +2,109 @@
 {% load myfilters %}
 {% block stock_list %}
 
-{% if most_recent_date or sector %}
-    <div class="alert alert-secondary">
-    {% if most_recent_date %}Prices current as at {{ most_recent_date }}.{% endif %}
-    {% if sector %}Only stocks in {{ sector }} are displayed.{% endif %}
-    </div>
-{% endif %}
-
 {% if page_obj %}
-<table style="width: 100%">
-   <tr>
-      <th>ASX Code</th>
-      <th>Annual yield</th>
-      <th>Price ($AUD)</th>
-      <th>Day change</th>
-      <th>Volume ($AUD Mil.)</th>
-      <th>EPS</th>
-      <th>Price/Earnings</th>
-      <th>Year high price</th>
-      <th>Year low price</th>
-   </tr>
-   {% for stock in page_obj %}
-       <tr class="small" style="margin-bottom: 5px">
-          <td>
-             <a href="/watchlist/{{ stock.asx_code }}?next={{ request.path }}">
-             {% if stock.asx_code in watched %}
-                 <img src="{% static "star.png" %}" width="12" />
-             {% else %}
-                 <img src="{% static "empty-star.png" %}" width="12" />
-             {% endif %}
-           </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
-                 <img src="{% static "money.png" %}" width="12" />
-           </a><a class="confirm-delete" href="/delete/{{ stock.asx_code }}?next={{ request.path }}"><img width="12" src="{% static "delete-stock.png" %}" />&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
-          </td>
-          <td>{{ stock.annual_dividend_yield |floatformat }}</td>
-          <td>{{ stock.last_price }}</td>
-          <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
-          <td align="center">{{ stock.volume_as_millions }}</td>
-          <td align="right">{{ stock.eps|floatformat }}</td>
-          <td align="center">{{ stock.pe|floatformat }}</td>
-          <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
-          <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
-       </tr>
-       {% if stock.asx_code in virtual_purchases %}
-           {% for purchase in virtual_purchases|get_item:stock.asx_code %}
+    <div class="row mt-2">
+        <table style="width: 100%">
            <tr>
-              <td></td>
-              <td colspan="6" class="small">{{ purchase }}</td>
-              <td><a href="/delete/{{ purchase.buy_date|date:"Y-m-d"}}/{{ purchase.asx_code }}?next={{ request.path }}">
-                      <img src="{% static "trashcan.png" %}" width="12" />
-                  </a>
-              </td>
+              <th>ASX Code</th>
+              <th>Annual yield</th>
+              <th>Price ($AUD)</th>
+              <th>Day change</th>
+              <th>Volume ($AUD Mil.)</th>
+              <th>EPS</th>
+              <th>Price/Earnings</th>
+              <th>Year high price</th>
+              <th>Year low price</th>
            </tr>
+           {% for stock in page_obj %}
+               <tr class="small" style="margin-bottom: 5px">
+                  <td>
+                     <a href="/watchlist/{{ stock.asx_code }}?next={{ request.path }}">
+                     {% if stock.asx_code in watched %}
+                         <img src="{% static "star.png" %}" width="12" />
+                     {% else %}
+                         <img src="{% static "empty-star.png" %}" width="12" />
+                     {% endif %}
+                   </a><a href="/purchase/{{ stock.asx_code }}?next={{ request.path }}">
+                         <img src="{% static "money.png" %}" width="12" />
+                   </a>&nbsp;<a href="/show/{{ stock.asx_code }}">{{ stock.asx_code }}</a>
+                  </td>
+                  <td>{{ stock.annual_dividend_yield |floatformat }}</td>
+                  <td>{{ stock.last_price }}</td>
+                  <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
+                  <td align="center">{{ stock.volume_as_millions }}</td>
+                  <td align="right">{{ stock.eps|floatformat }}</td>
+                  <td align="center">{{ stock.pe|floatformat }}</td>
+                  <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+                  <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
+               </tr>
+               {% if stock.asx_code in virtual_purchases %}
+                   {% for purchase in virtual_purchases|get_item:stock.asx_code %}
+                   <tr>
+                      <td></td>
+                      <td colspan="6" class="small">{{ purchase }}</td>
+                      <td><a href="/delete/purchase/{{ purchase.id }}"><img src="{% static "trashcan.png" %}" width="12" />
+                          </a>&nbsp;<a href="/update/purchase/{{ purchase.id }}"><img src="{% static "edit.jpg" %}" width="12" /></a>
+                      </td>
+                   </tr>
+                   {% endfor %}
+               {% endif %}
            {% endfor %}
-       {% endif %}
-   {% endfor %}
-</table>
+        </table>
+    </div>
 
-<div class="pagination">
-    <span class="step-links">
-        {% if page_obj.has_previous %}
-            <a href="?page=1" class="btn btn-primary">&laquo; first</a>
-            <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-primary">previous</a>
-        {% endif %}
+    <div class="row pagination mt-4">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1" class="btn btn-primary">&laquo; first</a>
+                <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-primary">previous</a>
+            {% endif %}
 
-        <span class="current">
-            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+            <span class="current">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+            </span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="btn btn-primary">next</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-primary">last &raquo;</a>
+            {% endif %}
         </span>
-
-        {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}" class="btn btn-primary">next</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-primary">last &raquo;</a>
+        {% if virtual_purchases %}
+        <span>
+            &nbsp;<a href="/show/trends" class="btn btn-primary">Show trends</a>&nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Show purchase performance</a>
+        </span>
         {% endif %}
-    </span>
-    {% if virtual_purchases %}
-    <span>
-        &nbsp;<a href="/show/trends" class="btn btn-primary">Show trends</a>&nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Show purchase performance</a>
-    </span>
-    {% endif %}
-</div>
+    </div>
 {% endif %}
 
 {% if sentiment_heatmap %}
-    <div class="sentiment-heatmap">
-    <h2>{{ sentiment_heatmap_title }}</h2>
-    <img src="data:image/png;base64, {{ sentiment_heatmap }}" />
+    <div class="row mt-4">
+        <h3>{{ sentiment_heatmap_title }}</h3>
+        <img src="data:image/png;base64, {{ sentiment_heatmap }}" />
     </div>
 {% endif %}
 
-
 {% if best_ten is None %}
-<div class="unimportant">No top/bottom10 available.</div>
+    <div class="row mt-4"><p>No top/bottom10 available.</p></div>
 {% else %}
-<h3>Top {{ n_top_bottom }}</h3>
+    <div class="row mt-4">
+        <h3>Top {{ n_top_bottom }}</h3>
 
-<table width="60%">
-   {% include "stock_series.html" with series=best_ten %}
-</table>
+        <table width="60%">
+           {% include "stock_series.html" with series=best_ten %}
+        </table>
+    </div>
 
-<h3>Bottom {{ n_top_bottom }}</h3>
+    <div class="row mt-4">
+        <h3>Bottom {{ n_top_bottom }}</h3>
 
-<table width="60%">
-    {% include "stock_series.html" with series=worst_ten %}
-</table>
+        <table width="60%">
+            {% include "stock_series.html" with series=worst_ten %}
+        </table>
+    </div>
 {% endif %}
 
 {% if momentum is None %}
-
 {% endif %}
 
 {% endblock %}

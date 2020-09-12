@@ -130,12 +130,16 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     top10 = sum.nlargest(n_top_bottom)
     bottom10 = sum.nsmallest(n_top_bottom)
     #print(bins)
-    for date in df.columns:
-        df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
-    fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
-    sentiment_plot = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-    return (sentiment_plot, df, top10, bottom10, n_stocks)
+    try:
+        # NB: this may fail if no prices are available so we catch that error and handle accordingly...
+        for date in df.columns:
+            df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
+        fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
+        sentiment_plot = plot_as_base64(fig).decode('utf-8')
+        plt.close(fig)
+        return (sentiment_plot, df, top10, bottom10, n_stocks)
+    except KeyError:
+        return (None, None, None, None, None)
 
 def make_momentum_plot(dataframe, descriptor, window_size=14):
     assert len(descriptor) > 0
