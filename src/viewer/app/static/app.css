@@ -59,3 +59,9 @@ a.button:active { border-style: inset; }
 tr.recent-downward-trend { background: #ff6961; }
 tr.recent-upward-trend { background: #c2ffe2; }
 tr.none { background: white; }
+
+/* hide bullets from messages */
+li.alert {
+  list-style-type: none;
+  margin-left: 0px;
+}
