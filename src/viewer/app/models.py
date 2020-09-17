@@ -4,6 +4,7 @@ from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 import pylru
+from collections import defaultdict
 from datetime import datetime, timedelta
 import re
 import io
@@ -23,6 +24,7 @@ def validate_user(user):
     assert user.is_active
     assert user.is_authenticated
     assert not user.is_anonymous
+    return user  # fluent style convenience
 
 class Quotation(model.Model):
     _id = ObjectIdField()
@@ -60,6 +62,10 @@ class Quotation(model.Model):
     year_low_price = model.FloatField()
 
     objects = DjongoManager() # convenient access to mongo API
+
+    def __str__(self):
+        assert self is not None
+        return str(model_to_dict(self))
 
     def percent_change(self):
         if self.is_error():
@@ -285,7 +291,7 @@ def latest_quote(stocks):
 
 def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
-    assert stock_codes is None or len(stock_codes) > 0
+    assert stock_codes is None or len(stock_codes) > 0 # NB: zero stocks considered bad
     dataframes = MarketDataCache.objects.filter(tag__in=required_tags, dataframe_format="parquet") \
                                         .values_list('dataframe', flat=True)
     superdf = None
@@ -446,12 +452,10 @@ def user_purchases(user):
     """
     Returns a dict: asx_code -> VirtualPurchase of the specified user's watchlist
     """
-    assert user is not None
-    purchases = {}
+    validate_user(user)
+    purchases = defaultdict(list)
     for purchase in VirtualPurchase.objects.filter(user=user):
         code = purchase.asx_code
-        if not code in purchases:
-            purchases[code] = []
         purchases[code].append(purchase)
     print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
