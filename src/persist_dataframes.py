@@ -3,6 +3,7 @@ import pymongo
 from bson.binary import Binary
 import argparse
 import io
+import os
 import pandas as pd
 import numpy
 from datetime import datetime, date
@@ -106,7 +107,10 @@ if __name__ == "__main__":
    a.add_argument("--status", help="Status of matrix eg. INCOMPLETE or FINAL", required=True, type=str)
    args = a.parse_args()
 
-   mongo = pymongo.MongoClient(args.db, args.port, username=args.dbuser, password=str(args.dbpassword))
+   pwd = str(args.dbpassword)
+   if pwd.startswith('$'):
+       pwd = os.getenv(args.dbpassword[1:])
+   mongo = pymongo.MongoClient(args.db, args.port, username=args.dbuser, password=pwd)
    db = mongo[args.dbname]
 
    load_all_prices(db, args.month, args.year, args.status)
