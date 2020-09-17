@@ -117,6 +117,12 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
             continue
         try:
             resp = fetcher.get(url, timeout=(30,30))
+            if resp.status_code != 200:
+                if resp.status_code == 404:   # not found? ok, add it to blacklist...
+                    db.asx_blacklist.find_one_and_update({ 'asx_code': asx_code }, 
+                                                         { "$set": { 'asx_code': asx_code, 'reason': "404 for {}".format(url) }},
+                                                         upsert=True)
+                raise ValueError("Got non-OK status for {}: {}".format(url, resp.status_code))
             d = json.loads(resp.content.decode())
             d.update({ 'fetch_date': fetch_date })
             for key in ['last_trade_date', 'year_high_date', 'year_low_date']:
@@ -168,7 +174,7 @@ def update_blacklist(db, config):
     print("Identified {} stocks for blacklisting with over 20 failed fetches".format(len(for_blacklisting)))
     for code in for_blacklisting:
         db.asx_blacklist.find_one_and_update({ 'asx_code': code },
-                        { '$set': { 'asx_code': code, 'reason': 'asxtrade.py says no' }}, 
+                        { '$set': { 'asx_code': code, 'reason': 'asxtrade.py says no' }},
                         upsert=True)
     print("Blacklist updated.")
 
