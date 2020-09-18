@@ -217,6 +217,13 @@ def all_available_dates(reference_stock='ANZ'):
     date_cache[reference_stock] = ret
     return ret
 
+def stocks_by_sector():
+    rows = [d for d in CompanyDetails.objects.values('asx_code', 'sector_name').order_by('asx_code')]
+    df = pd.DataFrame.from_records(rows)
+    assert len(df) > 0
+    assert 'asx_code' in df.columns and 'sector_name' in df.columns
+    return df
+
 def all_sector_stocks(sector_name):
     """
     Return a queryset with all stocks in the specified sector
