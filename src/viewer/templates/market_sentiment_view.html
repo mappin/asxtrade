@@ -2,28 +2,57 @@
 
 {% block content %}
 <div class="row mt-4">
+<p>
+This visualisation shows the number of stocks undergoing a daily price change (in percentage terms)
+amongst fixed price change bins across the past {{ n_days }} trading days. Stocks moving <1e-6%
+are not shown ie. barely moving stocks. Bins with few stocks are shown in blue, bins with lots
+of stocks are shown in yellow and the number present are displayed in the centre of each bin.
+The data may be downloaded in Excel-format using the button below the plot.
+</p>
+
 <img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
+
+<span class="row">
+    <a href="/data/market_sentiment/csv" class="btn btn-primary">Download CSV</a>&nbsp;&nbsp;
+    <a href="/data/market_sentiment/excel" class="btn btn-primary">Download Excel</a>
+</span>
 </div>
 
 {% if best_ten is None %}
 {% else %}
-<div class="row">
-<h3>Top {{ n_top_bottom }}</h3>
-</div>
+    <h3 class="row mt-4">Top {{ n_top_bottom }}</h3>
 
-<div class="row col-md-auto">
-<table>
-   {% include "stock_series.html" with series=best_ten %}
-</table>
-</div>
-<div class="row">
-<h3>Bottom {{ n_top_bottom }}</h3>
-</div>
+    <p>
+    Best performing stocks across the entire observation period (in percentage terms).
+    May be used to identify stocks increasing in price more than any other shown.
+    </p>
 
+    <div class="row col-md-auto">
+
+    <table>
+       {% include "stock_series.html" with series=best_ten %}
+    </table>
+    </div>
+
+    <h3 class="row mt-4">Bottom {{ n_top_bottom }}</h3>
+
+    <div class="row col-md-auto">
+    <table>
+        {% include "stock_series.html" with series=worst_ten %}
+    </table>
+    </div>
+{% endif %}
+
+{% if sector_performance is None %}
+{% else %}
 <div class="row col-md-auto">
-<table>
-    {% include "stock_series.html" with series=worst_ten %}
-</table>
+    <h3 class="mt-4">{{ sector_performance_title }}</h3>
+    <p>
+    This figure shows all ASX sectors with the average cumulative change (in percentage terms) over the last 180 trading days.
+    It can be used to identify sector-wide trends over time.
+    </p>
+
+    <img class="sector-performance-plot" src="data:image/png;base64, {{ sector_performance }}" alt="ASX sector performance plot">
 </div>
 {% endif %}
 

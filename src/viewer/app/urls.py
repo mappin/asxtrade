@@ -36,7 +36,8 @@ urlpatterns = [
     path('purchase/<str:stock>', buy_virtual_stock),
     path('update/purchase/<slug:slug>', edit_virtual_stock),
     path('delete/purchase/<slug:slug>', delete_virtual_stock),
-    path('stats/market-sentiment', market_sentiment)
+    path('stats/market-sentiment', market_sentiment),
+    path('data/<slug:dataset>/<str:format>/', download_data, name='data')
 ]
 
 
