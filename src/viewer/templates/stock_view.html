@@ -3,11 +3,10 @@
 {% block content %}
 <div class="row">
     <div class="col-md-auto">
-        <h3>Information</h3>
+        <h3 class="mt-4">Information</h3>
 
         <div class="info-table">
         {% if cd is None %}
-              <p>No company details available. ETF?</p>
         {% else %}
               <table class="small" style="width: 60%">
                    <tr><td>Sector</td><td>{{ cd.sector_name }}</td></tr>
@@ -45,29 +44,29 @@
 
         {% if key_indicators_plot is None %}
         {% else %}
-        <h3>Key indicators</h3>
+        <h3 class="mt-4">Key indicators</h3>
 
         <img class="stock-key-indicators" src="data:image/png; base64, {{ key_indicators_plot }}" alt="Key indicator plot"/>
         <p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
         {% endif %}
-        
-        <h3>Momentum</h3>
+
+        <h3 class="mt-4">Momentum</h3>
         <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
 
         {% if sector_momentum_plot is None %}
         {% else %}
-        <h3 class="asxtrade">{{ sector_momentum_title }}</h3>
+        <h3 class="asxtrade mt-4">{{ sector_momentum_title }}</h3>
 
         <img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
         {% endif %}
-        
+
         {% if company_versus_sector_plot is None %}
         {% else %}
-        <h3>{{ company_versus_sector_title }}<h3>
+        <h3 class="mt-4">{{ company_versus_sector_title }}<h3>
 
         <img class="company_versus_sector" src="data:image/png;base64, {{ company_versus_sector_plot }}" alt="{{ company_versus_sector_title }}">
         {% endif %}
-        
+
     </div>
 </div>
 {% endblock %}

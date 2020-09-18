@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
 from django.views.generic import FormView, UpdateView, DeleteView, CreateView
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -267,6 +267,47 @@ def show_stock(request, stock=None, sector_n_days=90):
    }
    return render(request, "stock_view.html", context=context)
 
+def save_dataframe_to_file(df, filename, format):
+    assert format in ('csv', 'excel', 'tsv', 'parquet')
+    assert df is not None and len(df) > 0
+    assert len(filename) > 0
+
+    if format == 'csv':
+        df.to_csv(filename)
+        return 'text/csv'
+    elif format == 'excel':
+        df.to_excel(filename)
+        return 'application/vnd.ms-excel'
+    elif format == 'tsv':
+        df.to_csv(filename, sep='\t')
+        return 'text/tab-separated-values'
+    elif format == 'parquet':
+        df.to_parquet(filename)
+        return 'application/octet-stream' # for now, but must be something better...
+    else:
+        raise ValueError("Unsupported format {}".format(format))
+
+def get_dataset(dataset_wanted):
+    assert dataset_wanted in ('market_sentiment')
+
+    if dataset_wanted == 'market_sentiment':
+        _, df, _, _, _ = plot_heatmap(None, all_dates=desired_dates(21), n_top_bottom=20)
+        return df
+    else:
+        raise ValueError("Unsupported dataset {}".format(dataset_wanted))
+
+@login_required
+def download_data(request, dataset=None, format='csv'):
+    validate_user(request.user)
+    import tempfile
+    with tempfile.NamedTemporaryFile() as fh:
+        df = get_dataset(dataset)
+        content_type = save_dataframe_to_file(df, fh.name, format)
+        fh.seek(0)
+        response = HttpResponse(fh.read(), content_type=content_type)
+        response['Content-Disposition'] = 'inline; filename=temp.{}'.format(format)
+        return response
+
 @login_required
 def market_sentiment(request, n_days=21, n_top_bottom=20):
     validate_user(request.user)
@@ -274,6 +315,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20):
     assert n_top_bottom > 0
     all_dates = desired_dates(n_days)
     sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates, n_top_bottom=n_top_bottom)
+    sector_performance_plot = plot_market_wide_sector_performance(desired_dates(180))
 
     context = {
        'sentiment_data': sentiment_heatmap_data,
@@ -283,6 +325,8 @@ def market_sentiment(request, n_days=21, n_top_bottom=20):
        'best_ten': top10,
        'worst_ten': bottom10,
        'watched': user_watchlist(request.user),
+       'sector_performance': sector_performance_plot,
+       'sector_performance_title': '180 day cumulative sector avg. performance',
        'title': "Market sentiment over past {} days".format(n_days)
     }
     return render(request, 'market_sentiment_view.html', context=context)
