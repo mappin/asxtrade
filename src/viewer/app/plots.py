@@ -40,8 +40,9 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
 
     df = pd.DataFrame.from_records(rows)
     #print(df['bin'].unique())
+    # HACK TODO FIXME: should get from price_change_bins()...
     order = ['-1000.0', '-100.0', '-10.0', '-5.0', '-3.0', '-2.0', '-1.0', '-1e-06',
-             '1e-06', '1.0', '2.0', '3.0', '5.0', '10.0', '100.0', '1000.0']
+             '1e-06', '1.0', '2.0', '3.0', '5.0', '10.0', '25.0', '100.0', '1000.0']
     df['bin_ordered'] = pd.Categorical(df['bin'], categories=order)
 
     plot = (p9.ggplot(df, p9.aes('date', 'bin_ordered', fill='value'))
