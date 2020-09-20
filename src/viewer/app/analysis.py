@@ -95,6 +95,6 @@ def price_change_bins():
     plotting code
     """
     bins = [-1000.0, -100.0, -10.0, -5.0, -3.0, -2.0, -1.0, -1e-6, 0.0,
-            1e-6, 1.0, 2.0, 3.0, 5.0, 10.0, 100.0, 1000.0]
+            1e-6, 1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 100.0, 1000.0]
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
