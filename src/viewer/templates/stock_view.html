@@ -46,27 +46,47 @@
         {% else %}
         <h3 class="mt-4">Key indicators</h3>
 
-        <img class="stock-key-indicators" src="data:image/png; base64, {{ key_indicators_plot }}" alt="Key indicator plot"/>
+        <img class="stock-key-indicators" 
+             src="data:image/png; base64, {{ key_indicators_plot }}"
+             alt="Key indicator plot" />
         <p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
         {% endif %}
 
         <h3 class="mt-4">Momentum</h3>
-        <img class="stock" src="data:image/png;base64, {{ rsi_data }}" alt="RSI data plot for ASX.{{ asx_code }}">
+        <img class="stock"
+             src="data:image/png;base64, {{ rsi_data }}"
+             alt="RSI data plot for ASX.{{ asx_code }}" />
 
         {% if sector_momentum_plot is None %}
         {% else %}
         <h3 class="asxtrade mt-4">{{ sector_momentum_title }}</h3>
 
-        <img class="sector_past3months" src="data:image/png;base64, {{ sector_momentum_plot }}" alt="{{ sector_momentum_title }}">
+        <img class="sector_past3months" 
+             src="data:image/png;base64, {{ sector_momentum_plot }}" 
+             alt="{{ sector_momentum_title }}" />
         {% endif %}
 
         {% if company_versus_sector_plot is None %}
         {% else %}
-        <h3 class="mt-4">{{ company_versus_sector_title }}<h3>
+        <h3 class="mt-4">{{ company_versus_sector_title }}</h3>
 
-        <img class="company_versus_sector" src="data:image/png;base64, {{ company_versus_sector_plot }}" alt="{{ company_versus_sector_title }}">
+        <img class="company_versus_sector" 
+             src="data:image/png;base64, {{ company_versus_sector_plot }}" 
+             alt="{{ company_versus_sector_title }}" />
         {% endif %}
 
+        {% if monthly_highest_price_plot is None %}
+        {% else %}
+        <h3 class="mt-4">{{ monthly_highest_price_plot_title }}</h3>
+
+        <img class="month_best_price_plot"
+             src="data:image/png;base64, {{ monthly_highest_price_plot }}"
+             alt="{{ monthly_highest_price_plot_title }}" />
+             
+        <p>Plot the maximum daily open price each month over the past 24 months. Note that this is <b>not</b>
+           the last trading price used in most other figures.</p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
+

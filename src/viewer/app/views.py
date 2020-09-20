@@ -253,6 +253,9 @@ def show_stock(request, stock=None, sector_n_days=90):
    else:
       c_vs_s_plot = sector_momentum_data = key_indicator_plot = None
 
+   # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
+   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(600)))
+
    # populate template and render HTML page with context
    context = {
        'rsi_data': fig,
@@ -264,6 +267,8 @@ def show_stock(request, stock=None, sector_n_days=90):
        'company_versus_sector_plot': c_vs_s_plot,
        'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector),
        'key_indicators_plot': key_indicator_plot,
+       'monthly_highest_price_plot_title': 'Maximum price each month trend',
+       'monthly_highest_price_plot': monthly_maximum_plot,
    }
    return render(request, "stock_view.html", context=context)
 

@@ -335,3 +335,20 @@ def make_rsi_plot(stock_code, dataframe):
     rsi_data = plot_as_base64(fig).decode('utf-8')
     plt.close(fig)
     return rsi_data
+
+def plot_best_monthly_price_trend(dataframe, field='open_price'):
+    assert dataframe is not None
+    assert field in dataframe.columns
+    assert 'fetch_date' in dataframe.columns
+    dataframe = dataframe.filter(items=['fetch_date', field], axis='columns')
+    dataframe = dataframe.set_index(pd.to_datetime(dataframe['fetch_date']))
+    dataframe = dataframe.resample('M', kind='period').max()
+    plot = (p9.ggplot(dataframe, p9.aes(x='dataframe.index', y=field))
+            + p9.geom_bar(stat='identity', fill='#880000', alpha=0.5)
+            + p9.xlab('') + p9.ylab('$AUD')
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
+           )
+    fig = plot.draw()
+    data = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+    return data
