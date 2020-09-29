@@ -5,7 +5,7 @@ from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 import pylru
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import re
 import io
 import pandas as pd
@@ -234,16 +234,28 @@ def all_sector_stocks(sector_name):
                                    .values_list('asx_code', flat=True)
     return stocks
 
-def desired_dates(n_days, today=None): # today is provided as keyword arg for testing
+def desired_dates(today=None, start_date=None): # today is provided as keyword arg for testing
     """
-    Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings
+    Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings, Ordered
+    from start_date thru today inclusive. Start_date may be:
+    1) a string in YYYY-mm-dd format OR
+    2) a datetime instance OR
+    3) a integer number of days (>0) from today backwards to return.
     """
-    assert n_days > 0
     if today is None:
-        today = datetime.now()
-    start_date = today - timedelta(days=n_days - 1) # -1 for today inclusive
+        today = date.today()
+    if isinstance(start_date, (datetime, date)):
+        pass # FALLTHRU
+    elif isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    elif isinstance(start_date, int):
+        assert start_date > 0
+        start_date = today - timedelta(days=start_date - 1) # -1 for today inclusive
+    else:
+        raise ValueError("Unsupported start_date {}".format(type(start_date)))
+    assert start_date <= today
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
-    assert len(all_dates) == n_days
+    assert len(all_dates) > 0
     return all_dates
 
 def find_named_companies(wanted_name, wanted_activity):
@@ -266,9 +278,12 @@ def latest_quotation_date(stock):
     return d[-1]
 
 def all_quotes(stock, all_dates=None):
+    """
+    company_prices() is better as it is pre-pivoted monthly tables, but this is needed for some use cases
+    """
     assert len(stock) >= 3
     if all_dates is None:
-        all_dates = desired_dates(30)
+        all_dates = desired_dates(start_date=30)
     quotes = Quotation.objects.filter(asx_code=stock) \
                               .filter(fetch_date__in=all_dates) \
                               .exclude(error_code="id-or-code-invalid")
@@ -327,7 +342,7 @@ def all_etfs():
     return etf_codes
 
 def increasing_eps(stock_codes, past_n_days=300):
-    all_dates = desired_dates(past_n_days)
+    all_dates = desired_dates(start_date=past_n_days)
     required_tags = set(["eps-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates])
     # NB: we dont care here if some tags cant be found
     df, n = make_superdf(required_tags, stock_codes)
@@ -337,7 +352,7 @@ def increasing_eps(stock_codes, past_n_days=300):
     return increasing_eps_stocks
 
 def increasing_yield(stock_codes, past_n_days=300):
-    all_dates = desired_dates(past_n_days)
+    all_dates = desired_dates(start_date=past_n_days)
     required_tags = set(["annual_dividend_yield-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates])
     df, n = make_superdf(required_tags, stock_codes)
     # ignore penny-ante stocks (must be at least 1c per share dividend)

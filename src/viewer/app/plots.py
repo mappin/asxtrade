@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
 from app.analysis import *
-from app.models import stocks_by_sector
+from app.models import stocks_by_sector, desired_dates
 import numpy as np
 import pandas as pd
 import base64
@@ -75,10 +75,69 @@ def plot_key_stock_indicators(df, stock):
         #    + p9.aes(ymin=0)
             + p9.xlab("") + p9.ylab("")
     )
+    return plot_as_inline_html_data(plot)
+
+def plot_as_inline_html_data(plot, charset='utf-8'):
+    """
+    Return utf-8 encoded base64 image data for inline insertion into HTML content
+    using the template engine. Plot must be a valid plotnine ggplot instance (or compatible)
+    """
+    assert plot is not None
     fig = plot.draw()
-    data = plot_as_base64(fig).decode('utf-8')
+    data = plot_as_base64(fig).decode(charset)
     plt.close(fig)
     return data
+
+def plot_portfolio(portfolio_df):
+    assert portfolio_df is not None
+    #print(portfolio_df)
+    portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
+
+    # 1. overall performance
+    df = portfolio_df.filter(items=['portfolio_cost', 'portfolio_worth', 'portfolio_profit', 'date'])
+    df = df.melt(id_vars=['date'], var_name='field')
+    plot = (p9.ggplot(df, p9.aes('date', 'value', group='field'))
+            + p9.xlab('')
+            + p9.geom_line(size=1.5)
+            + p9.facet_wrap('~field', nrow=3, ncol=1, scales='free_y')
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
+    )
+    overall_figure = plot_as_inline_html_data(plot)
+
+    # 2. per purchased stock performance
+    df = portfolio_df.filter(items=['stock', 'date', 'stock_profit', 'stock_worth'])
+    df = df.melt(id_vars=['date','stock'], var_name='field')
+    plot = (p9.ggplot(df, p9.aes('date', 'value', group='stock', colour='stock'))
+            + p9.xlab('')
+            + p9.geom_line(size=1.0)
+            + p9.facet_wrap('~field', nrow=2, ncol=1, scales="free_y")
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), subplots_adjust={'right': 0.8})
+    )
+    stock_figure = plot_as_inline_html_data(plot)
+
+    # 3. plot contributors
+    all_dates = sorted(df['date'].unique())
+    df = df[df['date'] == all_dates[-1]]
+    df = df[df['field'] == 'stock_profit']
+    winners = df[df['value'] >= 0.0]
+    losers = df[df['value'] < 0.0]
+
+    plot = (p9.ggplot(winners, p9.aes('stock', 'value', fill='stock'))
+            + p9.geom_bar(stat='identity')
+            + p9.xlab('')
+            + p9.ylab('$ AUD')
+            + p9.theme(legend_position='none')
+    )
+    profit_contributors = plot_as_inline_html_data(plot)
+    plot = (p9.ggplot(losers, p9.aes('stock', 'value', fill='stock'))
+            + p9.geom_bar(stat='identity')
+            + p9.theme(legend_position='none')
+            + p9.xlab('')
+            + p9.ylab('')
+    )
+    loss_contributors = plot_as_inline_html_data(plot)
+
+    return overall_figure, stock_figure, profit_contributors, loss_contributors
 
 def plot_company_rank(df):
     assert isinstance(df, pd.DataFrame)
@@ -93,10 +152,7 @@ def plot_company_rank(df):
                        figure_size=(8, 20),
                        subplots_adjust={'right': 0.8})
            )
-    fig = plot.draw()
-    data = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-    return data
+    return plot_as_inline_html_data(plot)
 
 def plot_company_versus_sector(df, stock, sector):
     assert isinstance(df, pd.DataFrame)
@@ -108,12 +164,11 @@ def plot_company_versus_sector(df, stock, sector):
             + p9.geom_line(size=1.5)
             + p9.xlab('')
             + p9.ylab('Percentage change since start')
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(8,4), subplots_adjust={'right': 0.8})
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7),
+                       figure_size=(8,4),
+                       subplots_adjust={'right': 0.8})
     )
-    fig = plot.draw()
-    data = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-    return data
+    return plot_as_inline_html_data(plot)
 
 def plot_market_wide_sector_performance(all_dates, field_name='change_in_percent'):
     """
@@ -161,7 +216,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     if bins is None:
         bins, labels = price_change_bins()
     if all_dates is None:
-        all_dates = desired_dates(30)
+        all_dates = desired_dates(start_date=30)
     df = company_prices(companies, all_dates=all_dates, field_name=field_name) # by default change_in_percent will be used
     n_stocks = len(df)
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
