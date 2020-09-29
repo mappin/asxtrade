@@ -1,4 +1,4 @@
-from app.models import Quotation, CompanyDetails, all_sector_stocks, desired_dates, company_prices
+from app.models import Quotation, CompanyDetails, all_sector_stocks, company_prices
 from datetime import datetime, timedelta
 import pylru
 import pandas as pd

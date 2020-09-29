@@ -15,6 +15,7 @@ from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from app.analysis import relative_strength
 from app.plots import *
 import pylru
+import numpy as np
 
 
 def info(request, msg):
@@ -207,7 +208,7 @@ def show_stock(request, stock=None, sector_n_days=90):
    """
    validate_stock(stock)
    validate_user(request.user)
-   all_stock_quotes_df  = all_quotes(stock, all_dates=desired_dates(sector_n_days))
+   all_stock_quotes_df  = all_quotes(stock, all_dates=desired_dates(start_date=sector_n_days))
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
@@ -219,7 +220,7 @@ def show_stock(request, stock=None, sector_n_days=90):
 
    # show sector performance over past 3 months
    window_size = 14 # since must have a full window before computing momentum
-   all_dates = desired_dates(sector_n_days+window_size)
+   all_dates = desired_dates(start_date=sector_n_days+window_size)
    sector = company_details.sector_name if company_details else None
    sector_companies = all_sector_stocks(sector) if sector else []
    if len(sector_companies) > 0:
@@ -254,7 +255,7 @@ def show_stock(request, stock=None, sector_n_days=90):
       c_vs_s_plot = sector_momentum_data = key_indicator_plot = None
 
    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
-   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(600)))
+   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=600)))
 
    # populate template and render HTML page with context
    context = {
@@ -388,8 +389,67 @@ def show_trends(request):
 
 @login_required
 def show_purchase_performance(request):
-    validate_user(request.user)
-    assert False
+    purchase_buy_dates = []
+    purchases = []
+    stocks = []
+    for stock, purchases_for_stock in user_purchases(request.user).items():
+        stocks.append(stock)
+        for purchase in purchases_for_stock:
+            purchase_buy_dates.append(purchase.buy_date)
+            purchases.append(purchase)
+
+    purchase_buy_dates = sorted(purchase_buy_dates)
+    #print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
+
+    all_dates = desired_dates(start_date=purchase_buy_dates[0])
+    df = company_prices(stocks, all_dates=all_dates)
+    rows = []
+    stock_count = defaultdict(int)
+    stock_cost = defaultdict(float)
+    portfolio_cost = 0.0
+
+    for d in all_dates:
+        d = datetime.strptime(d, "%Y-%m-%d").date()
+        d_str = str(d)
+        if d_str not in df.columns: # not a trading day?
+            continue
+        purchases_to_date = filter(lambda vp: vp.buy_date <= d, purchases)
+        for purchase in purchases_to_date:
+            if purchase.buy_date == d:
+               portfolio_cost += purchase.amount
+               stock_count[purchase.asx_code] += purchase.n
+               stock_cost[purchase.asx_code] += purchase.amount
+
+        portfolio_worth = sum(map(lambda t: df.at[t[0], d_str] * t[1], stock_count.items()))
+
+        # emit rows for each stock and aggregate portfolio
+        for asx_code in stocks:
+            cur_price = df.at[asx_code, d_str]
+            if np.isnan(cur_price): # price missing? ok, skip record
+                continue
+            assert cur_price is not None and cur_price >= 0.0
+            stock_worth = cur_price * stock_count[asx_code]
+
+            rows.append({ 'portfolio_cost': portfolio_cost,
+                    'portfolio_worth': portfolio_worth,
+                    'portfolio_profit': portfolio_worth - portfolio_cost,
+                    'stock_cost': stock_cost[asx_code],
+                    'stock_worth': stock_worth,
+                    'stock_profit': stock_worth - stock_cost[asx_code],
+                    'date': d_str, 'stock': asx_code })
+
+    portfolio_performance_figure, stock_performance_figure, \
+       profit_contributors_figure, loss_contributors_figure = plot_portfolio(pd.DataFrame.from_records(rows))
+    context = {
+         'portfolio_figure': portfolio_performance_figure,
+         'stock_figure': stock_performance_figure,
+         'title': 'Portfolio performance',
+         'portfolio_title': 'Overall',
+         'profit_contributors': profit_contributors_figure,
+         'loss_contributors': loss_contributors_figure,
+         'stock_title': 'Stock'
+    }
+    return render(request, 'portfolio_trends.html', context=context)
 
 def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request):
     """
@@ -411,7 +471,7 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
     n_days = 30
     n_top_bottom = 20
     sentiment_heatmap_data, df, top10, bottom10, n = \
-        plot_heatmap(matching_companies, all_dates=desired_dates(n_days), n_top_bottom=n_top_bottom)
+        plot_heatmap(matching_companies, all_dates=desired_dates(start_date=n_days), n_top_bottom=n_top_bottom)
 
     context = {
          "most_recent_date": latest_quotation_date('ANZ'),
