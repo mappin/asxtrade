@@ -51,8 +51,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
             + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(10,5)))
     if plot_text_labels:
         plot = plot + p9.geom_text(p9.aes(label='value'), size=8, color="white")
-    fig = plot.draw()
-    return fig
+    return plot_as_inline_html_data(plot)
 
 def plot_key_stock_indicators(df, stock):
     assert isinstance(df, pd.DataFrame)
@@ -67,7 +66,6 @@ def plot_key_stock_indicators(df, stock):
     plot_df['value'] = pd.to_numeric(plot_df['value'])
     plot_df['fetch_date'] = pd.to_datetime(plot_df['fetch_date'])
 
-
     plot = (p9.ggplot(plot_df, p9.aes('fetch_date', 'value', color='indicator'))
             + p9.geom_line(size=1.5, show_legend=False)
             + p9.facet_wrap('~ indicator', nrow=6, ncol=1, scales='free_y')
@@ -81,6 +79,7 @@ def plot_as_inline_html_data(plot, charset='utf-8'):
     """
     Return utf-8 encoded base64 image data for inline insertion into HTML content
     using the template engine. Plot must be a valid plotnine ggplot instance (or compatible)
+    This function performs all required cleanup of the figure state, so callers can be clean.
     """
     assert plot is not None
     fig = plot.draw()
@@ -88,56 +87,60 @@ def plot_as_inline_html_data(plot, charset='utf-8'):
     plt.close(fig)
     return data
 
-def plot_portfolio(portfolio_df):
+def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_size=7):
+    """
+    Given a daily snapshot of virtual purchases plot both overall and per-stock
+    performance. Return a tuple of figures representing the performance as inline data.
+    """
     assert portfolio_df is not None
     #print(portfolio_df)
     portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
+    avg_profit_over_period = portfolio_df.filter(items=['stock', 'stock_profit']).groupby('stock').mean()
+    avg_profit_over_period['contribution'] = ['positive' if profit >= 0.0 else 'negative' for profit in avg_profit_over_period.stock_profit]
+    avg_profit_over_period = avg_profit_over_period.drop('stock_profit', axis='columns') # dont want to override actual profit with average
+    portfolio_df = portfolio_df.merge(avg_profit_over_period, left_on='stock', right_index=True, how='inner')
+    #print(portfolio_df)
 
     # 1. overall performance
     df = portfolio_df.filter(items=['portfolio_cost', 'portfolio_worth', 'portfolio_profit', 'date'])
     df = df.melt(id_vars=['date'], var_name='field')
-    plot = (p9.ggplot(df, p9.aes('date', 'value', group='field'))
-            + p9.xlab('')
+    plot = (p9.ggplot(df, p9.aes('date', 'value', group='field', color='field'))
+            + p9.labs(x='', y='$ AUD')
             + p9.geom_line(size=1.5)
-            + p9.facet_wrap('~field', nrow=3, ncol=1, scales='free_y')
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
+            + p9.facet_wrap('~ field', nrow=3, ncol=1, scales='free_y')
+            + p9.theme(axis_text_x=p9.element_text(angle=30, size=date_text_size),
+                       figure_size=figure_size,
+                       legend_position='none')
     )
     overall_figure = plot_as_inline_html_data(plot)
 
-    # 2. per purchased stock performance
-    df = portfolio_df.filter(items=['stock', 'date', 'stock_profit', 'stock_worth'])
-    df = df.melt(id_vars=['date','stock'], var_name='field')
-    plot = (p9.ggplot(df, p9.aes('date', 'value', group='stock', colour='stock'))
-            + p9.xlab('')
-            + p9.geom_line(size=1.0)
-            + p9.facet_wrap('~field', nrow=2, ncol=1, scales="free_y")
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), subplots_adjust={'right': 0.8})
-    )
-    stock_figure = plot_as_inline_html_data(plot)
+    df = portfolio_df.filter(items=['stock', 'date', 'stock_profit', 'stock_worth', 'contribution'])
+    melted_df = df.melt(id_vars=['date','stock', 'contribution'], var_name='field')
+    all_dates = sorted(melted_df['date'].unique())
+    df = melted_df[melted_df['date'] == all_dates[-1]]
+    df = df[df['field'] == 'stock_profit'] # only latest profit is plotted
 
-    # 3. plot contributors
-    all_dates = sorted(df['date'].unique())
-    df = df[df['date'] == all_dates[-1]]
-    df = df[df['field'] == 'stock_profit']
-    winners = df[df['value'] >= 0.0]
-    losers = df[df['value'] < 0.0]
-
-    plot = (p9.ggplot(winners, p9.aes('stock', 'value', fill='stock'))
+    # 2. plot contributors ie. winners and losers
+    plot = (p9.ggplot(df, p9.aes('stock', 'value', fill='stock'))
             + p9.geom_bar(stat='identity')
-            + p9.xlab('')
-            + p9.ylab('$ AUD')
-            + p9.theme(legend_position='none')
+            + p9.labs(x='', y='$ AUD')
+            + p9.facet_grid('contribution ~ field')
+            + p9.theme(legend_position='none', figure_size=figure_size)
     )
     profit_contributors = plot_as_inline_html_data(plot)
-    plot = (p9.ggplot(losers, p9.aes('stock', 'value', fill='stock'))
-            + p9.geom_bar(stat='identity')
-            + p9.theme(legend_position='none')
-            + p9.xlab('')
-            + p9.ylab('')
-    )
-    loss_contributors = plot_as_inline_html_data(plot)
 
-    return overall_figure, stock_figure, profit_contributors, loss_contributors
+    # 3. per purchased stock performance
+    plot = (p9.ggplot(melted_df, p9.aes('date', 'value', group='stock', colour='stock'))
+            + p9.xlab('')
+            + p9.geom_line(size=1.0)
+            + p9.facet_grid('field ~ contribution', scales="free_y")
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=date_text_size),
+                       figure_size=figure_size,
+                       panel_spacing=0.5,  # more space between plots to avoid tick mark overlap
+                       subplots_adjust = {'right': 0.8})
+    )
+    stock_figure = plot_as_inline_html_data(plot)
+    return overall_figure, stock_figure, profit_contributors
 
 def plot_company_rank(df):
     assert isinstance(df, pd.DataFrame)
@@ -201,10 +204,7 @@ def plot_market_wide_sector_performance(all_dates, field_name='change_in_percent
                        axis_text_y = p9.element_text(size=6),
                        legend_position='none')
     )
-    fig = plot.draw()
-    data = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-    return data
+    return plot_as_inline_html_data(plot)
 
 def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None, n_top_bottom=10):
     """
@@ -227,9 +227,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
         # NB: this may fail if no prices are available so we catch that error and handle accordingly...
         for date in df.columns:
             df['bin_{}'.format(date)] = pd.cut(df[date], bins, labels=labels)
-        fig = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
-        sentiment_plot = plot_as_base64(fig).decode('utf-8')
-        plt.close(fig)
+        sentiment_plot = make_sentiment_plot(df, plot_text_labels=len(all_dates) <= 21) # show counts per bin iff not too many bins
         return (sentiment_plot, df, top10, bottom10, n_stocks)
     except KeyError:
         return (None, None, None, None, None)
@@ -400,10 +398,7 @@ def plot_best_monthly_price_trend(dataframe, field='open_price'):
     dataframe = dataframe.resample('M', kind='period').max()
     plot = (p9.ggplot(dataframe, p9.aes(x='dataframe.index', y=field))
             + p9.geom_bar(stat='identity', fill='#880000', alpha=0.5)
-            + p9.xlab('') + p9.ylab('$AUD')
+            + p9.labs(x='', y='$AUD')
             + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
            )
-    fig = plot.draw()
-    data = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-    return data
+    return plot_as_inline_html_data(plot)

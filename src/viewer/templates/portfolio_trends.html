@@ -17,6 +17,17 @@
         {% endif %}
         </div>
 
+
+        {% if profit_contributors is None %}
+        {% else %}
+        <h3 class="profit-contributions mt-4">Profit/Loss contributors</h3>
+
+        <div class="contributors-figure">
+            <img src="data:image/png; base64, {{ profit_contributors }}"
+               alt="Profit contributors" />
+        </div>
+        {% endif %}
+
         <h3 class="mt-4">{{ stock_title }}</h3>
 
         <div class="stock-figure">
@@ -30,24 +41,6 @@
                  alt="Stock virtual performance" />
         {% endif %}
         </div>
-
-        {% if profit_contributors is None %}
-        {% else %}
-        <h3 class="profit-contributions">Profit/Loss contributors in the portfolio</h3>
-
-        <div class="contributors-figure">
-            <table>
-              <tr><td>
-                    <img src="data:image/png; base64, {{ profit_contributors }}"
-                       alt="Profit contributors" />
-              </td><td>
-                    <img src="data:image/png; base64, {{ loss_contributors }}"
-                       alt="Loss contributors" />
-              </td></tr>
-            </table>
-        </div>
-        {% endif %}
-
     </div>
 </div>
 {% endblock %}

@@ -75,7 +75,8 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
        self.sector_name = kwargs['sector']
        all_dates = all_available_dates()
        wanted_stocks = set(all_sector_stocks(self.sector_name))
-       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, desired_dates(self.n_days), n_top_bottom=self.n_top_bottom)
+       wanted_dates = desired_dates(start_date=self.n_days)
+       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, all_dates=wanted_dates, n_top_bottom=self.n_top_bottom)
        self.top10 = top10
        self.bottom10 = bottom10
        if any(['best10' in kwargs, 'worst10' in kwargs]):
@@ -374,7 +375,7 @@ def show_increasing_yield_stocks(request):
 def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
-    all_dates = desired_dates(300)
+    all_dates = desired_dates(start_date=300) # last 300 days
     cip = company_prices(watchlist_stocks, all_dates=all_dates, field_name='change_in_percent', fail_on_missing=False)
     trends = calculate_trends(cip, watchlist_stocks, all_dates)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
@@ -439,15 +440,14 @@ def show_purchase_performance(request):
                     'date': d_str, 'stock': asx_code })
 
     portfolio_performance_figure, stock_performance_figure, \
-       profit_contributors_figure, loss_contributors_figure = plot_portfolio(pd.DataFrame.from_records(rows))
+       profit_contributors_figure = plot_portfolio(pd.DataFrame.from_records(rows))
     context = {
-         'portfolio_figure': portfolio_performance_figure,
-         'stock_figure': stock_performance_figure,
          'title': 'Portfolio performance',
          'portfolio_title': 'Overall',
+         'portfolio_figure': portfolio_performance_figure,
+         'stock_title': 'Stock',
+         'stock_figure': stock_performance_figure,
          'profit_contributors': profit_contributors_figure,
-         'loss_contributors': loss_contributors_figure,
-         'stock_title': 'Stock'
     }
     return render(request, 'portfolio_trends.html', context=context)
 
