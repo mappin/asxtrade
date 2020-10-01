@@ -189,7 +189,7 @@ def plot_market_wide_sector_performance(all_dates, field_name='change_in_percent
     Display specified dates for average sector performance. Each company is assumed to have at zero
     at the start of the observation period. A plot as base64 data is returned.
     """
-    df = company_prices(None, all_dates=all_dates, field_name='change_in_percent') # None == all stocks
+    df = company_prices(None, all_dates=all_dates, fields='change_in_percent') # None == all stocks
     n_stocks = len(df)
     # merge in sector information for each company
     code_and_sector = stocks_by_sector()
@@ -241,7 +241,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
         bins, labels = price_change_bins()
     if all_dates is None:
         all_dates = desired_dates(start_date=30)
-    df = company_prices(companies, all_dates=all_dates, field_name=field_name) # by default change_in_percent will be used
+    df = company_prices(companies, all_dates=all_dates, fields=field_name) # by default change_in_percent will be used
     n_stocks = len(df)
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
     top10 = sum.nlargest(n_top_bottom)
@@ -312,7 +312,7 @@ def auto_dates():
 def relative_strength(prices, n=14):
     # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
     assert n > 0
-    assert prices is not None and len(prices.columns) == 1
+    assert prices is not None
 
     # Get the difference in price from previous step
     delta = prices.diff()
@@ -337,7 +337,7 @@ def relative_strength(prices, n=14):
     assert len(rsi) == len(prices)
     return rsi
 
-def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
+def make_rsi_plot(stock, stock_df):
     assert len(stock) > 0
 
     #print(last_price)
@@ -345,10 +345,10 @@ def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
     #print(day_low_price)
     #print(day_high_price)
 
-    last_price = last_price.transpose()
-    volume = volume.transpose()
-    day_low_price = day_low_price.transpose()
-    day_high_price = day_high_price.transpose()
+    last_price = stock_df['last_price']
+    volume = stock_df['volume']
+    day_low_price = stock_df['day_low_price']
+    day_high_price = stock_df['day_high_price']
 
     plt.rc('axes', grid=True)
     plt.rc('grid', color='0.75', linestyle='-', linewidth=0.5)
@@ -374,13 +374,12 @@ def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
     fillcolor = 'darkgoldenrod'
 
     timeline = pd.to_datetime(last_price.index)
-    values = rsi[stock]
     #print(values)
-    ax1.plot(timeline, values, color=fillcolor)
+    ax1.plot(timeline, rsi, color=fillcolor)
     ax1.axhline(70, color='darkgreen')
     ax1.axhline(30, color='darkgreen')
-    ax1.fill_between(timeline, values, 70, where=(values >= 70), facecolor=fillcolor, edgecolor=fillcolor)
-    ax1.fill_between(timeline, values, 30, where=(values <= 30), facecolor=fillcolor, edgecolor=fillcolor)
+    ax1.fill_between(timeline, rsi, 70, where=(rsi >= 70), facecolor=fillcolor, edgecolor=fillcolor)
+    ax1.fill_between(timeline, rsi, 30, where=(rsi <= 30), facecolor=fillcolor, edgecolor=fillcolor)
     ax1.text(0.6, 0.9, '>70 = overbought', va='top', transform=ax1.transAxes, fontsize=textsize)
     ax1.text(0.6, 0.1, '<30 = oversold', transform=ax1.transAxes, fontsize=textsize)
     ax1.set_ylim(0, 100)
@@ -393,8 +392,8 @@ def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
     low = day_low_price + dx
     high = day_high_price + dx
 
-    deltas = np.zeros_like(last_price[stock])
-    deltas[1:] = np.diff(last_price[stock])
+    deltas = np.zeros_like(last_price)
+    deltas[1:] = np.diff(last_price)
     up = deltas > 0
     ax2.vlines(timeline[up], low[up], high[up], color='black', label='_nolegend_')
     ax2.vlines(timeline[~up], low[~up], high[~up], color='black', label='_nolegend_')
@@ -418,7 +417,7 @@ def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
     leg = ax2.legend(loc='center left', shadow=True, fancybox=True, prop=props)
     leg.get_frame().set_alpha(0.5)
 
-    volume = (last_price[stock] * volume[stock])/1e6  # dollar volume in millions
+    volume = (last_price * volume)/1e6  # dollar volume in millions
     #print(volume)
     vmax = max(volume)
     poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
@@ -432,8 +431,8 @@ def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
     n_fast = 12
     n_slow = 26
     n_ema= 9
-    emafast = last_price[stock].ewm(span=n_fast, adjust=False).mean()
-    emaslow = last_price[stock].ewm(span=n_slow, adjust=False).mean()
+    emafast = last_price.ewm(span=n_fast, adjust=False).mean()
+    emaslow = last_price.ewm(span=n_slow, adjust=False).mean()
     macd = emafast - emaslow
     nema = macd.ewm(span=n_ema, adjust=False).mean()
     ax3.plot(timeline, macd, color='black', lw=2)

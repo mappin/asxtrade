@@ -212,39 +212,28 @@ def show_stock(request, stock=None, sector_n_days=90):
 
    window_size = 14 # since must have a full window before computing momentum over sector_n_days
    all_dates = desired_dates(start_date=sector_n_days+window_size)
-   stock_price_df = company_prices([stock], all_dates=all_dates, field_name='last_price')
-   stock_volume_df = company_prices([stock], all_dates=all_dates, field_name='volume')
-   stock_day_low_df = company_prices([stock], all_dates=all_dates, field_name='day_low_price')
-   stock_day_high_df = company_prices([stock], all_dates=all_dates, field_name='day_high_price')
+   wanted_fields = ['last_price', 'volume', 'day_low_price', 'day_high_price', 'eps', 'pe', 'annual_dividend_yield']
+   stock_df = company_prices([stock], all_dates=all_dates, fields=wanted_fields)
 
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
        warning(request, "No details available for {}".format(stock))
 
-   n_dates = len(stock_price_df.columns)
+   n_dates = len(stock_df)
    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
        raise Http404("Insufficient price quotes for {} - only {}".format(stock, n_dates))
 
    # plot relative strength
-   fig = make_rsi_plot(stock, stock_price_df, stock_volume_df, stock_day_low_df, stock_day_high_df)
+   fig = make_rsi_plot(stock, stock_df)
 
    # show sector performance over past 3 months
-   all_stocks_cip = company_prices(None, all_dates=all_dates, field_name='change_in_percent')
+   all_stocks_cip = company_prices(None, all_dates=all_dates, fields='change_in_percent')
    sector = company_details.sector_name if company_details else None
    t = analyse_sector(stock, sector, all_stocks_cip, window_size=window_size)
    c_vs_s_plot, sector_momentum_plot, point_score_plot = t
    # key indicator performance over past 90 days (for now): pe, eps, yield etc.
-   stock_eps_df = company_prices([stock], all_dates=all_dates, field_name='eps')
-   stock_pe_df = company_prices([stock], all_dates=all_dates, field_name='pe')
-   stock_dividend_df = company_prices([stock], all_dates=all_dates, field_name='annual_dividend_yield')
-   indicator_df = pd.concat((stock_price_df, stock_volume_df, stock_day_low_df,
-                             stock_day_high_df, stock_eps_df, stock_pe_df, stock_dividend_df))
-   indicator_df.set_index(pd.Index(['last_price', 'volume', 'day_low_price',
-                           'day_high_price', 'eps', 'pe', 'annual_dividend_yield']), inplace=True)
-   indicator_df = indicator_df.transpose()
-   print(indicator_df)
-   key_indicator_plot = plot_key_stock_indicators(indicator_df, stock)
+   key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
    monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=600)))
 
@@ -368,7 +357,7 @@ def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
     all_dates = desired_dates(start_date=300) # last 300 days
-    cip = company_prices(watchlist_stocks, all_dates=all_dates, field_name='change_in_percent', fail_on_missing=False)
+    cip = company_prices(watchlist_stocks, all_dates=all_dates, fields='change_in_percent', fail_on_missing=False)
     trends = calculate_trends(cip, watchlist_stocks, all_dates)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(cip.filter(trends.keys(), axis='index'), all_dates=all_dates)
