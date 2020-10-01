@@ -12,7 +12,7 @@ from collections import defaultdict
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import relative_strength
+from app.analysis import analyse_sector
 from app.plots import *
 import pylru
 import numpy as np
@@ -209,52 +209,42 @@ def show_stock(request, stock=None, sector_n_days=90):
    """
    validate_stock(stock)
    validate_user(request.user)
-   all_stock_quotes_df  = all_quotes(stock, all_dates=desired_dates(start_date=sector_n_days))
+
+   window_size = 14 # since must have a full window before computing momentum over sector_n_days
+   all_dates = desired_dates(start_date=sector_n_days+window_size)
+   stock_price_df = company_prices([stock], all_dates=all_dates, field_name='last_price')
+   stock_volume_df = company_prices([stock], all_dates=all_dates, field_name='volume')
+   stock_day_low_df = company_prices([stock], all_dates=all_dates, field_name='day_low_price')
+   stock_day_high_df = company_prices([stock], all_dates=all_dates, field_name='day_high_price')
+
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
    if company_details is None:
        warning(request, "No details available for {}".format(stock))
 
-   if len(all_stock_quotes_df) < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-       raise Http404("Insufficient price quotes for {} - only {}".format(stock, len(all_stock_quotes_df)))
-   fig = make_rsi_plot(stock, all_stock_quotes_df)
+   n_dates = len(stock_price_df.columns)
+   if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+       raise Http404("Insufficient price quotes for {} - only {}".format(stock, n_dates))
+
+   # plot relative strength
+   fig = make_rsi_plot(stock, stock_price_df, stock_volume_df, stock_day_low_df, stock_day_high_df)
 
    # show sector performance over past 3 months
-   window_size = 14 # since must have a full window before computing momentum
-   all_dates = desired_dates(start_date=sector_n_days+window_size)
+   all_stocks_cip = company_prices(None, all_dates=all_dates, field_name='change_in_percent')
    sector = company_details.sector_name if company_details else None
-   sector_companies = all_sector_stocks(sector) if sector else []
-   if len(sector_companies) > 0:
-      cip = company_prices(sector_companies, all_dates=all_dates, field_name='change_in_percent')
-      cip = cip.fillna(0.0)
-      rows = []
-      cum_sum = defaultdict(float)
-      stock_versus_sector = []
-      # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
-      best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
-      for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-          for asx_code, daily_change in cip[day].iteritems():
-              cum_sum[asx_code] += daily_change
-          n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
-          n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
-          n_unchanged = len(cip) - n_pos - n_neg
-          rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
-          stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
-          stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
-          if stock != best_stock_in_sector:
-              stock_versus_sector.append({ 'group': '{} (best in {})'.format(best_stock_in_sector, sector), 'value': cum_sum[best_stock_in_sector], 'date': day})
-      df = pd.DataFrame.from_records(rows)
-      sector_momentum_data = make_momentum_plot(df, sector, window_size=window_size)
-
-      # company versus sector performance
-      stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
-      c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
-
-      # key indicator performance over past 90 days (for now): pe, eps, yield etc.
-      key_indicator_plot = plot_key_stock_indicators(all_stock_quotes_df, stock)
-   else:
-      c_vs_s_plot = sector_momentum_data = key_indicator_plot = None
-
+   t = analyse_sector(stock, sector, all_stocks_cip, window_size=window_size)
+   c_vs_s_plot, sector_momentum_plot, point_score_plot = t
+   # key indicator performance over past 90 days (for now): pe, eps, yield etc.
+   stock_eps_df = company_prices([stock], all_dates=all_dates, field_name='eps')
+   stock_pe_df = company_prices([stock], all_dates=all_dates, field_name='pe')
+   stock_dividend_df = company_prices([stock], all_dates=all_dates, field_name='annual_dividend_yield')
+   indicator_df = pd.concat((stock_price_df, stock_volume_df, stock_day_low_df,
+                             stock_day_high_df, stock_eps_df, stock_pe_df, stock_dividend_df))
+   indicator_df.set_index(pd.Index(['last_price', 'volume', 'day_low_price',
+                           'day_high_price', 'eps', 'pe', 'annual_dividend_yield']), inplace=True)
+   indicator_df = indicator_df.transpose()
+   print(indicator_df)
+   key_indicator_plot = plot_key_stock_indicators(indicator_df, stock)
    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
    monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=600)))
 
@@ -264,13 +254,15 @@ def show_stock(request, stock=None, sector_n_days=90):
        'asx_code': stock,
        'securities': securities,
        'cd': company_details,
-       'sector_momentum_plot': sector_momentum_data,
+       'sector_momentum_plot': sector_momentum_plot,
        'sector_momentum_title': "{} sector stocks: {} day performance".format(sector, sector_n_days),
        'company_versus_sector_plot': c_vs_s_plot,
        'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector),
        'key_indicators_plot': key_indicator_plot,
        'monthly_highest_price_plot_title': 'Maximum price each month trend',
        'monthly_highest_price_plot': monthly_maximum_plot,
+       'point_score_plot': point_score_plot,
+       'point_score_plot_title': 'Points score due to price movements'
    }
    return render(request, "stock_view.html", context=context)
 
@@ -316,13 +308,13 @@ def download_data(request, dataset=None, format='csv'):
         return response
 
 @login_required
-def market_sentiment(request, n_days=21, n_top_bottom=20):
+def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     validate_user(request.user)
     assert n_days > 0
     assert n_top_bottom > 0
-    all_dates = desired_dates(n_days)
+    all_dates = desired_dates(start_date=n_days)
     sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(None, all_dates=all_dates, n_top_bottom=n_top_bottom)
-    sector_performance_plot = plot_market_wide_sector_performance(desired_dates(180))
+    sector_performance_plot = plot_market_wide_sector_performance(desired_dates(start_date=sector_n_days))
 
     context = {
        'sentiment_data': sentiment_heatmap_data,
