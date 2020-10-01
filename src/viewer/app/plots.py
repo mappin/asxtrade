@@ -11,6 +11,17 @@ import io
 from datetime import datetime
 from collections import Counter
 
+
+def price_change_bins():
+    """
+    Return the bins and their label as a tuple for heatmap_market() to use and the
+    plotting code
+    """
+    bins = [-1000.0, -100.0, -10.0, -5.0, -3.0, -2.0, -1.0, -1e-6, 0.0,
+            1e-6, 1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 100.0, 1000.0]
+    labels = ["{}".format(b) for b in bins[1:]]
+    return (bins, labels)
+
 def plot_as_base64(fig):
     """
     Convert supplied figure into string buffer and then return as base64-encoded data
@@ -57,10 +68,10 @@ def plot_key_stock_indicators(df, stock):
     assert isinstance(df, pd.DataFrame)
     assert all(['eps' in df.columns, 'pe' in df.columns, 'annual_dividend_yield' in df.columns])
 
-    df['market_cap'] = df['market_cap'] / 1000000 # express in millions for a nicer scale
     df['volume'] = df['last_price'] * df['volume'] / 1000000 # again, express as $(M)
+    df['fetch_date'] = df.index
     plot_df = pd.melt(df, id_vars='fetch_date',
-                 value_vars=['pe', 'eps', 'annual_dividend_yield', 'volume', 'market_cap', 'last_price'],
+                 value_vars=['pe', 'eps', 'annual_dividend_yield', 'volume', 'last_price'],
                  var_name='indicator',
                  value_name='value')
     plot_df['value'] = pd.to_numeric(plot_df['value'])
@@ -206,6 +217,19 @@ def plot_market_wide_sector_performance(all_dates, field_name='change_in_percent
     )
     return plot_as_inline_html_data(plot)
 
+def plot_series(df, x=None, y=None, tick_text_size=6, line_size=1.5,
+                y_axis_label='Point score', x_axis_label=''):
+    assert len(df) > 0
+    assert len(x) > 0 and len(y) > 0
+    plot = (p9.ggplot(df, p9.aes(x=x, y=y, color='stock'))
+        + p9.geom_line(size=line_size)
+        + p9.labs(x=x_axis_label, y=y_axis_label)
+        + p9.theme(axis_text_x = p9.element_text(angle=30, size=tick_text_size),
+                   axis_text_y = p9.element_text(size=tick_text_size),
+                   legend_position='none')
+    )
+    return plot_as_inline_html_data(plot)
+
 def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins=None, n_top_bottom=10):
     """
     Using field_name plot a data matrix as a heatmap by change_in_percent using the specified bins. If not
@@ -232,7 +256,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     except KeyError:
         return (None, None, None, None, None)
 
-def make_momentum_plot(dataframe, descriptor, window_size=14):
+def plot_sector_performance(dataframe, descriptor, window_size=14):
     assert len(descriptor) > 0
     assert len(dataframe) > 0
 
@@ -285,7 +309,47 @@ def auto_dates():
                                 '%d %b %Y %H:%M', ]
     return (locator, formatter)
 
-def make_rsi_plot(stock_code, dataframe):
+def relative_strength(prices, n=14):
+    # see https://stackoverflow.com/questions/20526414/relative-strength-index-in-python-pandas
+    assert n > 0
+    assert prices is not None and len(prices.columns) == 1
+
+    # Get the difference in price from previous step
+    delta = prices.diff()
+
+    # Get rid of the first row, which is NaN since it did not have a previous
+    # row to calculate the differences
+    delta = delta[1:]
+
+    # Make the positive gains (up) and negative gains (down) Series
+    up, down = delta.copy(), delta.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+
+    # Calculate the EWMA
+    roll_up1 = up.ewm(span=n).mean()
+    roll_down1 = down.abs().ewm(span=n).mean()
+
+    # Calculate the RSI based on EWMA
+    rs = roll_up1 / roll_down1
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    rsi.at[len(rsi)+1] = np.nan # ensure data series are the same length for matplotlib
+    assert len(rsi) == len(prices)
+    return rsi
+
+def make_rsi_plot(stock, last_price, volume, day_low_price, day_high_price):
+    assert len(stock) > 0
+
+    #print(last_price)
+    #print(volume)
+    #print(day_low_price)
+    #print(day_high_price)
+
+    last_price = last_price.transpose()
+    volume = volume.transpose()
+    day_low_price = day_low_price.transpose()
+    day_high_price = day_high_price.transpose()
+
     plt.rc('axes', grid=True)
     plt.rc('grid', color='0.75', linestyle='-', linewidth=0.5)
 
@@ -305,36 +369,37 @@ def make_rsi_plot(stock_code, dataframe):
     fig.autofmt_xdate()
 
     # plot the relative strength indicator
-    prices = pd.to_numeric(dataframe['last_price'], errors='coerce').to_numpy()
-    rsi = relative_strength(dataframe['last_price'])
+    rsi = relative_strength(last_price)
     #print(len(rsi))
     fillcolor = 'darkgoldenrod'
 
-    timeline = pd.to_datetime(dataframe['fetch_date'])
-    ax1.plot(timeline, rsi, color=fillcolor)
+    timeline = pd.to_datetime(last_price.index)
+    values = rsi[stock]
+    #print(values)
+    ax1.plot(timeline, values, color=fillcolor)
     ax1.axhline(70, color='darkgreen')
     ax1.axhline(30, color='darkgreen')
-    ax1.fill_between(timeline, rsi, 70, where=(rsi >= 70), facecolor=fillcolor, edgecolor=fillcolor)
-    ax1.fill_between(timeline, rsi, 30, where=(rsi <= 30), facecolor=fillcolor, edgecolor=fillcolor)
+    ax1.fill_between(timeline, values, 70, where=(values >= 70), facecolor=fillcolor, edgecolor=fillcolor)
+    ax1.fill_between(timeline, values, 30, where=(values <= 30), facecolor=fillcolor, edgecolor=fillcolor)
     ax1.text(0.6, 0.9, '>70 = overbought', va='top', transform=ax1.transAxes, fontsize=textsize)
     ax1.text(0.6, 0.1, '<30 = oversold', transform=ax1.transAxes, fontsize=textsize)
     ax1.set_ylim(0, 100)
     ax1.set_yticks([30, 70])
     ax1.text(0.025, 0.95, 'RSI (14)', va='top', transform=ax1.transAxes, fontsize=textsize)
-    #ax1.set_title('{} daily'.format(stock_code))
+    #ax1.set_title('{} daily'.format(stock))
 
     # plot the price and volume data
     dx = 0.0
-    low = dataframe.day_low_price + dx
-    high = dataframe.day_high_price + dx
+    low = day_low_price + dx
+    high = day_high_price + dx
 
-    deltas = np.zeros_like(prices)
-    deltas[1:] = np.diff(prices)
+    deltas = np.zeros_like(last_price[stock])
+    deltas[1:] = np.diff(last_price[stock])
     up = deltas > 0
     ax2.vlines(timeline[up], low[up], high[up], color='black', label='_nolegend_')
     ax2.vlines(timeline[~up], low[~up], high[~up], color='black', label='_nolegend_')
-    ma20 = dataframe.last_price.rolling(window=20).mean()
-    ma200 = dataframe.last_price.rolling(window=200).mean()
+    ma20 = last_price.rolling(window=20).mean()
+    ma200 = last_price.rolling(window=200).mean()
 
     #timeline = timeline.to_list()
     linema20, = ax2.plot(timeline, ma20, color='blue', lw=2, label='MA (20)')
@@ -353,7 +418,7 @@ def make_rsi_plot(stock_code, dataframe):
     leg = ax2.legend(loc='center left', shadow=True, fancybox=True, prop=props)
     leg.get_frame().set_alpha(0.5)
 
-    volume = (prices * dataframe.volume)/1e6  # dollar volume in millions
+    volume = (last_price[stock] * volume[stock])/1e6  # dollar volume in millions
     #print(volume)
     vmax = max(volume)
     poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
@@ -367,8 +432,8 @@ def make_rsi_plot(stock_code, dataframe):
     n_fast = 12
     n_slow = 26
     n_ema= 9
-    emafast = dataframe.last_price.ewm(span=n_fast, adjust=False).mean()
-    emaslow = dataframe.last_price.ewm(span=n_slow, adjust=False).mean()
+    emafast = last_price[stock].ewm(span=n_fast, adjust=False).mean()
+    emaslow = last_price[stock].ewm(span=n_slow, adjust=False).mean()
     macd = emafast - emaslow
     nema = macd.ewm(span=n_ema, adjust=False).mean()
     ax3.plot(timeline, macd, color='black', lw=2)

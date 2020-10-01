@@ -256,7 +256,7 @@ def desired_dates(today=None, start_date=None): # today is provided as keyword a
     assert start_date <= today
     all_dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq='D')]
     assert len(all_dates) > 0
-    return all_dates
+    return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
 def find_named_companies(wanted_name, wanted_activity):
     ret = set()
@@ -384,6 +384,9 @@ def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on
     # on the first of the month, we dont have data yet so we permit one missing tag for this reason
     if fail_on_missing and n_dataframes < len(required_tags) - 1:
         raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(n_dataframes, required_tags))
+    # NB: ensure all columns are ALWAYS in ascending date order
+    dates = sorted(list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
+    superdf = superdf[dates]
     return superdf
 
 class MarketDataCache(model.Model):
