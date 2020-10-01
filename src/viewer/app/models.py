@@ -359,11 +359,26 @@ def increasing_yield(stock_codes, past_n_days=300):
     increasing_yield_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.01]
     return increasing_yield_stocks
 
-def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on_missing=True):
+def company_prices(stock_codes, all_dates=None, fields='last_price', fail_on_missing=True):
     """
     Return a dataframe with the required companies (iff quoted) over the
-    specified dates. By default last_price is provided.
+    specified dates. By default last_price is provided. Fields may be a list,
+    in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
+    if not isinstance(fields, str): # assume iterable if not str...
+        assert len(stock_codes) == 1
+        dataframes = [company_prices(stock_codes, all_dates=all_dates,
+                                         fields=field, fail_on_missing=fail_on_missing) for field in fields]
+        result_df = pd.concat(dataframes, ignore_index=True)
+        result_df.set_index(pd.Index(fields), inplace=True)
+        #print(result_df)
+        result_df = result_df.transpose()
+        #print(result_df)
+        assert list(result_df.columns) == fields
+        return result_df
+
+    print(stock_codes)
+    assert isinstance(fields, str)
     if all_dates is None:
         all_dates = [ datetime.strftime(datetime.now(), "%Y-%m-%d") ]
 
@@ -372,7 +387,7 @@ def company_prices(stock_codes, all_dates=None, field_name='last_price', fail_on
         validate_date(date)
         yyyy = date[0:4]
         mm = date[5:7]
-        required_tags.add("{}-{}-{}-asx".format(field_name, mm, yyyy))
+        required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
     which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
