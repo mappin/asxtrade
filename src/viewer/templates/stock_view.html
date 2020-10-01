@@ -46,7 +46,7 @@
         {% else %}
         <h3 class="mt-4">Key indicators</h3>
 
-        <img class="stock-key-indicators" 
+        <img class="stock-key-indicators"
              src="data:image/png; base64, {{ key_indicators_plot }}"
              alt="Key indicator plot" />
         <p>Volume in millions based on the last price each day. Market cap expressed in millions. EPS expressed in $AUD.</p>
@@ -61,8 +61,8 @@
         {% else %}
         <h3 class="asxtrade mt-4">{{ sector_momentum_title }}</h3>
 
-        <img class="sector_past3months" 
-             src="data:image/png;base64, {{ sector_momentum_plot }}" 
+        <img class="sector_past3months"
+             src="data:image/png;base64, {{ sector_momentum_plot }}"
              alt="{{ sector_momentum_title }}" />
         {% endif %}
 
@@ -70,8 +70,8 @@
         {% else %}
         <h3 class="mt-4">{{ company_versus_sector_title }}</h3>
 
-        <img class="company_versus_sector" 
-             src="data:image/png;base64, {{ company_versus_sector_plot }}" 
+        <img class="company_versus_sector"
+             src="data:image/png;base64, {{ company_versus_sector_plot }}"
              alt="{{ company_versus_sector_title }}" />
         {% endif %}
 
@@ -82,11 +82,29 @@
         <img class="month_best_price_plot"
              src="data:image/png;base64, {{ monthly_highest_price_plot }}"
              alt="{{ monthly_highest_price_plot_title }}" />
-             
+
         <p>Plot the maximum daily open price each month over the past 24 months. Note that this is <b>not</b>
            the last trading price used in most other figures.</p>
+        {% endif %}
+
+        {% if point_score_plot is None %}
+        {% else %}
+        <h3 class="mt-4">{{ point_score_plot_title }}</h3>
+        <p>Visualise the stock percentage daily change price using a points system:</p>
+        <ul>
+          <li>+1 if it goes up on a given day</li>
+          <li>+2 if it beats the market average on a given day</li>
+          <li>+3 if it beats the sector average on a given day</li>
+          <li>+1 if it goes up more than 5% on a given day</li>
+          <li>+1 if it goes up despite a down market (and sector) day</li>
+        </ul>
+        <p>This may yield easier identification of stocks which are outperforming or solid performers over time.
+          Symettry applies: points are deducted for moves in the downward direction.
+        </p>
+        <img class="point_score_plot"
+             src="data:image/png;base64, {{ point_score_plot }}"
+             alt="{{ point_score_plot_title }}" />
         {% endif %}
     </div>
 </div>
 {% endblock %}
-
