@@ -5,12 +5,13 @@ import requests
 import dateutil
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 import json
 import csv
 import olefile
 import tempfile
 import time
+from random import randint
 import pandas as pd
 import os
 import re
@@ -118,9 +119,11 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
         try:
             resp = fetcher.get(url, timeout=(30,30))
             if resp.status_code != 200:
-                if resp.status_code == 404:   # not found? ok, add it to blacklist...
-                    db.asx_blacklist.find_one_and_update({ 'asx_code': asx_code }, 
-                                                         { "$set": { 'asx_code': asx_code, 'reason': "404 for {}".format(url) }},
+                if resp.status_code == 404:   # not found? ok, add it to blacklist... but we will check it again in future in case API broken...
+                    db.asx_blacklist.find_one_and_update({ 'asx_code': asx_code },
+                                                         { "$set": { 'asx_code': asx_code,
+                                                                     'reason': "404 for {}".format(url),
+                                                                     'valid_until': datetime.utcnow() + timedelta(days=randint(30, 60)) }},
                                                          upsert=True)
                 raise ValueError("Got non-OK status for {}: {}".format(url, resp.status_code))
             d = json.loads(resp.content.decode())
@@ -150,7 +153,8 @@ def available_stocks(db, config):
     ret = set()
     for security_type in stocks:
        tmp = set([r.get('asx_code') for r in db.asx_isin.find({ 'security_name': security_type })
-                                              if db.asx_blacklist.find_one({'asx_code': r.get('asx_code') }) is None])
+                                              if db.asx_blacklist.find_one({'asx_code': r.get('asx_code'),
+                                                                            'valid_until': { '$gt': datetime.utcnow() }}) is None])
        ret = ret.union(tmp)
     exclude_stocks_without_details = config.get('exclude_stocks_without_details', False)
     exclude_stocks_with_zero_volume = config.get('exclude_zero_volume_stocks', False)
@@ -212,6 +216,19 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
             pass
         time.sleep(5)
 
+def fix_blacklist(db, config):
+    updates = {}
+    # we generate a random
+    for rec in db.asx_blacklist.find({ }):
+        future_date = datetime.today().date() + timedelta(days=randint(30, 90))
+        updates[rec.get('asx_code')] = future_date
+
+    n = 0
+    for stock, future_date in updates.items():
+        db.asx_blacklist.update_one({ 'asx_code': stock }, { '$set': { 'valid_until': datetime.combine(future_date, datetime.min.time()) }})
+        n += 1
+    print("Updated {} blacklist entries.".format(n))
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Fetch and update data from ASX Research")
     args.add_argument('--blacklist', help="Update blacklist table with dead stocks", action="store_true")
@@ -221,6 +238,7 @@ if __name__ == "__main__":
     args.add_argument('--want-prices', help="Update ASX stock price list with current data", action="store_true")
     args.add_argument('--want-details', help="Update ASX company details (incl. dividend, annual report etc.) with current data", action="store_true")
     args.add_argument('--validate', help="", action="store_true")
+    args.add_argument('--fix-blacklist', help="Ensure each blacklist entry has a valid_until date", action="store_true")
     args.add_argument('--date', help="Date to use as the record date in the database [YYYY-mm-dd]", type=str, required=False)
     a = args.parse_args()
 
@@ -244,6 +262,9 @@ if __name__ == "__main__":
     if a.want_isin:
         print("**** UPDATING ASX SECURITIES")
         update_isin(db, config, ensure_indexes=True)
+    if a.fix_blacklist:
+        print("*** FIX BLACKLIST ENTRIES")
+        fix_blacklist(db, config)
 
     if any([a.want_prices, a.want_details]):
         stocks_to_fetch = available_stocks(db, config)
