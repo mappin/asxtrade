@@ -12,7 +12,7 @@ from collections import defaultdict
 from app.models import *
 from app.mixins import SearchMixin
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import analyse_sector
+from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change
 from app.plots import *
 import pylru
 import numpy as np
