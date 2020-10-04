@@ -1,5 +1,6 @@
-from app.models import Quotation, CompanyDetails, all_sector_stocks, company_prices
+from app.models import Quotation, CompanyDetails, all_sector_stocks, company_prices, day_low_high
 from app.plots import *
+from app.messages import warning
 from datetime import datetime, timedelta
 import pylru
 import pandas as pd
@@ -64,18 +65,15 @@ def rank_cumulative_change(df, all_dates):
 
 def analyse_point_scores(stock, sector_companies, all_stocks_cip):
     """
-    Visualise the stock in terms of point scores:
-    +1 if it goes up on a given day
-    +2 if it beats the market average on a given day
-    +3 if it beats the sector average on a given day
-    +1 if it goes up more than 5% on a given day
-    +1 if it goes up despite a down market (and sector) day
+    Visualise the stock in terms of point scores as described on the stock view page.
     Points are lost for equivalent downturns and the result plotted. All rows in all_stocks_cip will be
     used to calculate the market average on a given trading day, whilst only sector_companies will
     be used to calculate the sector average. A utf-8 base64 encoded plot image is returned
     """
     rows = []
     points = 0
+    day_low_high_df = day_low_high(stock, all_dates=all_stocks_cip.columns)
+
     for date in all_stocks_cip.columns:
         market_avg = all_stocks_cip[date].mean()
         sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
@@ -90,14 +88,27 @@ def analyse_point_scores(stock, sector_companies, all_stocks_cip):
             points += 3
         else:
             points -= 3
-        if stock_move > 5.0:
+        if stock_move >= 2.0:
             points += 1
-        elif stock_move < -5.0:
+        elif stock_move <= -2.0:
             points -= 1
         if stock_move > 0.0 and market_avg < 0.0 and sector_avg < 0.0:
             points += 1
         elif stock_move < 0.0 and market_avg > 0.0 and sector_avg > 0.0:
             points -= 1
+        try:
+            day_low = day_low_high_df.at[date, 'day_low_price']
+            day_high = day_low_high_df.at[date, 'day_high_price']
+            last_price = day_low_high_df.at[date, 'last_price']
+            assert not np.isnan(day_low) and not np.isnan(day_high)
+            range = (day_high - day_low) * 0.20 # 20%
+            if last_price >= day_high - range:
+                points += 1
+            elif last_price <= day_low + range:
+                points -= 1
+        except KeyError:
+            warning(None, "Unable to obtain day low/high and last_price for {} on {}".format(stock, date))
+            pass # FALLTHRU...
         rows.append({ 'points': points, 'stock': stock, 'date': date })
     df = pd.DataFrame.from_records(rows)
     df['date'] = pd.to_datetime(df['date'])

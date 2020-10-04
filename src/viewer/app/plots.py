@@ -230,12 +230,16 @@ def plot_series(df, x=None, y=None, tick_text_size=6, line_size=1.5,
                 y_axis_label='Point score', x_axis_label=''):
     assert len(df) > 0
     assert len(x) > 0 and len(y) > 0
+    assert line_size > 0.0
+    assert isinstance(tick_text_size, int) and tick_text_size > 0
+    assert y_axis_label is not None
+    assert x_axis_label is not None
     plot = (p9.ggplot(df, p9.aes(x=x, y=y, color='stock'))
-        + p9.geom_line(size=line_size)
-        + p9.labs(x=x_axis_label, y=y_axis_label)
-        + p9.theme(axis_text_x = p9.element_text(angle=30, size=tick_text_size),
-                   axis_text_y = p9.element_text(size=tick_text_size),
-                   legend_position='none')
+            + p9.geom_line(size=line_size)
+            + p9.labs(x=x_axis_label, y=y_axis_label)
+            + p9.theme(axis_text_x = p9.element_text(angle=30, size=tick_text_size),
+                       axis_text_y = p9.element_text(size=tick_text_size),
+                       legend_position='none')
     )
     return plot_as_inline_html_data(plot)
 
@@ -255,6 +259,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
     top10 = sum.nlargest(n_top_bottom)
     bottom10 = sum.nsmallest(n_top_bottom)
+    print(df.columns)
     #print(bins)
     try:
         # NB: this may fail if no prices are available so we catch that error and handle accordingly...
@@ -342,7 +347,10 @@ def relative_strength(prices, n=14):
     # Calculate the RSI based on EWMA
     rs = roll_up1 / roll_down1
     rsi = 100.0 - (100.0 / (1.0 + rs))
-    rsi.at[len(rsi)+1] = np.nan # ensure data series are the same length for matplotlib
+    # NB: format is carefully handled here, so downstream code doesnt break
+    new_date = datetime.strftime(datetime.now(), "%Y-%m-%d")
+    print(new_date)
+    rsi.at[new_date] = np.nan # ensure data series are the same length for matplotlib
     assert len(rsi) == len(prices)
     return rsi
 

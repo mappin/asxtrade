@@ -4,41 +4,18 @@ from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
 from django import forms
 from django.views.generic.list import MultipleObjectTemplateResponseMixin, MultipleObjectMixin
 from bson.objectid import ObjectId
 from collections import defaultdict
 from app.models import *
 from app.mixins import SearchMixin
+from app.messages import info, warning, add_messages
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
 from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change
 from app.plots import *
 import pylru
 import numpy as np
-
-
-def info(request, msg):
-    assert request is not None
-    assert len(msg) > 0
-    messages.info(request, msg, extra_tags="alert alert-secondary", fail_silently=True)
-    print(msg)
-
-def warning(request, msg):
-    assert request is not None
-    assert len(msg) > 0
-    messages.warning(request, msg, extra_tags="alert alert-warning", fail_silently=True)
-    print("WARNING: {}".format(msg))
-
-def add_messages(request, context):
-    assert request is not None
-    assert context is not None
-    as_at = context.get('most_recent_date', None)
-    sector = context.get('sector', None)
-    if as_at:
-        info(request, 'Prices current as at {}.'.format(as_at))
-    if sector:
-        info(request, "Only stocks from {} are shown.".format(sector))
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
     form_class = SectorSearchForm
@@ -214,6 +191,7 @@ def show_stock(request, stock=None, sector_n_days=90):
    all_dates = desired_dates(start_date=sector_n_days+window_size)
    wanted_fields = ['last_price', 'volume', 'day_low_price', 'day_high_price', 'eps', 'pe', 'annual_dividend_yield']
    stock_df = company_prices([stock], all_dates=all_dates, fields=wanted_fields)
+   #print(stock_df)
 
    securities = Security.objects.filter(asx_code=stock)
    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
@@ -228,7 +206,7 @@ def show_stock(request, stock=None, sector_n_days=90):
    fig = make_rsi_plot(stock, stock_df)
 
    # show sector performance over past 3 months
-   all_stocks_cip = company_prices(None, all_dates=all_dates, fields='change_in_percent')
+   all_stocks_cip = company_prices(None, all_dates=all_dates, fields='change_in_percent', fix_missing=False)
    sector = company_details.sector_name if company_details else None
    t = analyse_sector(stock, sector, all_stocks_cip, window_size=window_size)
    c_vs_s_plot, sector_momentum_plot, point_score_plot = t
@@ -357,7 +335,8 @@ def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
     all_dates = desired_dates(start_date=300) # last 300 days
-    cip = company_prices(watchlist_stocks, all_dates=all_dates, fields='change_in_percent', fail_on_missing=False)
+    cip = company_prices(watchlist_stocks, all_dates=all_dates,
+                         fields='change_in_percent', fail_missing_months=False)
     trends = calculate_trends(cip, watchlist_stocks, all_dates)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(cip.filter(trends.keys(), axis='index'), all_dates=all_dates)
