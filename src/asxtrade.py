@@ -240,6 +240,7 @@ if __name__ == "__main__":
     args.add_argument('--validate', help="", action="store_true")
     args.add_argument('--fix-blacklist', help="Ensure each blacklist entry has a valid_until date", action="store_true")
     args.add_argument('--date', help="Date to use as the record date in the database [YYYY-mm-dd]", type=str, required=False)
+    args.add_argument('--stocks', help="JSON array with stocks to load for --want-prices", type=str, required=False)
     a = args.parse_args()
 
     config = {}
@@ -267,7 +268,8 @@ if __name__ == "__main__":
         fix_blacklist(db, config)
 
     if any([a.want_prices, a.want_details]):
-        stocks_to_fetch = available_stocks(db, config)
+        stocks_to_fetch = available_stocks(db, config) if not a.stocks else json.loads(a.stocks)
+        print("Found {} stocks to fetch.".format(len(stocks_to_fetch)))
         if a.want_prices:
             print("**** UPDATING PRICES")
             if a.date:
