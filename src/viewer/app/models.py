@@ -3,6 +3,7 @@ from django.conf import settings
 from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
+from app.messages import warning
 import pylru
 from collections import defaultdict
 from datetime import datetime, timedelta, date
@@ -336,6 +337,39 @@ def make_superdf(required_tags, stock_codes):
                 superdf = superdf.merge(df, how='outer', left_index=True, right_index=True)
     return (superdf, n)
 
+def day_low_high(stock, all_dates=None):
+    """
+    For the specified dates (specified in strict YYYY-mm-dd format) return
+    the day low/high price, last price and volume as a pandas dataframe with dates down and
+    columns which represent the prices and volume (in $AUD millions).
+    """
+    assert stock is not None and len(stock) >= 3
+
+    quotes = Quotation.objects.filter(asx_code=stock) \
+                              .filter(fetch_date__in=all_dates) \
+                              .exclude(error_code="id-or-code-invalid")
+    rows = []
+    for q in quotes:
+        rows.append({ 'date': q.fetch_date, 'day_low_price': q.day_low_price,
+                      'day_high_price': q.day_high_price,
+                      'volume': q.volume_as_millions(),
+                      'last_price': q.last_price })
+    day_low_high_df = pd.DataFrame.from_records(rows)
+    day_low_high_df.set_index(day_low_high_df['date'], inplace=True)
+    return day_low_high_df
+
+def impute_missing(df, method='linear'):
+    assert df is not None
+    if method == 'linear': # faster...
+        result = df.interpolate(method=method, limit_direction='forward', axis='columns')
+        return result
+    else:
+        # must have a DateTimeIndex so...
+        df.columns = pd.to_datetime(df.columns)
+        df = df.interpolate(method=method, limit_direction='forward', axis='columns')
+        df.set_index(df.index.format(), inplace=True) # convert back to strings for caller compatibility
+        return df
+
 def all_etfs():
     etf_codes = [s.asx_code for s in Security.objects.filter(security_name='EXCHANGE TRADED FUND UNITS FULLY PAID')]
     print("Found {} ETF codes".format(len(etf_codes)))
@@ -359,7 +393,7 @@ def increasing_yield(stock_codes, past_n_days=300):
     increasing_yield_stocks = [idx for idx, series in df.iterrows() if series.is_monotonic_increasing and max(series) >= 0.01]
     return increasing_yield_stocks
 
-def company_prices(stock_codes, all_dates=None, fields='last_price', fail_on_missing=True):
+def company_prices(stock_codes, all_dates=None, fields='last_price', fail_missing_months=True, fix_missing=True):
     """
     Return a dataframe with the required companies (iff quoted) over the
     specified dates. By default last_price is provided. Fields may be a list,
@@ -368,7 +402,7 @@ def company_prices(stock_codes, all_dates=None, fields='last_price', fail_on_mis
     if not isinstance(fields, str): # assume iterable if not str...
         assert len(stock_codes) == 1
         dataframes = [company_prices(stock_codes, all_dates=all_dates,
-                                         fields=field, fail_on_missing=fail_on_missing) for field in fields]
+                                         fields=field, fail_missing_months=fail_missing_months) for field in fields]
         result_df = pd.concat(dataframes, ignore_index=True)
         result_df.set_index(pd.Index(fields), inplace=True)
         #print(result_df)
@@ -377,7 +411,7 @@ def company_prices(stock_codes, all_dates=None, fields='last_price', fail_on_mis
         assert list(result_df.columns) == fields
         return result_df
 
-    print(stock_codes)
+    #print(stock_codes)
     assert isinstance(fields, str)
     if all_dates is None:
         all_dates = [ datetime.strftime(datetime.now(), "%Y-%m-%d") ]
@@ -397,11 +431,14 @@ def company_prices(stock_codes, all_dates=None, fields='last_price', fail_on_mis
     superdf = superdf.drop(columns=cols_to_drop)
 
     # on the first of the month, we dont have data yet so we permit one missing tag for this reason
-    if fail_on_missing and n_dataframes < len(required_tags) - 1:
+    if fail_missing_months and n_dataframes < len(required_tags) - 1:
         raise ValueError("Not all required data is available - aborting! Found {} wanted {}".format(n_dataframes, required_tags))
     # NB: ensure all columns are ALWAYS in ascending date order
     dates = sorted(list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
     superdf = superdf[dates]
+    if fix_missing and superdf.isnull().values.any():
+        warning(None, "Missing data found in fields={} stocks={} over dates: {}-{}".format(fields, stock_codes, all_dates[0], all_dates[-1]))
+        superdf = impute_missing(superdf)
     return superdf
 
 class MarketDataCache(model.Model):
