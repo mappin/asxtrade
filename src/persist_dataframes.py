@@ -56,6 +56,13 @@ def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-do
     for field_name in ['change_in_percent', 'last_price', 'change_price', 'day_low_price', 'day_high_price', 'volume', 'eps', 'pe', 'annual_dividend_yield']:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
         df = load_prices(db, field_name, month, year)
+        if df.isnull().values.any():
+           dates_with_missing = set(df.columns[df.isnull().any()])
+           today = datetime.strftime(datetime.today(), "%Y-%m-%d")
+           if today in dates_with_missing:
+              print("WARNING: today's {} matrix contains missing data! Continuing anyway.".format(field_name)) 
+              print("Rows with missing data: ", list(df[df.isnull().any(axis=1)].index))
+              pass # FALLTHRU...
 
         with io.BytesIO() as fp:
              # NB: if this fails it may be because you are using fastparquet which doesnt (yet) support BytesIO. Use eg. pyarrow
