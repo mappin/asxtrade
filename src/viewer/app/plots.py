@@ -200,19 +200,28 @@ def plot_market_wide_sector_performance(all_dates, field_name='change_in_percent
     df = df.merge(code_and_sector, left_on='asx_code', right_on='asx_code')
     print("Found {} stocks, {} sectors and merged total: {}".format(n_stocks, len(code_and_sector), len(df)))
     # compute average change in percent of each unique sector over each day and sum over the dates
+    cumulative_pct_change = df.expanding(axis='columns').sum()
+    # merge date-wise into df
+    for date in cumulative_pct_change.columns:
+        df[date] = cumulative_pct_change[date]
+    #df.to_csv('/tmp/crap.csv')
     grouped_df = df.groupby('sector_name').mean()
-    grouped_df = grouped_df.cumsum(axis='columns')
+    #grouped_df.to_csv('/tmp/crap.csv')
+
     # ready the dataframe for plotting
     grouped_df = pd.melt(grouped_df, ignore_index=False, var_name='date', value_name='cumulative_change_percent')
     grouped_df['sector'] = grouped_df.index
     grouped_df['date'] = pd.to_datetime(grouped_df['date'])
+    n_col = 3
     plot = (p9.ggplot(grouped_df, p9.aes('date', 'cumulative_change_percent', color='sector'))
-            + p9.geom_line()
-            + p9.facet_wrap('~sector', nrow=n_unique_sectors // 2 + 1, ncol=2, scales='free_y')
+            + p9.geom_line(size=1.0)
+            + p9.facet_wrap('~sector', nrow=n_unique_sectors // n_col + 1, ncol=n_col, scales='free_y')
             + p9.xlab('')
             + p9.ylab('Average sector change (%)')
             + p9.theme(axis_text_x = p9.element_text(angle=30, size=6),
                        axis_text_y = p9.element_text(size=6),
+                       figure_size = (12, 6),
+                       panel_spacing=0.3,
                        legend_position='none')
     )
     return plot_as_inline_html_data(plot)
