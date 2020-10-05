@@ -12,7 +12,7 @@ from app.models import *
 from app.mixins import SearchMixin
 from app.messages import info, warning, add_messages
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change
+from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, detect_outliers
 from app.plots import *
 import pylru
 import numpy as np
@@ -331,6 +331,24 @@ def show_increasing_yield_stocks(request):
     )
 
 @login_required
+def show_outliers(request, what=None, n_days=30):
+    validate_user(request.user)
+    stocks = user_watchlist(request.user)
+    all_dates = desired_dates(start_date=n_days)
+    cip = company_prices(stocks, all_dates=all_dates, fields='change_in_percent')
+
+    if what == 'watchlist':
+        outliers = detect_outliers(user_watchlist(request.user), cip)
+    else:
+        raise Http404('No such stock list: {}'.format(what))
+    return show_matching_companies(set(outliers),
+               "Unusual stock behaviours over past {} days".format(n_days),
+               "Outlier stocks: sentiment",
+               user_purchases(request.user),
+               request
+    )
+
+@login_required
 def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
@@ -418,9 +436,9 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
     assert len(matching_companies) > 0
     assert isinstance(title, str) and isinstance(heatmap_title, str)
 
-    print("Showing results for {} companies".format(len(matching_companies)))
     stocks_queryset, date = latest_quote(matching_companies)
     stocks_queryset = stocks_queryset.order_by('asx_code')
+    print("Found {} quotes for {} stocks".format(stocks_queryset.count(), len(matching_companies)))
 
     # paginate results for 50 stocks per page
     paginator = Paginator(stocks_queryset, 50)

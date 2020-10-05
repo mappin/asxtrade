@@ -2,7 +2,9 @@
 {% load myfilters %}
 {% block stock_list %}
 
-{% if page_obj %}
+{% if page_obj is None %}
+    <div class="row mt-2"><p>No stocks to display.</p></div>
+{% else %}
     <div class="row mt-2">
         <table style="width: 100%">
            <tr>
@@ -72,6 +74,12 @@
         {% if virtual_purchases %}
         <span>
             &nbsp;<a href="/show/trends" class="btn btn-primary">Show trends</a>&nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Show purchase performance</a>
+        </span>
+        {% endif %}
+        {% if '/show/outliers' not in request.path %}
+        <span>
+            &nbsp;<a href="/show/outliers/watchlist/30" class="btn btn-primary">Show outliers (30 days)</a>
+            &nbsp;<a href="/show/outliers/watchlist/180" class="btn btn-primary">Show outliers (180 days, SLOW)</a>
         </span>
         {% endif %}
     </div>

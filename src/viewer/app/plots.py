@@ -259,7 +259,7 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
     sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
     top10 = sum.nlargest(n_top_bottom)
     bottom10 = sum.nsmallest(n_top_bottom)
-    print(df.columns)
+    #print(df.columns)
     #print(bins)
     try:
         # NB: this may fail if no prices are available so we catch that error and handle accordingly...
@@ -348,10 +348,11 @@ def relative_strength(prices, n=14):
     rs = roll_up1 / roll_down1
     rsi = 100.0 - (100.0 / (1.0 + rs))
     # NB: format is carefully handled here, so downstream code doesnt break
-    new_date = datetime.strftime(datetime.now(), "%Y-%m-%d")
-    print(new_date)
+    new_date = datetime.strftime(datetime.now(), "%Y-%m-%d ") # make sure it is not an existing date
+    #print(new_date)
     rsi.at[new_date] = np.nan # ensure data series are the same length for matplotlib
-    assert len(rsi) == len(prices)
+    #print(len(rsi), " ", len(prices))
+    #assert len(rsi) == len(prices)
     return rsi
 
 def make_rsi_plot(stock, stock_df):
