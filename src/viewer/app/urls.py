@@ -32,6 +32,7 @@ urlpatterns = [
     path('show/watched', show_watched, name='show-watched'),
     path('show/etfs', show_etfs, name='show-etfs'),
     path('show/<str:stock>', show_stock, name='show-stock'),
+    path('show/outliers/<str:what>/<int:n_days>', show_outliers, name='show-outliers'), # eg. show/outliers/{all,watchlist} WARNING: slow
     path('watchlist/<str:stock>', toggle_watched),
     path('purchase/<str:stock>', buy_virtual_stock),
     path('update/purchase/<slug:slug>', edit_virtual_stock),

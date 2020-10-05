@@ -63,53 +63,188 @@ def rank_cumulative_change(df, all_dates):
     df['x'] = pd.to_datetime(df['x'], format="%Y-%m-%d")
     return df
 
-def analyse_point_scores(stock, sector_companies, all_stocks_cip):
+def rule_move_up(state: dict):
     """
-    Visualise the stock in terms of point scores as described on the stock view page.
+    Return 1 if the state indicates the stock moved up, 0 otherwise
+    """
+    assert state is not None
+
+    move = state.get('stock_move')
+    if move > 0.0:
+       return 1
+    return 0
+
+def rule_market_avg(state: dict):
+    """
+    If the magnitude of the stock move is greater than the magnitude of the
+    market move, then award two points in the direction of the move. Otherwise 0
+    """
+    assert state is not None
+
+    move = state.get('stock_move')
+    market_avg = state.get('market_avg')
+    if abs(move) >= abs(market_avg):
+        return np.sign(move) * 2
+    return 0
+
+def rule_sector_avg(state: dict):
+    """
+    Award 3 points for a stock beating the sector average on a given day or
+    detract three points if it falls more than the magnitude of the sector
+    """
+    assert state is not None
+
+    move = state.get('stock_move')
+    sector_avg = state.get('sector_avg')
+
+    if abs(move) >= abs(sector_avg):
+        return np.sign(move) * 3
+    return 0
+
+def rule_signif_move(state: dict):
+    """
+    Only ~10% of stocks will move by more than 2% percent on a given day, so give a point for that...
+    """
+    assert state is not None
+
+    move = state.get('stock_move') # percentage move
+    if move >= 2.0:
+        return 1
+    elif move <= -2.0:
+        return -1
+    return 0
+
+def rule_against_market(state: dict):
+    """
+    Award 1 point (in the direction of the move) if the stock moves against
+    the overall market AND sector in defiance of the global sentiment (eg. up on a down day)
+    """
+    assert state is not None
+    stock_move = state.get('stock_move')
+    market_avg = state.get('market_avg')
+    sector_avg = state.get('sector_avg')
+    if stock_move > 0.0 and market_avg < 0.0 and sector_avg < 0.0:
+        return 1
+    elif stock_move < 0.0 and market_avg > 0.0 and sector_avg > 0.0:
+        return -1
+    return 0
+
+def rule_at_end_of_daily_range(state: dict):
+    """
+    Award 1 point if the price at the end of the day is within 20% of the daily trading range (either end)
+    Otherwise 0.
+    """
+    assert state is not None
+    day_low_high_df = state.get('day_low_high_df')
+    date = state.get('date')
+    threshold = state.get('daily_range_threshold')
+    try:
+        day_low = day_low_high_df.at[date, 'day_low_price']
+        day_high = day_low_high_df.at[date, 'day_high_price']
+        last_price = day_low_high_df.at[date, 'last_price']
+        assert not np.isnan(day_low) and not np.isnan(day_high)
+        range = (day_high - day_low) * threshold # 20% at either end of daily range
+        if last_price >= day_high - range:
+            return 1
+        elif last_price <= day_low + range:
+            return -1
+        # else FALLTHRU...
+    except KeyError:
+        stock = state.get('stock')
+        warning(None, "Unable to obtain day low/high and last_price for {} on {}".format(stock, date))
+    return 0
+
+def default_point_score_rules():
+    """
+    Return a list of rules to apply as a default list during analyse_point_scores()
+    """
+    return [rule_move_up,
+            rule_market_avg,
+            rule_sector_avg,
+            rule_signif_move,
+            rule_against_market,
+            rule_at_end_of_daily_range
+            ]
+
+def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
+    """
+    Returns a dataframe describing those outliers present in stocks based on the provided rules.
+    """
+    if rules is None:
+        rules = default_point_score_rules()
+    str_rules = { str(r):r for r in rules }
+    rows = []
+    stocks_by_sector_df = stocks_by_sector() # NB: ETFs in watchlist will have no sector
+    stocks_by_sector_df.index = stocks_by_sector_df['asx_code']
+    for stock in stocks:
+        #print("Processing stock: ", stock)
+        try:
+           sector = stocks_by_sector_df.at[stock, 'sector_name']
+           sector_companies = list(stocks_by_sector_df.loc[stocks_by_sector_df['sector_name'] == sector].asx_code)
+        except KeyError:
+           warning(None, "Unable to locate watchlist entry: {} - continuing without it".format(stock))
+           continue
+        day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
+        state = {
+            'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
+            'all_stocks_change_in_percent_df': all_stocks_cip,
+            'stock': stock,
+            'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
+        }
+        points_by_rule = defaultdict(int)
+        for date in all_stocks_cip.columns:
+            market_avg = all_stocks_cip[date].mean()
+            sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
+            stock_move = all_stocks_cip.at[stock, date]
+            state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
+                           'stock_move': stock_move, 'date': date })
+            for rule_name, rule in str_rules.items():
+                points_by_rule[rule_name] += rule(state)
+        d = { 'stock': stock }
+        d.update(points_by_rule)
+        rows.append(d)
+    df = pd.DataFrame.from_records(rows)
+    df = df.set_index('stock')
+    print(df)
+    from pyod.models.iforest import IForest
+    clf = IForest()
+    clf.fit(df)
+    scores = clf.predict(df)
+    results = [row[0] for row, value in zip(df.iterrows(), scores) if value > 0]
+    #print(results)
+    print("Found {} outlier stocks".format(len(results)))
+    return results
+
+def analyse_point_scores(stock: str, sector_companies, all_stocks_cip: pd.DataFrame, rules=None):
+    """
+    Visualise the stock in terms of point scores as described on the stock view page. Rules to apply
+    can be specified by rules (default rules are provided by rule_*())
+
     Points are lost for equivalent downturns and the result plotted. All rows in all_stocks_cip will be
     used to calculate the market average on a given trading day, whilst only sector_companies will
     be used to calculate the sector average. A utf-8 base64 encoded plot image is returned
     """
+    assert len(stock) >= 3
+    assert all_stocks_cip is not None
+    if rules is None:
+        rules = default_point_score_rules()
     rows = []
     points = 0
     day_low_high_df = day_low_high(stock, all_dates=all_stocks_cip.columns)
-
+    state = { 'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
+              'all_stocks_change_in_percent_df': all_stocks_cip,
+              'stock': stock,
+              'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
+            }
     for date in all_stocks_cip.columns:
         market_avg = all_stocks_cip[date].mean()
         sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
         stock_move = all_stocks_cip.at[stock, date]
-        if stock_move > 0.0:
-            points += 1
-        if stock_move > market_avg:
-            points += 2
-        else:
-            points -= 2
-        if stock_move > sector_avg:
-            points += 3
-        else:
-            points -= 3
-        if stock_move >= 2.0:
-            points += 1
-        elif stock_move <= -2.0:
-            points -= 1
-        if stock_move > 0.0 and market_avg < 0.0 and sector_avg < 0.0:
-            points += 1
-        elif stock_move < 0.0 and market_avg > 0.0 and sector_avg > 0.0:
-            points -= 1
-        try:
-            day_low = day_low_high_df.at[date, 'day_low_price']
-            day_high = day_low_high_df.at[date, 'day_high_price']
-            last_price = day_low_high_df.at[date, 'last_price']
-            assert not np.isnan(day_low) and not np.isnan(day_high)
-            range = (day_high - day_low) * 0.20 # 20%
-            if last_price >= day_high - range:
-                points += 1
-            elif last_price <= day_low + range:
-                points -= 1
-        except KeyError:
-            warning(None, "Unable to obtain day low/high and last_price for {} on {}".format(stock, date))
-            pass # FALLTHRU...
+        state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
+                       'stock_move': stock_move, 'date': date })
+        points += sum(map(lambda r: r(state), rules))
         rows.append({ 'points': points, 'stock': stock, 'date': date })
+
     df = pd.DataFrame.from_records(rows)
     df['date'] = pd.to_datetime(df['date'])
     point_score_plot = plot_series(df, x='date', y='points')
@@ -118,7 +253,7 @@ def analyse_point_scores(stock, sector_companies, all_stocks_cip):
 def analyse_sector(stock, sector, all_stocks_cip, window_size=14):
     assert all_stocks_cip is not None
 
-    sector_companies = all_sector_stocks(sector) if sector else []
+    sector_companies = all_sector_stocks(sector) if sector else [] # ETFs dont have a sector for now...
     if len(sector_companies) > 0:
        cip = all_stocks_cip.filter(items=sector_companies, axis='index')
        cip = cip.fillna(0.0)
