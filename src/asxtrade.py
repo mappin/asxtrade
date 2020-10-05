@@ -101,7 +101,7 @@ def validate_prices(dataframe):
 
 def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True):
     assert isinstance(config, dict)
-    assert len(available_stocks) > 10
+    #assert len(available_stocks) > 10 # dont do this anymore, since we might have to refetch a few failed stocks
 
     if ensure_indexes:
         db.asx_prices.create_index([('asx_code', pymongo.ASCENDING), ('fetch_date', pymongo.ASCENDING)], unique=True)
@@ -268,7 +268,11 @@ if __name__ == "__main__":
         fix_blacklist(db, config)
 
     if any([a.want_prices, a.want_details]):
-        stocks_to_fetch = available_stocks(db, config) if not a.stocks else json.loads(a.stocks)
+        if a.stocks:
+           with open(a.stocks, 'r') as fp:
+               stocks_to_fetch = json.loads(fp.read())
+        else:
+           stocks_to_fetch = available_stocks(db, config)
         print("Found {} stocks to fetch.".format(len(stocks_to_fetch)))
         if a.want_prices:
             print("**** UPDATING PRICES")

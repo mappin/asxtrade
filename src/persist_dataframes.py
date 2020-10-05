@@ -3,6 +3,7 @@ import pymongo
 from bson.binary import Binary
 import argparse
 import io
+import json
 import os
 import pandas as pd
 import numpy
@@ -60,8 +61,9 @@ def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-do
            dates_with_missing = set(df.columns[df.isnull().any()])
            today = datetime.strftime(datetime.today(), "%Y-%m-%d")
            if today in dates_with_missing:
-              print("WARNING: today's {} matrix contains missing data! Continuing anyway.".format(field_name)) 
-              print("Rows with missing data: ", list(df[df.isnull().any(axis=1)].index))
+              print("WARNING: today's {} matrix contains missing data! Continuing anyway.".format(field_name))
+              print(df[today].isnull().values.any())
+              print("Rows with missing data: ", json.dumps(list(df[df[today].isnull()].index)))
               pass # FALLTHRU...
 
         with io.BytesIO() as fp:
