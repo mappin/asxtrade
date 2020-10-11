@@ -23,39 +23,44 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
     action_url = '/search/by-sector'
     paginate_by = 50
     ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
-    sector_name = None
-    as_at_date = None
-    sentiment_data = None
-    n_days = 30
-    n_top_bottom = 20
+    template_values_dict = {
+        'sector_name': None,
+        'sector_id': None,
+        'most_recent_date': None,
+        'sentiment_heatmap': None,
+        'best_ten': None,
+        'worst_ten': None,
+        'n_days': 30,
+        'n_top_bottom': 20
+    }
 
     def render_to_response(self, context):
+        context.update(self.template_values_dict)
         context.update({ # NB: we use update() to not destroy page_obj
-            'sector': self.sector_name,
-            'most_recent_date': self.as_at_date,
-            'sentiment_heatmap': self.sentiment_data,
             'watched': user_watchlist(self.request.user), # to highlight top10/bottom10 bookmarks correctly
-            'n_top_bottom': self.n_top_bottom,
-            'best_ten': self.top10,
-            'worst_ten': self.bottom10,
             'title': 'Find by company sector',
-            'sentiment_heatmap_title': "{}: past {} days".format(self.sector_name, self.n_days)
         })
+        assert context['sector_id'] is not None and isinstance(context['sector_id'], int)
+        print(context['sector_id'])
+        context['sentiment_heatmap_title'] = "{}: past {} days".format(context['sector_name'], context['n_days'])
         add_messages(self.request, context)
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
        if kwargs == {}:
-           self.top10 = self.bottom10 = None
+           self.template_values_dict.update({ 'top10': None, 'bottom10': None })
            return Quotation.objects.none()
        assert 'sector' in kwargs and len(kwargs['sector']) > 0
-       self.sector_name = kwargs['sector']
+       sector = kwargs.get('sector')
        all_dates = all_available_dates()
-       wanted_stocks = set(all_sector_stocks(self.sector_name))
-       wanted_dates = desired_dates(start_date=self.n_days)
-       self.sentiment_data, df, top10, bottom10, _ = plot_heatmap(wanted_stocks, all_dates=wanted_dates, n_top_bottom=self.n_top_bottom)
-       self.top10 = top10
-       self.bottom10 = bottom10
+       wanted_stocks = set(all_sector_stocks(sector))
+       n_days = self.template_values_dict.get('n_days', 30)
+       n_top_bottom = self.template_values_dict.get('n_top_bottom', 20)
+       wanted_dates = desired_dates(start_date=n_days)
+       heatmap, df, top10, bottom10, _ = plot_heatmap(wanted_stocks,
+                                                      all_dates=wanted_dates,
+                                                      n_top_bottom=n_top_bottom)
+
        if any(['best10' in kwargs, 'worst10' in kwargs]):
            wanted = set()
            restricted = False
@@ -68,11 +73,19 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
            if restricted:
                wanted_stocks = wanted_stocks.intersection(wanted)
            # FALLTHRU...
-       self.as_at_date = all_dates[-1]
 
-       print("Looking for {} companies as at {}".format(len(wanted_stocks), self.as_at_date))
-       self.wanted_stocks = wanted_stocks
-       results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=self.as_at_date) \
+       when_date = all_dates[-1]
+       print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
+       self.template_values_dict.update({
+          'sector_name': sector,
+          'most_recent_date': when_date,
+          'sentiment_heatmap': heatmap,
+          'best_ten': top10,
+          'worst_ten': bottom10,
+          'sector_id': int(Sector.objects.get(sector_name=sector).sector_id),
+          'wanted_stocks': wanted_stocks,
+       })
+       results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=when_date) \
                                   .exclude(error_code='id-or-code-invalid')
        results = results.order_by(*self.ordering)
        return results
@@ -330,23 +343,33 @@ def show_increasing_yield_stocks(request):
                 request
     )
 
-@login_required
-def show_outliers(request, what=None, n_days=30):
-    validate_user(request.user)
-    stocks = user_watchlist(request.user)
+def show_outliers(request, stocks, n_days=30, extra_context=None):
+    assert stocks is not None
+    assert n_days is not None # typically integer, but desired_dates() is polymorphic
     all_dates = desired_dates(start_date=n_days)
     cip = company_prices(stocks, all_dates=all_dates, fields='change_in_percent')
-
-    if what == 'watchlist':
-        outliers = detect_outliers(user_watchlist(request.user), cip)
-    else:
-        raise Http404('No such stock list: {}'.format(what))
-    return show_matching_companies(set(outliers),
+    outliers = detect_outliers(stocks, cip)
+    return show_matching_companies(outliers,
                "Unusual stock behaviours over past {} days".format(n_days),
                "Outlier stocks: sentiment",
                user_purchases(request.user),
-               request
+               request,
+               extra_context=extra_context
     )
+
+@login_required
+def show_sector_outliers(request, sector_id=None, n_days=30):
+    validate_user(request.user)
+    assert isinstance(sector_id, int) and sector_id > 0
+
+    stocks = all_sector_stocks(Sector.objects.get(sector_id=sector_id).sector_name)
+    return show_outliers(request, stocks, n_days=n_days)
+
+@login_required
+def show_watchlist_outliers(request, n_days=30):
+    validate_user(request.user)
+    stocks = user_watchlist(request.user)
+    return show_outliers(request, stocks, n_days=n_days)
 
 @login_required
 def show_trends(request):
@@ -429,7 +452,7 @@ def show_purchase_performance(request):
     }
     return render(request, 'portfolio_trends.html', context=context)
 
-def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request):
+def show_matching_companies(matching_companies, title, heatmap_title, user_purchases, request, extra_context=None):
     """
     Support function to public-facing views to eliminate code redundancy
     """
@@ -463,6 +486,8 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
          "sentiment_heatmap": sentiment_heatmap_data,
          "sentiment_heatmap_title": "{}: past {} days".format(heatmap_title, n_days)
     }
+    if extra_context:
+        context.update(extra_context)
     add_messages(request, context)
     return render(request, 'all_stocks.html', context=context)
 

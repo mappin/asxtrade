@@ -225,6 +225,18 @@ def stocks_by_sector():
     assert 'asx_code' in df.columns and 'sector_name' in df.columns
     return df
 
+class Sector(model.Model):
+    """
+    Table of ASX sector (GICS) names. Manually curated for now.
+    """
+    id = ObjectIdField(unique=True, db_column="_id")
+    sector_name = model.TextField(unique=True)
+    sector_id = model.IntegerField(db_column='id')
+
+    class Meta:
+        managed = False
+        db_table = "sector"
+
 def all_sector_stocks(sector_name):
     """
     Return a queryset with all stocks in the specified sector
@@ -409,6 +421,9 @@ def company_prices(stock_codes, all_dates=None, fields='last_price', fail_missin
         result_df = result_df.transpose()
         #print(result_df)
         assert list(result_df.columns) == fields
+        # reject rows which are all NA to avoid downstream problems eg. plotting stocks
+        # NB: we ONLY do this for the multi-field case, single field it is callers responsibility 
+        result_df = result_df.dropna()
         return result_df
 
     #print(stock_codes)

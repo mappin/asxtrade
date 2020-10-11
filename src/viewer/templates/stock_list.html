@@ -78,8 +78,13 @@
         {% endif %}
         {% if '/show/outliers' not in request.path %}
         <span>
+            {% if '/show/watched' in request.path %}
             &nbsp;<a href="/show/outliers/watchlist/30" class="btn btn-primary">Show outliers (30 days)</a>
             &nbsp;<a href="/show/outliers/watchlist/180" class="btn btn-primary">Show outliers (180 days, SLOW)</a>
+            {% elif '/search/by-sector' in request.path %}
+            &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Show outliers (30 days)</a>
+            &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Show outliers (180 days, SLOW)</a>
+            {% endif %}
         </span>
         {% endif %}
     </div>
