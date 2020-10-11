@@ -195,9 +195,12 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
         url = config.get('asx_company_details')
         url = url.replace('%s', asx_code)
         print(url)
-        rec = db.asx_company_details.find_one({ 'asx_code': asx_code })
-        if rec is not None:
-            dt = rec.get('_id').generation_time
+        # rec should only have one record since we remove&insert per asx_code below...
+        rec = [r for r in db.asx_company_details.find({ 'asx_code': asx_code }).sort([('_id', pymongo.ASCENDING)]).limit(50)]
+        if len(rec) > 0:
+            #print(rec)
+            dt = rec[-1].get('_id').generation_time
+            #print(dt)
             if datetime.now(timezone.utc) < dt + timedelta(days=7):  # existing record less than a week old? if so, ignore it
                 print("Ignoring {} as record is less than a week old.".format(asx_code))
                 continue
@@ -210,7 +213,8 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
                 print(d)
             else:
                 assert d.pop('code', None) == asx_code
-                db.asx_company_details.find_one_and_update({ 'asx_code': asx_code }, { '$set': d }, upsert=True)
+                db.asx_company_details.delete_one({ 'asx_code': asx_code })
+                db.asx_company_details.insert_one(d) # ensure new _id is assigned with current date
         except Exception as e:
             print(str(e))
             pass
