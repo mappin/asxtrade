@@ -181,10 +181,11 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
         try:
            sector = stocks_by_sector_df.at[stock, 'sector_name']
            sector_companies = list(stocks_by_sector_df.loc[stocks_by_sector_df['sector_name'] == sector].asx_code)
+           # day_low_high() may raise KeyError when data is currently being fetched, so it appears here...
+           day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
         except KeyError:
            warning(None, "Unable to locate watchlist entry: {} - continuing without it".format(stock))
            continue
-        day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
         state = {
             'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
             'all_stocks_change_in_percent_df': all_stocks_cip,
