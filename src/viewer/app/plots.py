@@ -126,10 +126,11 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
     overall_figure = plot_as_inline_html_data(plot)
 
     df = portfolio_df.filter(items=['stock', 'date', 'stock_profit', 'stock_worth', 'contribution'])
-    melted_df = df.melt(id_vars=['date','stock', 'contribution'], var_name='field')
+    melted_df = df.melt(id_vars=['date', 'stock', 'contribution'], var_name='field')
     all_dates = sorted(melted_df['date'].unique())
     df = melted_df[melted_df['date'] == all_dates[-1]]
     df = df[df['field'] == 'stock_profit'] # only latest profit is plotted
+    df['contribution'] = ['positive' if profit >= 0.0 else 'negative' for profit in df['value']]
 
     # 2. plot contributors ie. winners and losers
     plot = (p9.ggplot(df, p9.aes('stock', 'value', fill='stock'))
