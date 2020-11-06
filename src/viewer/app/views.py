@@ -41,17 +41,17 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
             'title': 'Find by company sector',
         })
         assert context['sector_id'] is not None and isinstance(context['sector_id'], int)
-        print(context['sector_id'])
         context['sentiment_heatmap_title'] = "{}: past {} days".format(context['sector_name'], context['n_days'])
         add_messages(self.request, context)
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
+       # if not specified, we default to Comms Services
+       sector = kwargs.get('sector', 'Communication Services')
+       sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
        if kwargs == {}:
-           self.template_values_dict.update({ 'top10': None, 'bottom10': None })
+           self.template_values_dict.update({ 'top10': None, 'bottom10': None, 'sector_id': sector_id, 'sector_name': sector })
            return Quotation.objects.none()
-       assert 'sector' in kwargs and len(kwargs['sector']) > 0
-       sector = kwargs.get('sector')
        all_dates = all_available_dates()
        wanted_stocks = set(all_sector_stocks(sector))
        n_days = self.template_values_dict.get('n_days', 30)
@@ -82,7 +82,7 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
           'sentiment_heatmap': heatmap,
           'best_ten': top10,
           'worst_ten': bottom10,
-          'sector_id': int(Sector.objects.get(sector_name=sector).sector_id),
+          'sector_id': sector_id,
           'wanted_stocks': wanted_stocks,
        })
        results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=when_date) \
@@ -440,8 +440,8 @@ def show_purchase_performance(request):
                     'stock_profit': stock_worth - stock_cost[asx_code],
                     'date': d_str, 'stock': asx_code })
 
-    portfolio_performance_figure, stock_performance_figure, \
-       profit_contributors_figure = plot_portfolio(pd.DataFrame.from_records(rows))
+    t = plot_portfolio(pd.DataFrame.from_records(rows))
+    portfolio_performance_figure, stock_performance_figure, profit_contributors_figure = t
     context = {
          'title': 'Portfolio performance',
          'portfolio_title': 'Overall',
