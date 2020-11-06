@@ -142,7 +142,8 @@ def rule_at_end_of_daily_range(state: dict):
         day_low = day_low_high_df.at[date, 'day_low_price']
         day_high = day_low_high_df.at[date, 'day_high_price']
         last_price = day_low_high_df.at[date, 'last_price']
-        assert not np.isnan(day_low) and not np.isnan(day_high)
+        if np.isnan(day_low) and np.isnan(day_high):
+            return 0
         range = (day_high - day_low) * threshold # 20% at either end of daily range
         if last_price >= day_high - range:
             return 1
