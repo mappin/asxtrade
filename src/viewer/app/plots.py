@@ -2,7 +2,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.analysis import *
+from app.analysis import company_prices
 from app.models import stocks_by_sector, desired_dates
 import numpy as np
 import pandas as pd
@@ -422,6 +422,8 @@ def make_rsi_plot(stock, stock_df):
     #timeline = timeline.to_list()
     linema20, = ax2.plot(timeline, ma20, color='blue', lw=2, label='MA (20)')
     linema200, = ax2.plot(timeline, ma200, color='red', lw=2, label='MA (200)')
+    assert linema20 is not None
+    assert linema200 is not None
 
     #last = dataframe[-1]
     #s = '%s O:%1.2f H:%1.2f L:%1.2f C:%1.2f, V:%1.1fM Chg:%+1.2f' % (
@@ -441,6 +443,7 @@ def make_rsi_plot(stock, stock_df):
     vmax = max(volume)
     poly = ax2t.fill_between(timeline, volume.to_list(), 0, alpha=0.5,
                              label='Volume', facecolor=fillcolor, edgecolor=fillcolor)
+    assert poly is not None # avoid unused variable from pylint
     ax2t.set_ylim(0, 5*vmax)
     ax2t.set_yticks([])
 
