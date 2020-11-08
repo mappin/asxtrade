@@ -14,11 +14,11 @@ import pandas as pd
 def validate_stock(stock):
     assert stock is not None
     assert isinstance(stock, str) and len(stock) >= 3
-    assert re.match('^\w+$', stock)
+    assert re.match(r'^\w+$', stock)
 
 def validate_date(d):
     assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
-    assert re.match('^\d{4}-\d{2}-\d{2}$', d)
+    assert re.match(r'^\d{4}-\d{2}-\d{2}$', d)
 
 def validate_user(user):
     assert user is not None
@@ -236,6 +236,12 @@ class Sector(model.Model):
     class Meta:
         managed = False
         db_table = "sector"
+
+@pylru.lrudecorator(1)
+def all_sectors():
+    all_sectors = list(CompanyDetails.objects.mongo_distinct('sector_name'))
+    results = [(sector, sector) for sector in all_sectors]
+    return results
 
 def all_sector_stocks(sector_name):
     """
