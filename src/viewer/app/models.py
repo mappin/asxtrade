@@ -239,8 +239,8 @@ class Sector(model.Model):
 
 @pylru.lrudecorator(1)
 def all_sectors():
-    all_sectors = list(CompanyDetails.objects.mongo_distinct('sector_name'))
-    results = [(sector, sector) for sector in all_sectors]
+    iterable = list(CompanyDetails.objects.mongo_distinct('sector_name'))
+    results = [(sector, sector) for sector in iterable] # as tuples since we want to use it in django form choice field
     return results
 
 def all_sector_stocks(sector_name):
@@ -281,15 +281,25 @@ def find_named_companies(wanted_name, wanted_activity):
     ret = set()
     if len(wanted_name) > 0:
         # match by company name first...
-        ret.update(CompanyDetails.objects.filter(name_full__icontains=wanted_name).values_list('asx_code', flat=True))
+        ret.update(CompanyDetails.objects \
+                      .filter(name_full__icontains=wanted_name) \
+                      .values_list('asx_code', flat=True))
         # but also matching codes
-        ret.update(CompanyDetails.objects.filter(asx_code__icontains=wanted_name).values_list('asx_code', flat=True))
-        # and if the code has no details, we try another method to find them... by checking all codes seen on the most recent date
+        ret.update(CompanyDetails.objects \
+                      .filter(asx_code__icontains=wanted_name) \
+                      .values_list('asx_code', flat=True))
+        # and if the code has no details, we try another method to find them... 
+        # by checking all codes seen on the most recent date
         latest_date = latest_quotation_date('ANZ')
-        ret.update(Quotation.objects.filter(asx_code__icontains=wanted_name).values_list('asx_code', flat=True))
+        ret.update(Quotation.objects \
+                      .filter(asx_code__icontains=wanted_name) \
+                      .filter(fetch_date=latest_date) \
+                      .values_list('asx_code', flat=True))
 
     if len(wanted_activity) > 0:
-        ret.update(CompanyDetails.objects.filter(principal_activities__icontains=wanted_activity).values_list('asx_code', flat=True))
+        ret.update(CompanyDetails.objects \
+                       .filter(principal_activities__icontains=wanted_activity) \
+                       .values_list('asx_code', flat=True))
     return ret
 
 def latest_quotation_date(stock):
