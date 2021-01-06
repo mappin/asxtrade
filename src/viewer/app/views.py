@@ -12,7 +12,7 @@ from app.models import *
 from app.mixins import SearchMixin
 from app.messages import info, warning, add_messages
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, detect_outliers
+from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, detect_outliers, default_point_score_rules
 from app.plots import *
 import pylru
 import numpy as np
@@ -193,7 +193,7 @@ def all_stocks(request):
    return render(request, "all_stocks.html", context=context)
 
 @login_required
-def show_stock(request, stock=None, sector_n_days=90):
+def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
    """
    Displays a view of a single stock via the stock_view.html template and associated state
    """
@@ -201,9 +201,9 @@ def show_stock(request, stock=None, sector_n_days=90):
    validate_user(request.user)
 
    window_size = 14 # since must have a full window before computing momentum over sector_n_days
-   all_dates = desired_dates(start_date=sector_n_days+window_size)
+   stock_dates = desired_dates(start_date=stock_n_days+window_size)
    wanted_fields = ['last_price', 'volume', 'day_low_price', 'day_high_price', 'eps', 'pe', 'annual_dividend_yield']
-   stock_df = company_prices([stock], all_dates=all_dates, fields=wanted_fields)
+   stock_df = company_prices([stock], all_dates=stock_dates, fields=wanted_fields, fail_missing_months=False)
    #print(stock_df)
 
    securities = Security.objects.filter(asx_code=stock)
@@ -219,14 +219,23 @@ def show_stock(request, stock=None, sector_n_days=90):
    fig = make_rsi_plot(stock, stock_df)
 
    # show sector performance over past 3 months
-   all_stocks_cip = company_prices(None, all_dates=all_dates, fields='change_in_percent', fix_missing=False)
+   sector_dates = desired_dates(start_date=180)
+   all_stocks_cip = company_prices(None, all_dates=sector_dates, fail_missing_months=False,
+                                   fields='change_in_percent', fix_missing=False)
    sector = company_details.sector_name if company_details else None
-   t = analyse_sector(stock, sector, all_stocks_cip, window_size=window_size)
-   c_vs_s_plot, sector_momentum_plot, point_score_plot = t
+   if sector is not None: # not an ETF? ie. sector information available?
+        sector_companies = list(all_sector_stocks(sector))
+        c_vs_s_plot, sector_momentum_plot = analyse_sector(stock, sector, sector_companies, 
+                                                            all_stocks_cip, window_size=window_size)
+        point_score_plot = plot_point_scores(stock, sector_companies, 
+                                                all_stocks_cip, default_point_score_rules())
+   else:
+        c_vs_s_plot = sector_momentum_plot = point_score_plot = None
+        
    # key indicator performance over past 90 days (for now): pe, eps, yield etc.
    key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
-   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=600)))
+   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=365)))
 
    # populate template and render HTML page with context
    context = {
@@ -456,23 +465,27 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
     """
     Support function to public-facing views to eliminate code redundancy
     """
-    assert len(matching_companies) > 0
     assert isinstance(title, str) and isinstance(heatmap_title, str)
 
-    stocks_queryset, date = latest_quote(matching_companies)
-    stocks_queryset = stocks_queryset.order_by('asx_code')
-    print("Found {} quotes for {} stocks".format(stocks_queryset.count(), len(matching_companies)))
+    if len(matching_companies) > 0:
+        stocks_queryset, date = latest_quote(matching_companies)
+        stocks_queryset = stocks_queryset.order_by('asx_code')
+        print("Found {} quotes for {} stocks".format(stocks_queryset.count(), len(matching_companies)))
 
-    # paginate results for 50 stocks per page
-    paginator = Paginator(stocks_queryset, 50)
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.page(page_number)
+        # paginate results for 50 stocks per page
+        paginator = Paginator(stocks_queryset, 50)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.page(page_number)
 
-    # add sentiment heatmap amongst watched stocks
-    n_days = 30
-    n_top_bottom = 20
-    sentiment_heatmap_data, df, top10, bottom10, n = \
-        plot_heatmap(matching_companies, all_dates=desired_dates(start_date=n_days), n_top_bottom=n_top_bottom)
+        # add sentiment heatmap amongst watched stocks
+        n_days = 30
+        n_top_bottom = 20
+        sentiment_heatmap_data, df, top10, bottom10, n = \
+            plot_heatmap(matching_companies, all_dates=desired_dates(start_date=n_days), n_top_bottom=n_top_bottom)
+    else:
+        page_obj = top10 = bottom10 = user_purchases = sentiment_heatmap_data = None
+        n_top_bottom = n_days = 0
+        warning(request, "No matching companies found.")
 
     context = {
          "most_recent_date": latest_quotation_date('ANZ'),

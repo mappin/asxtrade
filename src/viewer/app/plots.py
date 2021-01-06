@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
 from app.analysis import company_prices
-from app.models import stocks_by_sector, desired_dates
+from app.models import stocks_by_sector, desired_dates, day_low_high
 import numpy as np
 import pandas as pd
 import base64
@@ -488,3 +488,40 @@ def plot_best_monthly_price_trend(dataframe, field='open_price'):
             + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
            )
     return plot_as_inline_html_data(plot)
+
+def plot_point_scores(stock: str, sector_companies, 
+                      all_stocks_cip: pd.DataFrame,
+                      rules):
+    """
+    Visualise the stock in terms of point scores as described on the stock view page. Rules to apply
+    can be specified by rules (default rules are provided by rule_*())
+
+    Points are lost for equivalent downturns and the result plotted. All rows in all_stocks_cip will be
+    used to calculate the market average on a given trading day, whilst only sector_companies will
+    be used to calculate the sector average. A utf-8 base64 encoded plot image is returned
+    """
+    assert len(stock) >= 3
+    assert all_stocks_cip is not None
+    assert rules is not None and len(rules) > 0
+
+    rows = []
+    points = 0
+    day_low_high_df = day_low_high(stock, all_dates=all_stocks_cip.columns)
+    state = { 'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
+              'all_stocks_change_in_percent_df': all_stocks_cip,
+              'stock': stock,
+              'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
+            }
+    for date in all_stocks_cip.columns:
+        market_avg = all_stocks_cip[date].mean()
+        sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
+        stock_move = all_stocks_cip.at[stock, date]
+        state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
+                       'stock_move': stock_move, 'date': date })
+        points += sum(map(lambda r: r(state), rules))
+        rows.append({ 'points': points, 'stock': stock, 'date': date })
+
+    df = pd.DataFrame.from_records(rows)
+    df['date'] = pd.to_datetime(df['date'])
+    point_score_plot = plot_series(df, x='date', y='points')
+    return point_score_plot
