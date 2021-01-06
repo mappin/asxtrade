@@ -1,8 +1,7 @@
 from app.models import Quotation, CompanyDetails, all_sector_stocks, company_prices, day_low_high
-from app.plots import *
+from app.plots import plot_series, plot_sector_performance, plot_company_versus_sector, stocks_by_sector
 from app.messages import warning
 from datetime import datetime, timedelta
-import pylru
 import pandas as pd
 import numpy as np
 from collections import defaultdict, OrderedDict
@@ -23,6 +22,7 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
         series30 = series[-30:]
         coefficients, residuals, _, _, _ = np.polyfit(range(n), series, 1, full=True)
         coeff30, resid30, _, _, _ = np.polyfit(range(len(series30)), series30, 1, full=True)
+        assert resid30 is not None
         mse = residuals[0] / n
         nrmse = np.sqrt(mse) / (series.max() - series.min())
         if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): # ignore stocks which are barely moving either way
@@ -201,13 +201,16 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
             state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
                            'stock_move': stock_move, 'date': date })
             for rule_name, rule in str_rules.items():
-                points_by_rule[rule_name] += rule(state)
+                try:
+                    points_by_rule[rule_name] += rule(state)
+                except TypeError: # handle nan's in dataset safely
+                    pass
         d = { 'stock': stock }
         d.update(points_by_rule)
         rows.append(d)
     df = pd.DataFrame.from_records(rows)
     df = df.set_index('stock')
-    print(df)
+    #print(df)
     from pyod.models.iforest import IForest
     clf = IForest()
     clf.fit(df)
@@ -217,72 +220,35 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     print("Found {} outlier stocks".format(len(results)))
     return results
 
-def analyse_point_scores(stock: str, sector_companies, all_stocks_cip: pd.DataFrame, rules=None):
-    """
-    Visualise the stock in terms of point scores as described on the stock view page. Rules to apply
-    can be specified by rules (default rules are provided by rule_*())
-
-    Points are lost for equivalent downturns and the result plotted. All rows in all_stocks_cip will be
-    used to calculate the market average on a given trading day, whilst only sector_companies will
-    be used to calculate the sector average. A utf-8 base64 encoded plot image is returned
-    """
-    assert len(stock) >= 3
+def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_size=14):
     assert all_stocks_cip is not None
-    if rules is None:
-        rules = default_point_score_rules()
+    assert sector_companies is not None
+
+    if len(sector_companies) == 0:
+       return None, None
+
+    cip = all_stocks_cip.filter(items=sector_companies, axis='index')
+    cip = cip.fillna(0.0)
+    #assert len(cip) == len(sector_companies) # may fail when some stocks missing due to delisted etc.
     rows = []
-    points = 0
-    day_low_high_df = day_low_high(stock, all_dates=all_stocks_cip.columns)
-    state = { 'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
-              'all_stocks_change_in_percent_df': all_stocks_cip,
-              'stock': stock,
-              'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
-            }
-    for date in all_stocks_cip.columns:
-        market_avg = all_stocks_cip[date].mean()
-        sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
-        stock_move = all_stocks_cip.at[stock, date]
-        state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
-                       'stock_move': stock_move, 'date': date })
-        points += sum(map(lambda r: r(state), rules))
-        rows.append({ 'points': points, 'stock': stock, 'date': date })
-
+    cum_sum = defaultdict(float)
+    stock_versus_sector = []
+    # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
+    best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
+    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
+        for asx_code, daily_change in cip[day].iteritems():
+            cum_sum[asx_code] += daily_change
+        n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
+        n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
+        n_unchanged = len(cip) - n_pos - n_neg
+        rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
+        stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
+        stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
+        if stock != best_stock_in_sector:
+            stock_versus_sector.append({ 'group': '{} (best in {})'.format(best_stock_in_sector, sector), 'value': cum_sum[best_stock_in_sector], 'date': day})
     df = pd.DataFrame.from_records(rows)
-    df['date'] = pd.to_datetime(df['date'])
-    point_score_plot = plot_series(df, x='date', y='points')
-    return point_score_plot
 
-def analyse_sector(stock, sector, all_stocks_cip, window_size=14):
-    assert all_stocks_cip is not None
-
-    sector_companies = all_sector_stocks(sector) if sector else [] # ETFs dont have a sector for now...
-    if len(sector_companies) > 0:
-       cip = all_stocks_cip.filter(items=sector_companies, axis='index')
-       cip = cip.fillna(0.0)
-       #assert len(cip) == len(sector_companies) # may fail when some stocks missing due to delisted etc.
-       rows = []
-       cum_sum = defaultdict(float)
-       stock_versus_sector = []
-       # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
-       best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
-       for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-           for asx_code, daily_change in cip[day].iteritems():
-               cum_sum[asx_code] += daily_change
-           n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
-           n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
-           n_unchanged = len(cip) - n_pos - n_neg
-           rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
-           stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
-           stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
-           if stock != best_stock_in_sector:
-               stock_versus_sector.append({ 'group': '{} (best in {})'.format(best_stock_in_sector, sector), 'value': cum_sum[best_stock_in_sector], 'date': day})
-       df = pd.DataFrame.from_records(rows)
-
-       sector_momentum_plot = plot_sector_performance(df, sector, window_size=window_size)
-       stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
-       c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
-       point_score_plot = analyse_point_scores(stock, sector_companies, all_stocks_cip)
-    else:
-       c_vs_s_plot = sector_momentum_plot = point_score_plot = None
-
-    return c_vs_s_plot, sector_momentum_plot, point_score_plot
+    sector_momentum_plot = plot_sector_performance(df, sector, window_size=window_size)
+    stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
+    c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
+    return c_vs_s_plot, sector_momentum_plot
