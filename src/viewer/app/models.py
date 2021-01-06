@@ -245,7 +245,7 @@ def all_sectors():
 
 def all_sector_stocks(sector_name):
     """
-    Return a queryset with all stocks in the specified sector
+    Return a queryset with ASX code for every stock in the specified sector
     """
     assert sector_name is not None and len(sector_name) > 0
     stocks = CompanyDetails.objects.order_by('asx_code') \
