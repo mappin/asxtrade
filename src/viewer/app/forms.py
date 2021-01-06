@@ -11,7 +11,7 @@ def is_valid_sector(value):
     return list(CompanyDetails.objects.mongo_distinct('sector_name')).count(value) > 0
 
 class SectorSearchForm(forms.Form):
-    sector = forms.ChoiceField(choices=all_sectors, required=True, validators=[is_not_blank, is_valid_sector])
+    sector = forms.ChoiceField(choices=all_sectors(), required=True, validators=[is_not_blank, is_valid_sector])
     best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")
     worst10 = forms.BooleanField(required=False, label="Worst 10 performers (past 3 months)")
 
