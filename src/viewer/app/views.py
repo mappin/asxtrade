@@ -97,7 +97,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-yield'
     paginate_by = 50
-    ordering = ('-annual_dividend_yield', 'asx_code') # keep pagination happy, but not used by get_queryset()
+    ordering = ('asx_code') # keep pagination happy, but not used by get_queryset()
     as_at_date = None
     n_top_bottom = 20
 
@@ -136,8 +136,12 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
             results = results.filter(pe__gte=kwargs.get('min_pe'))
         if 'max_pe' in kwargs:
             results = results.filter(pe__lt=kwargs.get('max_pe'))
-
-        results = results.order_by(*self.ordering)
+        if 'min_eps_aud' in kwargs:
+            results = results.filter(eps__gte=kwargs.get('min_eps_aud'))
+        sort_by = self.request.GET.get('sort_by') or '-annual_dividend_yield'
+        sort_tuple = tuple(sort_by.split(","))
+        print(sort_tuple)
+        results = results.order_by(*sort_tuple)
 
         return results
 
@@ -227,10 +231,10 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         sector_companies = list(all_sector_stocks(sector))
         c_vs_s_plot, sector_momentum_plot = analyse_sector(stock, sector, sector_companies, 
                                                             all_stocks_cip, window_size=window_size)
-        point_score_plot = plot_point_scores(stock, sector_companies, 
+        point_score_plot, net_rule_contributors_plot = plot_point_scores(stock, sector_companies, 
                                                 all_stocks_cip, default_point_score_rules())
    else:
-        c_vs_s_plot = sector_momentum_plot = point_score_plot = None
+        c_vs_s_plot = sector_momentum_plot = point_score_plot = net_rule_contributors_plot = None
         
    # key indicator performance over past 90 days (for now): pe, eps, yield etc.
    key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
@@ -251,7 +255,9 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
        'monthly_highest_price_plot_title': 'Maximum price each month trend',
        'monthly_highest_price_plot': monthly_maximum_plot,
        'point_score_plot': point_score_plot,
-       'point_score_plot_title': 'Points score due to price movements'
+       'point_score_plot_title': 'Points score due to price movements',
+       'net_contributors_plot': net_rule_contributors_plot,
+       'net_contributors_plot_title': 'Contributions to point score by rule'
    }
    return render(request, "stock_view.html", context=context)
 
@@ -466,10 +472,12 @@ def show_matching_companies(matching_companies, title, heatmap_title, user_purch
     Support function to public-facing views to eliminate code redundancy
     """
     assert isinstance(title, str) and isinstance(heatmap_title, str)
+    sort_by = request.GET.get('sort_by') or 'asx_code'
+    info(request, "Sorting by {}".format(sort_by))
 
     if len(matching_companies) > 0:
         stocks_queryset, date = latest_quote(matching_companies)
-        stocks_queryset = stocks_queryset.order_by('asx_code')
+        stocks_queryset = stocks_queryset.order_by(sort_by)
         print("Found {} quotes for {} stocks".format(stocks_queryset.count(), len(matching_companies)))
 
         # paginate results for 50 stocks per page

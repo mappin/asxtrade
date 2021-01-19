@@ -6,6 +6,27 @@
     <div class="row mt-2"><p>No stocks to display.</p></div>
 {% else %}
     <div class="row mt-2">
+        <form action="{{ request.path }}" method="GET">
+            Sort by <select name="sort_by" id="sort_by" onchange="this.form.submit()">
+                <option value="asx_code">ASX code</option>
+                <option value="-eps">Earnings per share</option>
+                <option value="-annual_dividend_yield">Dividend yield</option>
+                <option value="pe">P/E</option>
+                <option value="change_in_percent">Daily change (%)</option>
+                <option value="change_price">Daily change ($)</option>
+            </select>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+        function set_selected(default_to_set) {
+            $('#sort_by').val(default_to_set)
+        }
+        var urlParams = new URLSearchParams(window.location.search);
+        set_selected(urlParams.get('sort_by'))
+    </script>
+    
+    <div class="row mt-2">
         <table style="width: 100%">
            <tr>
               <th>ASX Code</th>
@@ -35,7 +56,7 @@
                   <td>{{ stock.last_price }}</td>
                   <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
                   <td align="center">{{ stock.volume_as_millions }}</td>
-                  <td align="right">{{ stock.eps|floatformat }}</td>
+                  <td align="right">{{ stock.eps_as_cents|floatformat }}</td>
                   <td align="center">{{ stock.pe|floatformat }}</td>
                   <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
                   <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
@@ -58,8 +79,8 @@
     <div class="row pagination mt-4">
         <span class="step-links">
             {% if page_obj.has_previous %}
-                <a href="?page=1" class="btn btn-primary">&laquo; first</a>
-                <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-primary">previous</a>
+                <a href="?page=1" class="btn btn-primary" rel="keep-params">&laquo; first</a>
+                <a href="?page={{ page_obj.previous_page_number }}" rel="keep-params" class="btn btn-primary">previous</a>
             {% endif %}
 
             <span class="current">
@@ -67,8 +88,8 @@
             </span>
 
             {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="btn btn-primary">next</a>
-                <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-primary">last &raquo;</a>
+                <a href="?page={{ page_obj.next_page_number }}" rel="keep-params" class="btn btn-primary">next</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}" rel="keep-params" class="btn btn-primary">last &raquo;</a>
             {% endif %}
         </span>
         {% if virtual_purchases %}
@@ -88,6 +109,23 @@
         </span>
         {% endif %}
     </div>
+
+    <script type="text/javascript">
+        // all <a> tags containing a certain rel=""
+        $("a[rel~='keep-params']").click(function(e) {
+            e.preventDefault();
+
+            var params = new URLSearchParams(window.location.search.substr(1));
+            params.delete("page");  // remove existing page query param (if any)
+            var dest = $(this).attr('href') + '&' + params.toString();
+            console.log(dest)
+
+            // in my experience, a short timeout has helped overcome browser bugs
+            window.setTimeout(function() {
+                window.location.href = dest;
+            }, 100);
+        });
+    </script>
 {% endif %}
 
 {% if sentiment_heatmap is None %}
