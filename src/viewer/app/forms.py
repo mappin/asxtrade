@@ -20,6 +20,7 @@ class DividendSearchForm(forms.Form):
     max_yield = forms.FloatField(required=False, min_value=0.0, max_value=1000.0, initial=100.0)
     min_pe = forms.FloatField(required=False, min_value=0.0, initial=0.0, label="Min P/E")
     max_pe = forms.FloatField(required=False, max_value=1000.0, initial=30.0, label="Max P/E")
+    min_eps_aud = forms.FloatField(required=False, min_value=-1000.0, initial=0.01, label="Min EPS ($AUD)")
 
 class CompanySearchForm(forms.Form):
     name = forms.CharField(required=False)

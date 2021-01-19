@@ -9,7 +9,7 @@ import pandas as pd
 import base64
 import io
 from datetime import datetime
-from collections import Counter
+from collections import Counter, defaultdict
 
 
 def price_change_bins():
@@ -512,6 +512,7 @@ def plot_point_scores(stock: str, sector_companies,
               'stock': stock,
               'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
             }
+    net_points_by_rule = defaultdict(int)
     for date in all_stocks_cip.columns:
         market_avg = all_stocks_cip[date].mean()
         sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
@@ -519,9 +520,26 @@ def plot_point_scores(stock: str, sector_companies,
         state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
                        'stock_move': stock_move, 'date': date })
         points += sum(map(lambda r: r(state), rules))
+        for r in rules:
+            k = r.__name__
+            if k.startswith("rule_"):
+                k = k[5:]
+            net_points_by_rule[k] += r(state)
         rows.append({ 'points': points, 'stock': stock, 'date': date })
 
     df = pd.DataFrame.from_records(rows)
     df['date'] = pd.to_datetime(df['date'])
     point_score_plot = plot_series(df, x='date', y='points')
-    return point_score_plot
+
+    rows = []
+    for k,v in net_points_by_rule.items():
+        rows.append({ 'rule': str(k), 'net_points': v})
+    df = pd.DataFrame.from_records(rows)
+    net_rule_contributors_plot = (p9.ggplot(df, p9.aes(x='rule', y='net_points'))
+            + p9.labs(x="Rule", y="Contribution to points by rule")
+            + p9.geom_bar(stat="identity")
+            + p9.theme(axis_text_y = p9.element_text(size=7),
+                       subplots_adjust={'left': 0.2})
+            + p9.coord_flip()
+    )
+    return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)

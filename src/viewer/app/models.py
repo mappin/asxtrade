@@ -82,6 +82,11 @@ class Quotation(model.Model):
             return False
         return len(self.error_code) > 0
 
+    def eps_as_cents(self):
+        if any([self.is_error(), self.eps is None]):
+            return ""
+        return self.eps * 100.0
+        
     def volume_as_millions(self):
         """
         Return the volume as a formatted string (rounded to 2 decimal place)

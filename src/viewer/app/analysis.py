@@ -83,9 +83,10 @@ def rule_market_avg(state: dict):
 
     move = state.get('stock_move')
     market_avg = state.get('market_avg')
+    ret = 0
     if abs(move) >= abs(market_avg):
-        return np.sign(move) * 2
-    return 0
+        ret = np.sign(move) * 2
+    return ret
 
 def rule_sector_avg(state: dict):
     """
