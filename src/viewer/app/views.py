@@ -97,13 +97,15 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-yield'
     paginate_by = 50
-    ordering = ('asx_code') # keep pagination happy, but not used by get_queryset()
+    ordering = () # keep pagination happy, but not used by get_queryset()
     as_at_date = None
     n_top_bottom = 20
 
     def render_to_response(self, context):
-        qs = context['paginator'].object_list.all() # all() to get a fresh queryset instance
-        qs = list(qs.values_list('asx_code', flat=True))
+        # all() to get a fresh queryset instance
+        vec = context['paginator'].object_list.all()
+        #print(vec)
+        qs = [stock.asx_code for stock in vec ]
         if len(qs) == 0:
             warning(self.request, "No stocks to report")
             sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
