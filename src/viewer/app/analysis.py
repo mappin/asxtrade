@@ -1,10 +1,16 @@
 from app.models import Quotation, CompanyDetails, all_sector_stocks, company_prices, day_low_high
-from app.plots import plot_series, plot_sector_performance, plot_company_versus_sector, stocks_by_sector
+from app.plots import plot_series, plot_sector_performance, plot_company_versus_sector, plot_as_base64, stocks_by_sector, plot_as_inline_html_data
 from app.messages import warning
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from collections import defaultdict, OrderedDict
+from pypfopt.expected_returns import mean_historical_return
+from pypfopt.risk_models import CovarianceShrinkage
+from pypfopt.plotting import plot_covariance
+from pypfopt.hierarchical_portfolio import HRPOpt
+from pypfopt.expected_returns import returns_from_prices
 
 def as_css_class(thirty_day_slope, three_hundred_day_slope):
     if thirty_day_slope > 0.0 and three_hundred_day_slope < 0.0:
@@ -253,3 +259,58 @@ def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_
     stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
     c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
     return c_vs_s_plot, sector_momentum_plot
+
+def optimise_portfolio(stocks, desired_dates):
+    # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
+    df = company_prices(stocks, 
+                        all_dates=desired_dates, 
+                        fail_missing_months=False)
+    df = df.transpose()
+    #print(df)
+    mu = mean_historical_return(df)
+    s = CovarianceShrinkage(df).ledoit_wolf()
+    returns = returns_from_prices(df, log_returns=False)
+    # drop columns were there is no activity (ie. same value) in the observation period
+    cols_to_drop = returns.columns[returns.nunique() < 30]
+    print("Dropping due to inactivity: {}".format(cols_to_drop))
+    returns = returns.drop(columns=cols_to_drop)
+    # drop columns with very low variance
+    v = returns.var()
+    #print(v)
+    low_var = v[v < 0.0001]
+    #print(low_var.index)
+    returns = returns.drop(columns=low_var.index)
+    ef = HRPOpt(returns=returns)
+    ef.optimize()
+    fig, ax = plt.subplots()
+
+    cleaned_weights = ef.clean_weights()
+    # sort the clean weights by decreasing weight
+    cleaned_weights = OrderedDict(sorted(filter(lambda t: t[1] > 0.005, cleaned_weights.items()), key=lambda x: -x[1]))
+    performance = ef.portfolio_performance()
+    ret_tangent, std_tangent, _ = ef.portfolio_performance()
+    ax.scatter(std_tangent, ret_tangent, marker="*", s=100, c="r", label="Max Sharpe")
+   
+    # Generate random portfolios
+    n_samples = 10000
+    w = np.random.dirichlet(np.ones(len(mu)), n_samples)
+    rets = w.dot(mu)
+    stds = np.sqrt(np.diag(w @ s @ w.T))
+    sharpes = rets / stds
+    ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+
+    # Output
+    ax.set_title("Efficient Frontier with random portfolios")
+    ax.legend()
+    plt.tight_layout()
+    fig = plt.gcf()
+    efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
+    plt.close(fig)
+   
+    # only plot covariance for significant holdings
+    df = df[df.columns.intersection(cleaned_weights.keys())]
+    s = CovarianceShrinkage(df).ledoit_wolf()
+    ax = plot_covariance(s, plot_correlation=True)
+    correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
+    plt.close(ax.figure)
+    return cleaned_weights, performance, efficient_frontier_plot, correlation_plot

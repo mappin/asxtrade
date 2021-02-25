@@ -12,7 +12,7 @@ from app.models import *
 from app.mixins import SearchMixin
 from app.messages import info, warning, add_messages
 from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
-from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, detect_outliers, default_point_score_rules
+from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, optimise_portfolio, detect_outliers, default_point_score_rules
 from app.plots import *
 import pylru
 import numpy as np
@@ -142,7 +142,7 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
             results = results.filter(eps__gte=kwargs.get('min_eps_aud'))
         sort_by = self.request.GET.get('sort_by') or '-annual_dividend_yield'
         sort_tuple = tuple(sort_by.split(","))
-        print(sort_tuple)
+        #print(sort_tuple)
         results = results.order_by(*sort_tuple)
 
         return results
@@ -373,6 +373,30 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
                request,
                extra_context=extra_context
     )
+
+def show_optimised_stocks(request, stocks, past_n_days=365):
+    cleaned_weights, performance, efficient_frontier_plot, correlation_plot = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
+   
+    #print(performance)
+
+    context = {
+       'n_stocks': len(stocks),
+       'cleaned_weights': cleaned_weights,
+       'portfolio_performance': performance,
+       'efficient_frontier_plot': efficient_frontier_plot,
+       'correlation_plot': correlation_plot
+    }
+    return render(request, 'optimised_view.html', context=context)
+
+@login_required
+def show_optimised_sector(request, sector_id=None):
+    sector_name = Sector.objects.get(sector_id=sector_id).sector_name
+    stocks = all_sector_stocks(sector_name)
+    return show_optimised_stocks(request, stocks)
+
+@login_required
+def show_optimised_watchlist(request):
+    return show_optimised_stocks(request, user_watchlist(request.user))
 
 @login_required
 def show_sector_outliers(request, sector_id=None, n_days=30):
