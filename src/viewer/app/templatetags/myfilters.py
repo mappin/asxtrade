@@ -17,3 +17,7 @@ def has_item(d, key):
         return True
     except KeyError:
         return False
+
+@register.filter
+def percentage(value):
+    return value * 100.0

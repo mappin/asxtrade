@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="row">
+<h2>Optimised stock portfolio of {{ n_stocks }} stocks</h2>
+
+<p>
+    Not all stocks are shown - those with very small weights are removed for greater clarity. This analysis
+    only takes price performance into account - dividends are not considered.
+</p>
+</div>
+
+<div class="row">
+    <h3>Efficient frontier cleaned weights</h3>
+
+    <table style="width: 60%" class="mt-4">
+        <tr><th>Stock</th><th>Weight (%)</th></tr>
+        {% for stock, weight in cleaned_weights.items %}
+            <tr>
+                <td><a href="/show/{{ stock }}">{{ stock }}</a></td>
+                <td>{{ weight|percentage|floatformat }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="row">
+    <h3>Optimal portfolio performance</h3>
+
+    <table style="width: 60%" class="mt-4">
+        <tr><td>Expected annual return</td><td>{{ portfolio_performance.0 |percentage|floatformat }}%</td></tr>
+        <tr><td>Annual volatility</td><td>{{ portfolio_performance.1 |percentage|floatformat }}%</td></tr>
+        <tr><td>Sharpe ratio</td><td>{{ portfolio_performance.2 |floatformat }}</tr>
+    </table>
+</div>
+
+<div class="row">
+    <h3>Efficient frontier plot</h3>
+
+    <img src="data:image/png;base64, {{ efficient_frontier_plot }}" alt="Plot of portfolio risk/performance">
+</div>
+
+<div class="row">
+    <h3>Correlation plot</h3>
+    
+    <img src="data:image/png;base64, {{ correlation_plot }}" alt="Plot of stock correlation of optimal portfolio">
+</div>
+
+{% endblock %}

@@ -39,7 +39,9 @@ urlpatterns = [
     path('update/purchase/<slug:slug>', edit_virtual_stock),
     path('delete/purchase/<slug:slug>', delete_virtual_stock),
     path('stats/market-sentiment', market_sentiment),
-    path('data/<slug:dataset>/<str:format>/', download_data, name='data')
+    path('data/<slug:dataset>/<str:format>/', download_data, name='data'),
+    path('show/optimized/watchlist/', show_optimised_watchlist, name='show-optimised-watchlist'),
+    path('show/optimized/sector/<int:sector_id>', show_optimised_sector, name='show-optimised-sector')
 ]
 
 
