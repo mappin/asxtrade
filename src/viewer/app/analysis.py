@@ -270,47 +270,60 @@ def optimise_portfolio(stocks, desired_dates):
     mu = mean_historical_return(df)
     s = CovarianceShrinkage(df).ledoit_wolf()
     returns = returns_from_prices(df, log_returns=False)
-    # drop columns were there is no activity (ie. same value) in the observation period
-    cols_to_drop = returns.columns[returns.nunique() < 30]
-    print("Dropping due to inactivity: {}".format(cols_to_drop))
-    returns = returns.drop(columns=cols_to_drop)
-    # drop columns with very low variance
-    v = returns.var()
-    #print(v)
-    low_var = v[v < 0.0001]
-    #print(low_var.index)
-    returns = returns.drop(columns=low_var.index)
-    ef = HRPOpt(returns=returns)
-    ef.optimize()
-    fig, ax = plt.subplots()
+    messages = [] # messages to add to page to warn users of problems with computational stability/data quality
+    for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (50, 0.005)):
+        n_unique_min, var_min = t
 
-    cleaned_weights = ef.clean_weights()
-    # sort the clean weights by decreasing weight
-    cleaned_weights = OrderedDict(sorted(filter(lambda t: t[1] > 0.005, cleaned_weights.items()), key=lambda x: -x[1]))
-    performance = ef.portfolio_performance()
-    ret_tangent, std_tangent, _ = ef.portfolio_performance()
-    ax.scatter(std_tangent, ret_tangent, marker="*", s=100, c="r", label="Max Sharpe")
-   
-    # Generate random portfolios
-    n_samples = 10000
-    w = np.random.dirichlet(np.ones(len(mu)), n_samples)
-    rets = w.dot(mu)
-    stds = np.sqrt(np.diag(w @ s @ w.T))
-    sharpes = rets / stds
-    ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+        # drop columns were there is no activity (ie. same value) in the observation period
+        cols_to_drop = returns.columns[returns.nunique() < n_unique_min]
+        print("Dropping due to inactivity: {}".format(cols_to_drop))
+        returns = returns.drop(columns=cols_to_drop)
+        # drop columns with very low variance
+        v = returns.var()
+        low_var = v[v < var_min]
+        print("Dropping due to low variance: {}".format(low_var.index))
+        returns = returns.drop(columns=low_var.index)
+        returns = returns.dropna()
+        #with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
+        #    print(v)
+        #    print(returns)
+        ef = HRPOpt(returns=returns)
+        try: 
+            ef.optimize()
+            fig, ax = plt.subplots()
 
-    # Output
-    ax.set_title("Efficient Frontier with random portfolios")
-    ax.legend()
-    plt.tight_layout()
-    fig = plt.gcf()
-    efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
-    plt.close(fig)
-   
-    # only plot covariance for significant holdings
-    df = df[df.columns.intersection(cleaned_weights.keys())]
-    s = CovarianceShrinkage(df).ledoit_wolf()
-    ax = plot_covariance(s, plot_correlation=True)
-    correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
-    plt.close(ax.figure)
-    return cleaned_weights, performance, efficient_frontier_plot, correlation_plot
+            cleaned_weights = ef.clean_weights()
+            # sort the clean weights by decreasing weight
+            cleaned_weights = OrderedDict(sorted(filter(lambda t: t[1] > 0.005, cleaned_weights.items()), key=lambda x: -x[1]))
+            performance = ef.portfolio_performance()
+            ret_tangent, std_tangent, _ = ef.portfolio_performance()
+            ax.scatter(std_tangent, ret_tangent, marker="*", s=100, c="r", label="Max Sharpe")
+        
+            # Generate random portfolios
+            n_samples = 10000
+            w = np.random.dirichlet(np.ones(len(mu)), n_samples)
+            rets = w.dot(mu)
+            stds = np.sqrt(np.diag(w @ s @ w.T))
+            sharpes = rets / stds
+            ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+
+            # Output
+            ax.set_title("Efficient Frontier with random portfolios")
+            ax.legend()
+            plt.tight_layout()
+            fig = plt.gcf()
+            efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
+            plt.close(fig)
+        
+            # only plot covariance for significant holdings
+            df = df[df.columns.intersection(cleaned_weights.keys())]
+            s = CovarianceShrinkage(df).ledoit_wolf()
+            ax = plot_covariance(s, plot_correlation=True)
+            correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
+            plt.close(ax.figure)
+            return cleaned_weights, performance, efficient_frontier_plot, correlation_plot, messages
+        except ValueError:
+            messages.append("Unable to optimise stocks with min_unique={} and var_min={}".format(n_unique_min, var_min))
+            pass # try next iteration
+
+    return (None, None, None, None, messages)

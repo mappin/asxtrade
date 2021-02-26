@@ -259,7 +259,8 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
        'point_score_plot': point_score_plot,
        'point_score_plot_title': 'Points score due to price movements',
        'net_contributors_plot': net_rule_contributors_plot,
-       'net_contributors_plot_title': 'Contributions to point score by rule'
+       'net_contributors_plot_title': 'Contributions to point score by rule',
+        "watched": user_watchlist(request.user)
    }
    return render(request, "stock_view.html", context=context)
 
@@ -375,10 +376,11 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     )
 
 def show_optimised_stocks(request, stocks, past_n_days=365):
-    cleaned_weights, performance, efficient_frontier_plot, correlation_plot = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
-   
-    #print(performance)
+    cleaned_weights, performance, efficient_frontier_plot, correlation_plot, messages = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
 
+    for msg in messages:
+        warning(request, msg)
+    
     context = {
        'n_stocks': len(stocks),
        'cleaned_weights': cleaned_weights,
@@ -386,6 +388,7 @@ def show_optimised_stocks(request, stocks, past_n_days=365):
        'efficient_frontier_plot': efficient_frontier_plot,
        'correlation_plot': correlation_plot
     }
+    add_messages(request, context)
     return render(request, 'optimised_view.html', context=context)
 
 @login_required

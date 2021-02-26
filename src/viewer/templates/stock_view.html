@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="row">
@@ -31,7 +32,15 @@
                 </tr>
             {% for s in securities %}
                 <tr class="small" style="margin-bottom: 5px">
-                  <td>{{ s.asx_code }}</td>
+                  <td> <a href="/watchlist/{{ s.asx_code }}?next={{ request.path }}">
+                    {% if s.asx_code in watched %}
+                        <img src="{% static "star.png" %}" width="12" />
+                    {% else %}
+                        <img src="{% static "empty-star.png" %}" width="12" />
+                    {% endif %}
+                  </a><a href="/purchase/{{ s.asx_code }}?next={{ request.path }}">
+                        <img src="{% static "money.png" %}" width="12" />
+                  </a>&nbsp;{{ s.asx_code }}</td>
                   <td>{{ s.company_name }}</td>
                   <td>{{ s.asx_isin_code }}</td>
                   <td>{{ s.security_name }}</td>
