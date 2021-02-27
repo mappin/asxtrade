@@ -2,18 +2,28 @@
 
 {% block content %}
 
-<div class="row">
-<h2>Optimised stock portfolio of {{ n_stocks }} stocks</h2>
-
-<p>
-    Not all stocks are shown - those with very small weights are removed for greater clarity. This analysis
-    only takes price performance into account - dividends are not considered.
-</p>
+<div class="row mt-2">
+    <h2>Portfolio optimiser: {{ n_stocks }} stocks</h2>
 </div>
 
-<div class="row">
-    <h3>Efficient frontier cleaned weights</h3>
+<div class="row mt-2">
 
+<p>
+    Not all stocks are shown:
+</p>
+<ol>
+    <li>Stocks with little change in prices are removed</li>
+    <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
+    <li>80 stocks are chosen at random from the input stocks and only this is optimised: large pools of stocks are impractical to compute</li>
+    <li>only stock prices are considered: dividends, stock splits, capital raisings and any other events are ignored</li>
+</ol>
+</div>
+
+<div class="row mt-2">
+    <h3>HRP Optimizer cleaned weights</h3>
+</div>
+
+<div class="row mt-4">
     <table style="width: 60%" class="mt-4">
         <tr><th>Stock</th><th>Weight (%)</th></tr>
         {% for stock, weight in cleaned_weights.items %}
@@ -25,9 +35,11 @@
     </table>
 </div>
 
-<div class="row">
+<div class="row mt-2">
     <h3>Optimal portfolio performance</h3>
+</div>
 
+<div class="row mt-2">
     <table style="width: 60%" class="mt-4">
         <tr><td>Expected annual return</td><td>{{ portfolio_performance.0 |percentage|floatformat }}%</td></tr>
         <tr><td>Annual volatility</td><td>{{ portfolio_performance.1 |percentage|floatformat }}%</td></tr>
@@ -35,15 +47,19 @@
     </table>
 </div>
 
-<div class="row">
+<div class="row mt-2">
     <h3>Efficient frontier plot</h3>
+</div>
 
+<div class="mt-2 row">
     <img src="data:image/png;base64, {{ efficient_frontier_plot }}" alt="Plot of portfolio risk/performance">
 </div>
 
-<div class="row">
+<div class="row mt-2">
     <h3>Correlation plot</h3>
-    
+</div>
+
+<div class="mt-2 row">
     <img src="data:image/png;base64, {{ correlation_plot }}" alt="Plot of stock correlation of optimal portfolio">
 </div>
 

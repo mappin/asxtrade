@@ -265,28 +265,31 @@ def optimise_portfolio(stocks, desired_dates):
     df = company_prices(stocks, 
                         all_dates=desired_dates, 
                         fail_missing_months=False)
-    df = df.transpose()
+    stock_prices = df.transpose()
     #print(df)
-    mu = mean_historical_return(df)
-    s = CovarianceShrinkage(df).ledoit_wolf()
-    returns = returns_from_prices(df, log_returns=False)
+    all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
+
     messages = [] # messages to add to page to warn users of problems with computational stability/data quality
-    for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (50, 0.005)):
+    for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         n_unique_min, var_min = t
 
         # drop columns were there is no activity (ie. same value) in the observation period
-        cols_to_drop = returns.columns[returns.nunique() < n_unique_min]
+        cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
+        
         print("Dropping due to inactivity: {}".format(cols_to_drop))
-        returns = returns.drop(columns=cols_to_drop)
         # drop columns with very low variance
-        v = returns.var()
+        v = all_returns.var()
         low_var = v[v < var_min]
         print("Dropping due to low variance: {}".format(low_var.index))
-        returns = returns.drop(columns=low_var.index)
-        returns = returns.dropna()
-        #with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
-        #    print(v)
-        #    print(returns)
+        cols_to_drop.extend(low_var.index)
+        #print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
+        filtered_stocks = stock_prices.drop(columns=cols_to_drop)
+        n_stocks = 80 if len(filtered_stocks.columns) > 80 else len(filtered_stocks.columns)
+        filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
+        returns = returns_from_prices(filtered_stocks, log_returns=False)
+        mu = mean_historical_return(filtered_stocks)
+        s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
+
         ef = HRPOpt(returns=returns)
         try: 
             ef.optimize()
@@ -294,10 +297,13 @@ def optimise_portfolio(stocks, desired_dates):
 
             cleaned_weights = ef.clean_weights()
             # sort the clean weights by decreasing weight
-            cleaned_weights = OrderedDict(sorted(filter(lambda t: t[1] > 0.005, cleaned_weights.items()), key=lambda x: -x[1]))
-            performance = ef.portfolio_performance()
-            ret_tangent, std_tangent, _ = ef.portfolio_performance()
-            ax.scatter(std_tangent, ret_tangent, marker="*", s=100, c="r", label="Max Sharpe")
+            cleaned_weights = OrderedDict(list(sorted(cleaned_weights.items(), key=lambda x: -x[1]))[:30])
+            #print(cleaned_weights)
+            performance_tuple = ef.portfolio_performance()
+            ax.scatter(performance_tuple[1], performance_tuple[0], 
+                       marker="*", s=100, c="r", label="Max Sharpe")
+            ax.set_xlabel("Volatility")
+            ax.set_ylabel("Returns (%)")
         
             # Generate random portfolios
             n_samples = 10000
@@ -315,15 +321,17 @@ def optimise_portfolio(stocks, desired_dates):
             efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
             plt.close(fig)
         
-            # only plot covariance for significant holdings
-            df = df[df.columns.intersection(cleaned_weights.keys())]
-            s = CovarianceShrinkage(df).ledoit_wolf()
-            ax = plot_covariance(s, plot_correlation=True)
+            # only plot covariances for significant holdings
+            #assert covar_stocks.isna().sum() == 0 and covar_stocks.isnull().sum() == 0
+            m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())]).ledoit_wolf()
+            print(m)
+            ax = plot_covariance(m, plot_correlation=True)
             correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
             plt.close(ax.figure)
-            return cleaned_weights, performance, efficient_frontier_plot, correlation_plot, messages
-        except ValueError:
-            messages.append("Unable to optimise stocks with min_unique={} and var_min={}".format(n_unique_min, var_min))
+            return cleaned_weights, performance_tuple, efficient_frontier_plot, correlation_plot, messages
+        except ValueError as ve:
+            messages.append("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={}".format(n_unique_min, var_min, len(returns.columns)))
             pass # try next iteration
 
+    print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages)
