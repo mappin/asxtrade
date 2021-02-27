@@ -20,4 +20,7 @@ def has_item(d, key):
 
 @register.filter
 def percentage(value):
-    return value * 100.0
+    try:
+        return value * 100.0
+    except TypeError:
+        return 0.0
