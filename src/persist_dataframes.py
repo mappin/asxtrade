@@ -112,7 +112,7 @@ if __name__ == "__main__":
    a.add_argument("--dbuser", **dict_args)
    a.add_argument("--dbpassword", help="MongoDB password for user", type=str, required=True)
    a.add_argument("--month", help="Month of year 1..12", required=True, type=int)
-   a.add_argument("--year", help="Year to load [2020]", default=2020, type=int)
+   a.add_argument("--year", help="Year to load [2021]", default=2021, type=int)
    a.add_argument("--status", help="Status of matrix eg. INCOMPLETE or FINAL", required=True, type=str)
    args = a.parse_args()
 
