@@ -375,7 +375,17 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
                extra_context=extra_context
     )
 
-def show_optimised_stocks(request, stocks, past_n_days=365):
+def show_optimised_stocks(request, stocks, past_n_days=365, exclude=None):
+    """
+       Backend function to implement function-based views. Default is to use past year of data
+       and perform HRP Optimisation
+    """
+    validate_user(request.user)
+
+    if exclude is not None:
+        if isinstance(exclude, str):
+            exclude = exclude.split(",")
+        stocks = set(stocks).difference(exclude)
     cleaned_weights, performance, efficient_frontier_plot, correlation_plot, messages = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
 
     for msg in messages:
@@ -392,14 +402,18 @@ def show_optimised_stocks(request, stocks, past_n_days=365):
     return render(request, 'optimised_view.html', context=context)
 
 @login_required
-def show_optimised_sector(request, sector_id=None):
+def show_optimised_sector(request, sector_id=None, exclude=None):
     sector_name = Sector.objects.get(sector_id=sector_id).sector_name
     stocks = all_sector_stocks(sector_name)
-    return show_optimised_stocks(request, stocks)
+    return show_optimised_stocks(request, stocks, exclude=exclude)
 
 @login_required
-def show_optimised_watchlist(request):
-    return show_optimised_stocks(request, user_watchlist(request.user))
+def show_optimised_watchlist(request, exclude=None):
+    return show_optimised_stocks(request, user_watchlist(request.user), exclude=exclude)
+
+@login_required
+def show_optimised_etfs(request, exclude=None):
+    return show_optimised_stocks(request, all_etfs(), exclude=exclude)
 
 @login_required
 def show_sector_outliers(request, sector_id=None, n_days=30):
