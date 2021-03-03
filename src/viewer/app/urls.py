@@ -41,7 +41,11 @@ urlpatterns = [
     path('stats/market-sentiment', market_sentiment),
     path('data/<slug:dataset>/<str:format>/', download_data, name='data'),
     path('show/optimized/watchlist/', show_optimised_watchlist, name='show-optimised-watchlist'),
-    path('show/optimized/sector/<int:sector_id>', show_optimised_sector, name='show-optimised-sector')
+    path('show/optimized/watchlist/<str:exclude>', show_optimised_watchlist, name='show-optimised-watchlist'),
+    path('show/optimized/sector/<int:sector_id>/', show_optimised_sector, name='show-optimised-sector'),
+    path('show/optimized/sector/<int:sector_id>/<str:exclude>', show_optimised_sector, name='show-optimised-sector'),
+    path('show/optimized/etfs/', show_optimised_etfs, name='show-optimised-etfs'),
+    path('show/optimized/etfs/<str:exclude>', show_optimised_etfs, name='show-optimised-etfs')
 ]
 
 
