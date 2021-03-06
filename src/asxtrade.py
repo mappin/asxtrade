@@ -6,6 +6,7 @@ import dateutil
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from datetime import datetime, timedelta, timezone, date
+from utils import *
 import json
 import csv
 import olefile
@@ -98,7 +99,6 @@ def validate_prices(dataframe):
     print(context.get_available_data_asset_names())
     #context.
 
-
 def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True):
     assert isinstance(config, dict)
     #assert len(available_stocks) > 10 # dont do this anymore, since we might have to refetch a few failed stocks
@@ -132,6 +132,10 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
                 if key in d:
                     d[key] = dateutil.parser.parse(d[key]) # NB: gonna be slow since the auto-format magic has to do it thing... but safer for common formats
             #assert len(d.keys()) > 10
+            fix_percentage(d, 'change_in_percent')
+            fix_percentage(d, 'previous_day_percentage_change')
+            print(d)
+            exit(1)
             if df is None:
                 df = pd.DataFrame(columns=d.keys())
             row = pd.Series(d, name=asx_code)
