@@ -275,8 +275,9 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         sector_companies = list(all_sector_stocks(sector))
         c_vs_s_plot, sector_momentum_plot = analyse_sector(stock, sector, sector_companies, 
                                                             all_stocks_cip, window_size=window_size)
-        point_score_plot, net_rule_contributors_plot = plot_point_scores(stock, sector_companies, 
-                                                all_stocks_cip, default_point_score_rules())
+        t = plot_point_scores(stock, sector_companies, 
+                              all_stocks_cip, default_point_score_rules())
+        point_score_plot, net_rule_contributors_plot = t
     else:
         c_vs_s_plot = sector_momentum_plot = point_score_plot = net_rule_contributors_plot = None
         
