@@ -136,7 +136,7 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
     plot = (p9.ggplot(df, p9.aes('stock', 'value', fill='stock'))
             + p9.geom_bar(stat='identity')
             + p9.labs(x='', y='$ AUD')
-            + p9.facet_grid('contribution ~ field')
+            + p9.facet_grid('contribution ~ field', scales="free_y")
             + p9.theme(legend_position='none', figure_size=figure_size)
     )
     profit_contributors = plot_as_inline_html_data(plot)
