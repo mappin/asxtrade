@@ -273,6 +273,22 @@ def desired_dates(today=None, start_date=None): # today is provided as keyword a
     assert len(all_dates) > 0
     return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
+def all_stocks():
+    all_securities = Security.objects.values_list('asx_code', flat=True)
+    return set(all_securities)
+
+def find_movers(threshold, desired_dates):
+    """
+    Return a dataframe with row index set to ASX ticker symbols and the only column set to 
+    the sum over all desired dates for percentage change in the stock price. A negative sum
+    implies a decrease, positive an increase in price over the observation period.
+    """
+    assert threshold >= 0.0
+    assert desired_dates is not None
+    cip = company_prices(all_stocks(), desired_dates, fields='change_in_percent')
+    movements = cip.sum(axis=1)
+    return movements[movements.abs() >= threshold]
+
 def find_named_companies(wanted_name, wanted_activity):
     ret = set()
     if len(wanted_name) > 0:

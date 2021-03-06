@@ -1,10 +1,9 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from app.models import CompanyDetails, all_sectors
-from pylru import lrudecorator
 
 def is_not_blank(value):
-    if value == None or len(value) < 1 or len(value.strip()) < 1:
+    if value is None or len(value) < 1 or len(value.strip()) < 1:
         raise ValidationError("Invalid value - cannot be blank")
 
 def is_valid_sector(value):
@@ -25,3 +24,9 @@ class DividendSearchForm(forms.Form):
 class CompanySearchForm(forms.Form):
     name = forms.CharField(required=False)
     activity = forms.CharField(required=False)
+
+class MoverSearchForm(forms.Form):
+    threshold = forms.FloatField(required=True, min_value=0.0, max_value=10000.0, initial=50.0)
+    timeframe_in_days = forms.IntegerField(required=True, min_value=1, max_value=365, initial=7, label="Timeframe (days)")
+    show_increasing = forms.BooleanField(required=False, initial=True, label="Increasing")
+    show_decreasing = forms.BooleanField(required=False, initial=True, label="Decreasing")
