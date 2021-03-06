@@ -36,7 +36,7 @@ class Quotation(model.Model):
     annual_dividend_yield = model.FloatField()
     average_daily_volume = model.IntegerField()
     bid_price = model.FloatField()
-    change_in_percent = model.TextField()
+    change_in_percent = model.FloatField()
     change_price = model.FloatField()
     code = model.TextField(blank=False, null=False, max_length=20)
     day_high_price = model.FloatField()
@@ -54,7 +54,7 @@ class Quotation(model.Model):
     open_price = model.FloatField()
     pe = model.FloatField()
     previous_close_price = model.FloatField()
-    previous_day_percentage_change = model.TextField(max_length=100)
+    previous_day_percentage_change = model.FloatField()
     suspected = model.BooleanField()
     volume = model.IntegerField()
     year_high_date = model.DateField()
@@ -67,15 +67,6 @@ class Quotation(model.Model):
     def __str__(self):
         assert self is not None
         return str(model_to_dict(self))
-
-    def percent_change(self):
-        if self.is_error():
-            return 0.0
-
-        # since the ASX uses a string field, we auto-convert to float on the fly
-        pc = self.change_in_percent.rstrip('%')
-        pc = pc.replace(',', '')
-        return float(pc)
 
     def is_error(self):
         if self.error_code is None:
