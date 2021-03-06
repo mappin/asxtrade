@@ -186,6 +186,9 @@ def all_stocks(request):
                          .exclude(last_price__isnull=True) \
                          .exclude(volume=0) \
                          .order_by('-annual_dividend_yield', '-last_price', '-volume')
+   sort_by = request.GET.get('sort_by', None) 
+   if sort_by is not None:
+       qs = qs.order_by(sort_by)
    assert qs is not None
    paginator = Paginator(qs, 50)
    page_number = request.GET.get('page', 1)
