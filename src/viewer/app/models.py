@@ -277,7 +277,7 @@ def all_stocks():
     all_securities = Security.objects.values_list('asx_code', flat=True)
     return set(all_securities)
 
-def find_movers(threshold, desired_dates):
+def find_movers(threshold, required_dates):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
     the sum over all desired dates for percentage change in the stock price. A negative sum
@@ -285,7 +285,7 @@ def find_movers(threshold, desired_dates):
     """
     assert threshold >= 0.0
     assert desired_dates is not None
-    cip = company_prices(all_stocks(), desired_dates, fields='change_in_percent')
+    cip = company_prices(all_stocks(), required_dates, fields='change_in_percent')
     movements = cip.sum(axis=1)
     return movements[movements.abs() >= threshold]
 
