@@ -25,6 +25,7 @@ urlpatterns = [
     path('search/by-sector', sector_search),
     path('search/by-yield', dividend_search),
     path('search/by-company', company_search),
+    path('search/movers', mover_search),
     path('show/increasing-eps', show_increasing_eps_stocks),  # NB: order important here!
     path('show/increasing-yield', show_increasing_yield_stocks),
     path('show/trends', show_trends),

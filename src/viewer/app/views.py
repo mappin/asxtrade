@@ -11,10 +11,9 @@ from collections import defaultdict
 from app.models import *
 from app.mixins import SearchMixin
 from app.messages import info, warning, add_messages
-from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm
+from app.forms import SectorSearchForm, DividendSearchForm, CompanySearchForm, MoverSearchForm
 from app.analysis import analyse_sector, calculate_trends, rank_cumulative_change, optimise_portfolio, detect_outliers, default_point_score_rules
 from app.plots import *
-import pylru
 import numpy as np
 
 class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, MultipleObjectTemplateResponseMixin, FormView):
@@ -46,49 +45,49 @@ class SectorSearchView(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, Mul
         return super().render_to_response(context)
 
     def get_queryset(self, **kwargs):
-       # if not specified, we default to Comms Services
-       sector = kwargs.get('sector', 'Communication Services')
-       sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
-       if kwargs == {}:
-           self.template_values_dict.update({ 'top10': None, 'bottom10': None, 'sector_id': sector_id, 'sector_name': sector })
-           return Quotation.objects.none()
-       all_dates = all_available_dates()
-       wanted_stocks = set(all_sector_stocks(sector))
-       n_days = self.template_values_dict.get('n_days', 30)
-       n_top_bottom = self.template_values_dict.get('n_top_bottom', 20)
-       wanted_dates = desired_dates(start_date=n_days)
-       heatmap, df, top10, bottom10, _ = plot_heatmap(wanted_stocks,
-                                                      all_dates=wanted_dates,
-                                                      n_top_bottom=n_top_bottom)
+        # if not specified, we default to Comms Services
+        sector = kwargs.get('sector', 'Communication Services')
+        sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
+        if kwargs == {}:
+            self.template_values_dict.update({'top10': None, 'bottom10': None, 'sector_id': sector_id, 'sector_name': sector})
+            return Quotation.objects.none()
+        all_dates = all_available_dates()
+        wanted_stocks = set(all_sector_stocks(sector))
+        n_days = self.template_values_dict.get('n_days', 30)
+        n_top_bottom = self.template_values_dict.get('n_top_bottom', 20)
+        wanted_dates = desired_dates(start_date=n_days)
+        heatmap, df, top10, bottom10, _ = plot_heatmap(wanted_stocks,
+                                                       all_dates=wanted_dates,
+                                                       n_top_bottom=n_top_bottom)
 
-       if any(['best10' in kwargs, 'worst10' in kwargs]):
-           wanted = set()
-           restricted = False
-           if kwargs.get('best10', False):
-               wanted = wanted.union(top10.index)
-               restricted = True
-           if kwargs.get('worst10', False):
-               wanted = wanted.union(bottom10.index)
-               restricted = True
-           if restricted:
-               wanted_stocks = wanted_stocks.intersection(wanted)
-           # FALLTHRU...
+        if any(['best10' in kwargs, 'worst10' in kwargs]):
+            wanted = set()
+            restricted = False
+            if kwargs.get('best10', False):
+                wanted = wanted.union(top10.index)
+                restricted = True
+            if kwargs.get('worst10', False):
+                wanted = wanted.union(bottom10.index)
+                restricted = True
+            if restricted:
+                wanted_stocks = wanted_stocks.intersection(wanted)
+            # FALLTHRU...
 
-       when_date = all_dates[-1]
-       print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
-       self.template_values_dict.update({
-          'sector_name': sector,
-          'most_recent_date': when_date,
-          'sentiment_heatmap': heatmap,
-          'best_ten': top10,
-          'worst_ten': bottom10,
-          'sector_id': sector_id,
-          'wanted_stocks': wanted_stocks,
-       })
-       results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=when_date) \
-                                  .exclude(error_code='id-or-code-invalid')
-       results = results.order_by(*self.ordering)
-       return results
+        when_date = all_dates[-1]
+        print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
+        self.template_values_dict.update({
+            'sector_name': sector,
+            'most_recent_date': when_date,
+            'sentiment_heatmap': heatmap,
+            'best_ten': top10,
+            'worst_ten': bottom10,
+            'sector_id': sector_id,
+            'wanted_stocks': wanted_stocks,
+        })
+        results = Quotation.objects.filter(asx_code__in=wanted_stocks, fetch_date=when_date) \
+                                    .exclude(error_code='id-or-code-invalid')
+        results = results.order_by(*self.ordering)
+        return results
 
 sector_search = SectorSearchView.as_view()
 
@@ -97,30 +96,56 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
     template_name = "search_form.html" # generic template, not specific to this view
     action_url = '/search/by-yield'
     paginate_by = 50
-    ordering = () # keep pagination happy, but not used by get_queryset()
+    ordering = ('-annual_dividend_yield',)
     as_at_date = None
     n_top_bottom = 20
 
-    def render_to_response(self, context):
+    def additional_context(self, context):
+        """
+            Return the additional fields to be added to the context by render_to_response(). Subclasses
+            should override this rather than the template design pattern implementation of render_to_response()
+        """
         # all() to get a fresh queryset instance
         vec = context['paginator'].object_list.all()
         #print(vec)
-        qs = [stock.asx_code for stock in vec ]
+        qs = [stock.asx_code for stock in vec]
         if len(qs) == 0:
             warning(self.request, "No stocks to report")
             sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
         else:
             sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(qs, n_top_bottom=self.n_top_bottom)
-        context.update({
-           'most_recent_date': self.as_at_date,
-           'sentiment_heatmap': sentiment_data,
-           'watched': user_watchlist(self.request.user), # to ensure bookmarks are correct
-           'n_top_bottom': self.n_top_bottom,
-           'best_ten': top10,
-           'worst_ten': bottom10,
-           'title': 'Find by dividend yield or P/E',
-           'sentiment_heatmap_title': "Recent sentiment: {} total stocks".format(n_stocks),
-        })
+
+        return {
+            'most_recent_date':  self.as_at_date,
+            'sentiment_heatmap': sentiment_data,
+            'watched':           user_watchlist(self.request.user), # to ensure bookmarks are correct
+            'n_top_bottom':      self.n_top_bottom,
+            'best_ten':          top10,
+            'worst_ten':         bottom10,
+            'title':             'Find by dividend yield or P/E',
+            'sentiment_heatmap_title': "Recent sentiment: {} total stocks".format(n_stocks),
+        }
+
+    def sort_by(self, qs, sort_by):
+        assert qs is not None
+        if sort_by is None:
+            print("Sorting by {}".format(self.ordering))
+            qs = qs.order_by(*self.ordering)
+        else:
+            sort_tuple = tuple(sort_by.split(","))
+            print("Sorting by {}".format(sort_tuple))
+            qs = qs.order_by(*sort_tuple)
+        return qs
+
+    def render_to_response(self, context):
+        """
+        A template design pattern to organise the response. Provides an additional_context()
+        method for subclasses to use. Response is guaranteed to include:
+        1) messages informing the user of issues
+        2) additional context for the django template
+        or an exception raised
+        """
+        context.update(self.additional_context(context))
         add_messages(self.request, context)
         return super().render_to_response(context)
 
@@ -140,25 +165,40 @@ class DividendYieldSearch(SearchMixin, LoginRequiredMixin, MultipleObjectMixin, 
             results = results.filter(pe__lt=kwargs.get('max_pe'))
         if 'min_eps_aud' in kwargs:
             results = results.filter(eps__gte=kwargs.get('min_eps_aud'))
-        sort_by = self.request.GET.get('sort_by') or '-annual_dividend_yield'
-        sort_tuple = tuple(sort_by.split(","))
-        #print(sort_tuple)
-        results = results.order_by(*sort_tuple)
-
-        return results
+        return self.sort_by(results, self.request.GET.get('sort_by'))
 
 dividend_search = DividendYieldSearch.as_view()
 
+class MoverSearch(DividendYieldSearch):
+    form_class = MoverSearchForm
+    action_url = "/search/movers"
+
+    def additional_context(self, context):
+        return { 'title': 'Find companies with movement (%) within timeframe' }
+
+    def get_queryset(self, **kwargs):
+        if any([kwargs == {}, 'threshold' not in kwargs, 'timeframe_in_days' not in kwargs]):
+            return Quotation.objects.none()
+        threshold_percentage = kwargs.get('threshold')
+        timeframe_in_days = kwargs.get('timeframe_in_days')
+        user_sort = self.request.GET.get('sort_by')
+        df = find_movers(threshold_percentage, desired_dates(start_date=timeframe_in_days))
+        matching_companies = set()
+        if kwargs.get('show_increasing', False):
+            matching_companies.update(df[df > 0.0].index)
+        if kwargs.get('show_decreasing', False):
+            matching_companies.update(df[df < 0.0].index)
+        results, latest_date = latest_quote(tuple(matching_companies))
+        return self.sort_by(results, user_sort)
+
+mover_search = MoverSearch.as_view()
 
 class CompanySearch(DividendYieldSearch):
     form_class = CompanySearchForm
     action_url = "/search/by-company"
-    paginate_by = 50
 
-    def render_to_response(self, context, **kwargs):
-        result = super().render_to_response(context, **kwargs)
-        context['title'] = 'Find by company name or activity'
-        return result
+    def additional_context(self, context):
+        return { 'title': 'Find by company name or activity' }
 
     def get_queryset(self, **kwargs):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
@@ -169,103 +209,102 @@ class CompanySearch(DividendYieldSearch):
         print("Showing results for {} companies".format(len(matching_companies)))
         self.as_at_date = latest_quotation_date('ANZ')
         results, latest_date = latest_quote(tuple(matching_companies))
-        results = results.order_by(*self.ordering)
-        return results
+        return self.sort_by(results, self.request.GET.get('sort_by'))
 
 company_search = CompanySearch.as_view()
 
 @login_required
 def all_stocks(request):
-   all_dates = all_available_dates()
-   if len(all_dates) < 1:
-       raise Http404("No ASX price data available!")
-   ymd = all_dates[-1]
-   assert isinstance(ymd, str) and len(ymd) > 8
-   qs = Quotation.objects.filter(fetch_date=ymd) \
-                         .exclude(asx_code__isnull=True) \
-                         .exclude(last_price__isnull=True) \
-                         .exclude(volume=0) \
-                         .order_by('-annual_dividend_yield', '-last_price', '-volume')
-   sort_by = request.GET.get('sort_by', None) 
-   if sort_by is not None:
-       qs = qs.order_by(sort_by)
-   assert qs is not None
-   paginator = Paginator(qs, 50)
-   page_number = request.GET.get('page', 1)
-   page_obj = paginator.get_page(page_number)
-   context = {
-       "title": "ASX stocks by dividend yield",
-       "page_obj": page_obj,
-       "most_recent_date": ymd,
-       "watched": user_watchlist(request.user)
-   }
-   return render(request, "all_stocks.html", context=context)
+    all_dates = all_available_dates()
+    if len(all_dates) < 1:
+        raise Http404("No ASX price data available!")
+    ymd = all_dates[-1]
+    assert isinstance(ymd, str) and len(ymd) > 8
+    qs = Quotation.objects.filter(fetch_date=ymd) \
+                            .exclude(asx_code__isnull=True) \
+                            .exclude(last_price__isnull=True) \
+                            .exclude(volume=0) \
+                            .order_by('-annual_dividend_yield', '-last_price', '-volume')
+    sort_by = request.GET.get('sort_by', None) 
+    if sort_by is not None:
+        qs = qs.order_by(sort_by)
+    assert qs is not None
+    paginator = Paginator(qs, 50)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    context = {
+        "title": "ASX stocks by dividend yield",
+        "page_obj": page_obj,
+        "most_recent_date": ymd,
+        "watched": user_watchlist(request.user)
+    }
+    return render(request, "all_stocks.html", context=context)
 
 @login_required
 def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
-   """
-   Displays a view of a single stock via the stock_view.html template and associated state
-   """
-   validate_stock(stock)
-   validate_user(request.user)
+    """
+    Displays a view of a single stock via the stock_view.html template and associated state
+    """
+    validate_stock(stock)
+    validate_user(request.user)
 
-   window_size = 14 # since must have a full window before computing momentum over sector_n_days
-   stock_dates = desired_dates(start_date=stock_n_days+window_size)
-   wanted_fields = ['last_price', 'volume', 'day_low_price', 'day_high_price', 'eps', 'pe', 'annual_dividend_yield']
-   stock_df = company_prices([stock], all_dates=stock_dates, fields=wanted_fields, fail_missing_months=False)
-   #print(stock_df)
+    window_size = 14 # since must have a full window before computing momentum over sector_n_days
+    stock_dates = desired_dates(start_date=stock_n_days+window_size)
+    wanted_fields = ['last_price', 'volume', 'day_low_price', 'day_high_price', 'eps', 'pe', 'annual_dividend_yield']
+    stock_df = company_prices([stock], all_dates=stock_dates, fields=wanted_fields, fail_missing_months=False)
+    #print(stock_df)
 
-   securities = Security.objects.filter(asx_code=stock)
-   company_details = CompanyDetails.objects.filter(asx_code=stock).first()
-   if company_details is None:
-       warning(request, "No details available for {}".format(stock))
+    securities = Security.objects.filter(asx_code=stock)
+    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
+    if company_details is None:
+        warning(request, "No details available for {}".format(stock))
 
-   n_dates = len(stock_df)
-   if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-       raise Http404("Insufficient price quotes for {} - only {}".format(stock, n_dates))
+    n_dates = len(stock_df)
+    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+        raise Http404("Insufficient price quotes for {} - only {}".format(stock, n_dates))
 
-   # plot relative strength
-   fig = make_rsi_plot(stock, stock_df)
+    # plot relative strength
+    fig = make_rsi_plot(stock, stock_df)
 
-   # show sector performance over past 3 months
-   sector_dates = desired_dates(start_date=180)
-   all_stocks_cip = company_prices(None, all_dates=sector_dates, fail_missing_months=False,
-                                   fields='change_in_percent', fix_missing=False)
-   sector = company_details.sector_name if company_details else None
-   if sector is not None: # not an ETF? ie. sector information available?
+    # show sector performance over past 3 months
+    sector_dates = desired_dates(start_date=180)
+    all_stocks_cip = company_prices(None, all_dates=sector_dates, fail_missing_months=False,
+                                    fields='change_in_percent', fix_missing=False)
+    sector = company_details.sector_name if company_details else None
+    if sector is not None: # not an ETF? ie. sector information available?
         sector_companies = list(all_sector_stocks(sector))
         c_vs_s_plot, sector_momentum_plot = analyse_sector(stock, sector, sector_companies, 
                                                             all_stocks_cip, window_size=window_size)
         point_score_plot, net_rule_contributors_plot = plot_point_scores(stock, sector_companies, 
                                                 all_stocks_cip, default_point_score_rules())
-   else:
+    else:
         c_vs_s_plot = sector_momentum_plot = point_score_plot = net_rule_contributors_plot = None
         
-   # key indicator performance over past 90 days (for now): pe, eps, yield etc.
-   key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
-   # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
-   monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=365)))
+    # key indicator performance over past 90 days (for now): pe, eps, yield etc.
+    key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
+    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
+    monthly_maximum_plot = plot_best_monthly_price_trend(all_quotes(stock, all_dates=desired_dates(start_date=365)))
 
-   # populate template and render HTML page with context
-   context = {
-       'rsi_data': fig,
-       'asx_code': stock,
-       'securities': securities,
-       'cd': company_details,
-       'sector_momentum_plot': sector_momentum_plot,
-       'sector_momentum_title': "{} sector stocks: {} day performance".format(sector, sector_n_days),
-       'company_versus_sector_plot': c_vs_s_plot,
-       'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector),
-       'key_indicators_plot': key_indicator_plot,
-       'monthly_highest_price_plot_title': 'Maximum price each month trend',
-       'monthly_highest_price_plot': monthly_maximum_plot,
-       'point_score_plot': point_score_plot,
-       'point_score_plot_title': 'Points score due to price movements',
-       'net_contributors_plot': net_rule_contributors_plot,
-       'net_contributors_plot_title': 'Contributions to point score by rule',
+    # populate template and render HTML page with context
+    context = {
+        'rsi_data': fig,
+        'asx_code': stock,
+        'securities': securities,
+        'cd': company_details,
+        'sector_momentum_plot': sector_momentum_plot,
+        'sector_momentum_title': "{} sector stocks: {} day performance".format(sector, sector_n_days),
+        'company_versus_sector_plot': c_vs_s_plot,
+        'company_versus_sector_title': '{} vs. {} performance'.format(stock, sector),
+        'key_indicators_plot': key_indicator_plot,
+        'monthly_highest_price_plot_title': 'Maximum price each month trend',
+        'monthly_highest_price_plot': monthly_maximum_plot,
+        'point_score_plot': point_score_plot,
+        'point_score_plot_title': 'Points score due to price movements',
+        'net_contributors_plot': net_rule_contributors_plot,
+        'net_contributors_plot_title': 'Contributions to point score by rule',
         "watched": user_watchlist(request.user)
-   }
-   return render(request, "stock_view.html", context=context)
+    }
+    return render(request, "stock_view.html", context=context)
 
 def save_dataframe_to_file(df, filename, format):
     assert format in ('csv', 'excel', 'tsv', 'parquet')
@@ -479,9 +518,9 @@ def show_purchase_performance(request):
         purchases_to_date = filter(lambda vp: vp.buy_date <= d, purchases)
         for purchase in purchases_to_date:
             if purchase.buy_date == d:
-               portfolio_cost += purchase.amount
-               stock_count[purchase.asx_code] += purchase.n
-               stock_cost[purchase.asx_code] += purchase.amount
+                portfolio_cost += purchase.amount
+                stock_count[purchase.asx_code] += purchase.n
+                stock_cost[purchase.asx_code] += purchase.amount
 
         portfolio_worth = sum(map(lambda t: df.at[t[0], d_str] * t[1], stock_count.items()))
 
