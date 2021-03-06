@@ -1,0 +1,8 @@
+django >= 2.20
+djongo
+pandas >= 1.1.0
+numpy
+matplotlib
+pylru
+fastparquet
+pyportfolioopt
