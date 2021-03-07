@@ -174,7 +174,7 @@ class MoverSearch(DividendYieldSearch):
     action_url = "/search/movers"
 
     def additional_context(self, context):
-        return { 'title': 'Find companies with movement (%) within timeframe' }
+        return {'title': 'Find companies with movement (%) within timeframe'}
 
     def get_queryset(self, **kwargs):
         if any([kwargs == {}, 'threshold' not in kwargs, 'timeframe_in_days' not in kwargs]):
@@ -198,7 +198,7 @@ class CompanySearch(DividendYieldSearch):
     action_url = "/search/by-company"
 
     def additional_context(self, context):
-        return { 'title': 'Find by company name or activity' }
+        return {'title': 'Find by company name or activity'}
 
     def get_queryset(self, **kwargs):
         if kwargs == {} or not any(['name' in kwargs, 'activity' in kwargs]):
