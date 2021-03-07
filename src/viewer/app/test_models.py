@@ -41,3 +41,22 @@ def test_quotation_eps_handling():
     q = Quotation() # eps is None
     assert q.eps is None
     assert q.eps_as_cents() == 0.0
+
+def test_validate_stock():
+    bad_stocks = [None, 'AB', '---']
+    for stock in bad_stocks:
+        with pytest.raises(AssertionError):
+            validate_stock(stock)
+    good_stocks = ['ABC', 'ABCDE', 'AB2', 'abcde']
+    for stock in good_stocks:
+        validate_stock(stock)
+
+def test_validate_date():
+    bad_dates = ['2020-02-', '', None, '20-02-02', '2020-02-1']
+    for d in bad_dates:
+        with pytest.raises(AssertionError):
+            validate_date(d)
+    
+    good_dates = ['2020-02-02', '2020-02-01', '2021-12-31']
+    for d in good_dates:
+        validate_date(d)
