@@ -85,3 +85,10 @@ python3 manage.py runserver # run on local dev. host
  | Performance by sector | ![Pic](https://user-images.githubusercontent.com/11968760/110228446-6a760800-7f55-11eb-9041-786e6d145817.png#thumbnail)|
  | Portfolio optimisation | ![Pic](https://user-images.githubusercontent.com/11968760/110228663-e7ee4800-7f56-11eb-8b7d-edd3a09d7b29.png#thumbnail)
 
+## Testing
+
+TODO FIXME...
+
+## Debugging
+
+Use of the Django Debug Toolbar is strongly recommended, but it does have a known limitation which prevents usage during normal operation due to the use of pandas: see <https://github.com/jazzband/django-debug-toolbar/issues/1053> for details.
