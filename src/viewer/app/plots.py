@@ -2,8 +2,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.analysis import company_prices
-from app.models import stocks_by_sector, desired_dates, day_low_high
+from app.models import stocks_by_sector, desired_dates, day_low_high, company_prices
 import numpy as np
 import pandas as pd
 import base64
