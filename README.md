@@ -87,8 +87,8 @@ python3 manage.py runserver # run on local dev. host
 
 ## Testing
 
-TODO FIXME...
+Tox is used to drive pytest to execute the unit test. Django `manage.py test` is not used. Github Actions is then used to invoke tox for CI/CD for the application and unit tests.
 
 ## Debugging
 
-Use of the Django Debug Toolbar is strongly recommended, but it does have a known limitation which prevents usage during normal operation due to the use of pandas: see <https://github.com/jazzband/django-debug-toolbar/issues/1053> for details.
+Use of the Django Debug Toolbar is strongly recommended, but it does have a known limitation which prevents usage during normal operation due to the use of pandas within asxtrade: see <https://github.com/jazzband/django-debug-toolbar/issues/1053> for details.
