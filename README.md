@@ -18,6 +18,20 @@ Python3 based ASX data download and web application with basic features:
 
  * Visualisations provided by [plotnine](https://github.com/has2k1/plotnine) and [matplotlib](https://github.com/matplotlib/matplotlib)
 
+ ## Disclaimer
+
+This software is provided to you "as-is" and without
+warranty of any kind, express, implied or otherwise, including without
+limitation, any warranty of fitness for a particular purpose. In no event shall
+the author(s) be liable to you or anyone else for any direct, special, incidental,
+indirect or consequential damages of any kind, or any damages whatsoever,
+including without limitation, loss of profit, loss of use, savings or revenue,
+or the claims of third parties, whether or not the author(s) have
+been advised of the possibility of such loss, however caused and on any theory
+of liability, arising out of or in connection with the possession, use or
+performance of this software.
+
+
  ## System Requirements
 
   * Python 3.8
@@ -29,16 +43,25 @@ Python3 based ASX data download and web application with basic features:
   * Other requirements documented in [requirements.txt](./requirements.txt)
 
 
- ## Installation
+## Installation
+
+### Pre-requisite software installation
+
+On the system to run the website, you'll need to install required software:
+~~~~
+git clone https://github.com/ozacas/asxtrade.git
+cd asxtrade
+sudo pip3 install -r requirements.txt
+cd src/viewer # for setting up the website
+~~~~
+
+### Setup MongoDB database server
+
+Next, you'll want to setup a database to store the ASX data: instructions for this can be found at the [MongoDB website](https://docs.mongodb.com/manual/administration/install-community/)
+
+### Setup the website and superuser for administrating the site
 
 ~~~~
-sudo pip3 install -r requirements.txt
-cd src/viewer
-# setup mongodb and create a new database eg. asxtrade
-# will be system specific eg. ubuntu
-sudo apt-get install mongo-db
-# setup newly installed database
-# adjust settings.py eg. DATABASE to point to the new DB and...
 python3 manage.py migrate
 
 python3 manage.py createsuperuser
@@ -46,13 +69,13 @@ python3 manage.py createsuperuser
 python3 manage.py runserver # run on local dev. host
 ~~~~
 
- ## Installing data
+### Installing data
 
   You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run.
 
   Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2020, although ETF data covers a smaller period due to missing code.
 
- ## Features
+## Features
 
  | Feature             | Thumbnail Picture |
  |:--------------------|------------------:|
