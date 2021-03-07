@@ -5,7 +5,7 @@ from datetime import datetime
 def test_validate_stock():
     validate_stock('ANZ') # NB: must not assert
     with pytest.raises(AssertionError):
-         validate_stock('AN')
+        validate_stock('AN')
 
 def test_validate_date():
     validate_date('2020-01-01')
