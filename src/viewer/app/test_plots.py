@@ -1,6 +1,5 @@
 import pytest
-from app.analysis import price_change_bins
-from datetime import datetime
+from app.plots import price_change_bins
 
 def test_price_change_bins():
     bins, labels = price_change_bins()
