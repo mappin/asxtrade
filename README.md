@@ -10,7 +10,13 @@ Python3 based ASX data download and web application with basic features:
 
  * HRP portfolio optimisation using [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html)
 
- * 
+ * Market and per-sector performance incl. top 20/bottom 20
+
+ * Virtual portfolios with trend visualisations, profit/loss by stock
+
+ * Stock point-scoring by rules over time, based on their price performance
+
+ * Visualisations provided by [plotnine](https://github.com/has2k1/plotnine) and [matplotlib](https://github.com/matplotlib/matplotlib)
 
  ## System Requirements
 
@@ -42,12 +48,13 @@ python3 manage.py createsuperuser
 
   You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run.
 
-  Existing data ready to import into mongodb v4.4 can be fetched from [github]() using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/)
+  Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2020, although ETF data covers a smaller period due to missing code.
 
- ## Images
+ ## Features
 
-![watchlist](https://user-images.githubusercontent.com/11968760/91777314-da1bdb00-ec32-11ea-929e-66a1befc0d90.png)
-![key-indicators](https://user-images.githubusercontent.com/11968760/91777703-ed7b7600-ec33-11ea-87bf-b647033ed06f.png)
-![market-sentiment](https://user-images.githubusercontent.com/11968760/91778464-e48ba400-ec35-11ea-9b47-413601da6fd8.png)
+ | Feature             | Thumbnail Picture |
+ |:--------------------|------------------:|
+ | Portfolio watchlist | ![Pic](https://user-images.githubusercontent.com/11968760/91777314-da1bdb00-ec32-11ea-929e-66a1befc0d90.png#thumbnail)|
+ | Stock view | ![Pic](https://user-images.githubusercontent.com/11968760/91777703-ed7b7600-ec33-11ea-87bf-b647033ed06f.png)|
+ | Market sentiment | ![Pic](https://user-images.githubusercontent.com/11968760/91778464-e48ba400-ec35-11ea-9b47-413601da6fd8.png)|
 
-It is still in the experimental phase, currently only Djongo-backends are supported (although this will change in future).
