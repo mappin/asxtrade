@@ -75,7 +75,7 @@ class Quotation(model.Model):
 
     def eps_as_cents(self):
         if any([self.is_error(), self.eps is None]):
-            return ""
+            return 0.0
         return self.eps * 100.0
         
     def volume_as_millions(self):
