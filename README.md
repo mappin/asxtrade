@@ -1,5 +1,7 @@
 # asxtrade
 
+![tox workflow](https://github.com/ozacas/asxtrade/actions/workflows/python-package.yml/badge.svg)
+
 Python3 based ASX data download and web application with basic features:
 
  * ability to search by sector, keyword, movement, dividend yield or other attributes
