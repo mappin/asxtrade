@@ -1,5 +1,7 @@
 import factory
 from pytest_factoryboy import register
+from django.conf import settings
+from django.contrib.auth import get_user_model
 import faker
 
 faker = faker.Faker()
@@ -25,3 +27,10 @@ class QuotationFactory(factory.django.DjangoModelFactory):
     asx_code = factory.Sequence(lambda n: 'ANZ')
     error_code = '' # no error
     fetch_date = faker.date()
+
+class WatchlistFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = 'app.Watchlist'
+
+    user = factory.SubFactory(get_user_model())
+    asx_code = factory.Iterator(['ASX1', 'ASX2', 'BHCD'])
