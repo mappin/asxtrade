@@ -34,11 +34,11 @@ import numpy as np
 
 
 class SectorSearchView(
-    SearchMixin,
-    LoginRequiredMixin,
-    MultipleObjectMixin,
-    MultipleObjectTemplateResponseMixin,
-    FormView,
+        SearchMixin,
+        LoginRequiredMixin,
+        MultipleObjectMixin,
+        MultipleObjectTemplateResponseMixin,
+        FormView,
 ):
     form_class = SectorSearchForm
     template_name = "search_form.html"  # generic template, not specific to this view
@@ -97,7 +97,7 @@ class SectorSearchView(
         n_days = self.template_values_dict.get("n_days", 30)
         n_top_bottom = self.template_values_dict.get("n_top_bottom", 20)
         wanted_dates = desired_dates(start_date=n_days)
-        heatmap, df, top10, bottom10, _ = plot_heatmap(
+        heatmap, _, top10, bottom10, _ = plot_heatmap(
             wanted_stocks, all_dates=wanted_dates, n_top_bottom=n_top_bottom
         )
 
@@ -276,7 +276,7 @@ class CompanySearch(DividendYieldSearch):
         matching_companies = find_named_companies(wanted_name, wanted_activity)
         print("Showing results for {} companies".format(len(matching_companies)))
         self.as_at_date = latest_quotation_date("ANZ")
-        results, latest_date = latest_quote(tuple(matching_companies))
+        results, _ = latest_quote(tuple(matching_companies))
         return self.sort_by(results, self.request.GET.get("sort_by"))
 
 
@@ -284,7 +284,7 @@ company_search = CompanySearch.as_view()
 
 
 @login_required
-def all_stocks(request):
+def show_all_stocks(request):
     all_dates = all_available_dates()
     if len(all_dates) < 1:
         raise Http404("No ASX price data available!")
@@ -410,25 +410,25 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     return render(request, "stock_view.html", context=context)
 
 
-def save_dataframe_to_file(df, filename, format):
-    assert format in ("csv", "excel", "tsv", "parquet")
+def save_dataframe_to_file(df, filename, output_format):
+    assert output_format in ("csv", "excel", "tsv", "parquet")
     assert df is not None and len(df) > 0
     assert len(filename) > 0
 
-    if format == "csv":
+    if output_format == "csv":
         df.to_csv(filename)
         return "text/csv"
-    elif format == "excel":
+    elif output_format == "excel":
         df.to_excel(filename)
         return "application/vnd.ms-excel"
-    elif format == "tsv":
+    elif output_format == "tsv":
         df.to_csv(filename, sep="\t")
         return "text/tab-separated-values"
-    elif format == "parquet":
+    elif output_format == "parquet":
         df.to_parquet(filename)
         return "application/octet-stream"  # for now, but must be something better...
     else:
-        raise ValueError("Unsupported format {}".format(format))
+        raise ValueError("Unsupported format {}".format(output_format))
 
 
 def get_dataset(dataset_wanted):
@@ -651,8 +651,7 @@ def show_purchase_performance(request):
     stock_cost = defaultdict(float)
     portfolio_cost = 0.0
 
-    for d in all_dates:
-        d = datetime.strptime(d, "%Y-%m-%d").date()
+    for d in [datetime.strptime(x, "%Y-%m-%d").date() for x in all_dates]:
         d_str = str(d)
         if d_str not in df.columns:  # not a trading day?
             continue
@@ -709,7 +708,7 @@ def show_matching_companies(
     matching_companies,
     title,
     heatmap_title,
-    user_purchases,
+    virtual_purchases_by_user,
     request,
     extra_context=None,
 ):
@@ -721,7 +720,7 @@ def show_matching_companies(
     info(request, "Sorting by {}".format(sort_by))
 
     if len(matching_companies) > 0:
-        stocks_queryset, date = latest_quote(matching_companies)
+        stocks_queryset, _ = latest_quote(matching_companies)
         stocks_queryset = stocks_queryset.order_by(sort_by)
         print(
             "Found {} quotes for {} stocks".format(
@@ -755,7 +754,7 @@ def show_matching_companies(
         "n_top_bottom": n_top_bottom,
         "best_ten": top10,
         "worst_ten": bottom10,
-        "virtual_purchases": user_purchases,
+        "virtual_purchases": virtual_purchases_by_user,
         "sentiment_heatmap": sentiment_heatmap_data,
         "sentiment_heatmap_title": "{}: past {} days".format(heatmap_title, n_days),
     }
@@ -804,8 +803,8 @@ def toggle_watched(request, stock=None):
     if stock in current_watchlist:  # remove from watchlist?
         Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
     else:
-        w = Watchlist(user=request.user, asx_code=stock)
-        w.save()
+        Watchlist(user=request.user, asx_code=stock).save()
+
     return redirect_to_next(request)
 
 
