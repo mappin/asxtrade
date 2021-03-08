@@ -85,6 +85,7 @@ DATABASES = {
             'enforce_schema': False,
             'host': 'localhost',
             'port': 27017,
+            'authSource': 'admin',
             'username': 'mongoadmin',
             'password': 'root',
         }
