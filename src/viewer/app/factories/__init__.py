@@ -11,6 +11,13 @@ class CompanyDetailsFactory(factory.django.DjangoModelFactory):
     sector_name = factory.Sequence(lambda n: 'Financials')
     asx_code = factory.Sequence(lambda n: 'ANZ')
 
+class SecurityFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = 'app.Security'
+
+    asx_code = 'ANZ'
+    asx_isin_code = 'ISIN000001'
+
 class QuotationFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = 'app.Quotation'
