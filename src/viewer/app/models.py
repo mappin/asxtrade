@@ -113,6 +113,8 @@ class Security(model.Model):
     last_updated = model.DateField()
     security_name = model.TextField()
 
+    objects = DjongoManager()
+
     class Meta:
         db_table = "asx_isin"
         managed = False  # managed by asxtrade.py
@@ -247,7 +249,6 @@ class Sector(model.Model):
     """
     Table of ASX sector (GICS) names. Manually curated for now.
     """
-
     id = ObjectIdField(unique=True, db_column="_id")
     sector_name = model.TextField(unique=True)
     sector_id = model.IntegerField(db_column="id")
@@ -623,6 +624,8 @@ class MarketDataCache(model.Model):
     scope = model.TextField()
     dataframe = model.BinaryField()
 
+    objects = DjongoManager()
+    
     class Meta:
         managed = False  # table is managed by persist_dataframes.py
         db_table = "market_quote_cache"
