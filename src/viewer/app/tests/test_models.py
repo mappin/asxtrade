@@ -77,7 +77,9 @@ def test_validate_date():
 def test_all_sectors(company_details):
     assert company_details is not None
     # since company_details_factory gives a single ANZ company details record, this test will work...
-    assert all_sectors() == [("Financials", "Financials")]
+    ret = all_sectors()
+    #print(ret)
+    assert ret == [('Financials', 'Financials')]
     # and check the reverse is true: financials -> ANZ
     assert all_sector_stocks('Financials') == set(['ANZ'])
 

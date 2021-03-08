@@ -259,10 +259,9 @@ class Sector(model.Model):
         managed = False
         db_table = "sector"
 
-
-@pylru.lrudecorator(1)
 def all_sectors():
-    iterable = list(CompanyDetails.objects.mongo_distinct("sector_name"))
+    iterable = list(CompanyDetails.objects.order_by().values_list('sector_name', flat=True).distinct())
+    #print(iterable)
     results = [
         (sector, sector) for sector in iterable
     ]  # as tuples since we want to use it in django form choice field
