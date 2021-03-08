@@ -16,12 +16,13 @@ jobs:
     strategy:
       matrix:
         python-version: [3.7, 3.8]
-    env:
-      MONGO_INITDB_ROOT_USERNAME: mongoadmin
-      MONGO_INITDB_ROOT_PASSWORD: root
     services:
       mongodb:
         image: mongo:4.4.4
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongoadmin
+          MONGO_INITDB_ROOT_PASSWORD: root
+          MONGO_INITDB_DATABASE:      djongo_test
         ports:
           - 27017:27017
     steps:
@@ -54,3 +55,5 @@ jobs:
     - name: Test with tox
       run: |
         tox
+      env:
+        CI: true
