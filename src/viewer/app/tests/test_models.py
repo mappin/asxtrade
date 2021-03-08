@@ -8,6 +8,7 @@ from app.models import (
     CompanyDetails,
     all_sectors,
     all_sector_stocks,
+    all_stocks,
 )
 from datetime import datetime
 
@@ -93,3 +94,9 @@ def test_all_sectors(company_details):
     assert all_sectors() == [("Financials", "Financials")]
     # and check the reverse is true: financials -> ANZ
     assert all_sector_stocks('Financials') == set(['ANZ'])
+
+@pytest.mark.django_db
+def test_all_stocks(security):
+    assert security is not None
+    assert len(security.asx_code) >= 3
+    assert all_stocks() == set([security.asx_code])
