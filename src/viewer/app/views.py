@@ -93,7 +93,7 @@ class SectorSearchView(
             )
             return Quotation.objects.none()
         all_dates = all_available_dates()
-        wanted_stocks = set(all_sector_stocks(sector))
+        wanted_stocks = all_sector_stocks(sector)
         n_days = self.template_values_dict.get("n_days", 30)
         n_top_bottom = self.template_values_dict.get("n_top_bottom", 20)
         wanted_dates = desired_dates(start_date=n_days)
@@ -366,7 +366,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     )
     sector = company_details.sector_name if company_details else None
     if sector is not None:  # not an ETF? ie. sector information available?
-        sector_companies = list(all_sector_stocks(sector))
+        sector_companies = all_sector_stocks(sector)
         c_vs_s_plot, sector_momentum_plot = analyse_sector(
             stock, sector, sector_companies, all_stocks_cip, window_size=window_size
         )

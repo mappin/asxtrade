@@ -7,9 +7,9 @@ from app.models import (
     Security,
     CompanyDetails,
     all_sectors,
+    all_sector_stocks,
 )
 from datetime import datetime
-from app.factories import CompanyDetailsFactory
 
 
 def test_validate_stock():
@@ -43,21 +43,21 @@ def test_desired_dates():
     ]
 
 
-def test_quotation_error_handling():
-    q = Quotation(error_code="404", change_in_percent=4.4)
+def test_quotation_error_handling(quotation_factory):
+    q = quotation_factory.build(error_code="404")
     assert q.is_error()
     assert q.volume_as_millions() == ""  # since is_error() is True
 
 
-def test_quotation_volume_handling():
-    q = Quotation(error_code="", volume=1000 * 1000, last_price=1.0)
+def test_quotation_volume_handling(quotation_factory):
+    q = quotation_factory.build(volume=1000 * 1000, last_price=1.0)
     assert q.volume_as_millions() == "1.00"
-    q = Quotation(error_code="", volume=10 * 1000 * 1000, last_price=1.0)
+    q = quotation_factory.build(volume=10 * 1000 * 1000, last_price=1.0)
     assert q.volume_as_millions() == "10.00"
 
 
-def test_quotation_eps_handling():
-    q = Quotation(error_code="", eps=3.36)
+def test_quotation_eps_handling(quotation_factory):
+    q = quotation_factory.build(eps=3.36)
     assert q.eps - 3.36 < 0.001
     assert q.eps_as_cents() == 336.0
     q = Quotation()  # eps is None
@@ -91,3 +91,5 @@ def test_all_sectors(company_details):
     assert company_details is not None
     # since company_details_factory gives a single ANZ company details record, this test will work...
     assert all_sectors() == [("Financials", "Financials")]
+    # and check the reverse is true: financials -> ANZ
+    assert all_sector_stocks('Financials') == set(['ANZ'])
