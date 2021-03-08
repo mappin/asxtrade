@@ -5,6 +5,12 @@ def is_error(quotation: dict):
         return False
     return len(quotation.get('error_code')) == 0
 
+def is_suspended(quotation: dict):
+    assert quotation is not None
+    if 'suspended' not in quotation:
+        return False 
+    return quotation.get('suspended', False) != False
+        
 def fix_percentage(quotation: dict, field_name: str):
     assert quotation is not None
     assert len(field_name) > 0
@@ -14,7 +20,7 @@ def fix_percentage(quotation: dict, field_name: str):
     field_value = quotation.get(field_name)
     if isinstance(field_value, str):
         val = field_value.replace(',', '').rstrip('%')
-        pc = float(val) if not is_error(quotation) else 0.0
+        pc = float(val) if not any([is_error(quotation), is_suspended(quotation)]) else 0.0
         del quotation[field_name]
         assert field_name not in quotation
         quotation[field_name] = pc
