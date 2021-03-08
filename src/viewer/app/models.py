@@ -270,10 +270,10 @@ def all_sectors():
 
 def all_sector_stocks(sector_name):
     """
-    Return a queryset with ASX code for every stock in the specified sector
+    Return a set of unique ASX stock codes for every security designated as part of the specified sector
     """
     assert sector_name is not None and len(sector_name) > 0
-    stocks = (
+    stocks = set(
         CompanyDetails.objects.order_by("asx_code")
         .filter(sector_name=sector_name)
         .values_list("asx_code", flat=True)
