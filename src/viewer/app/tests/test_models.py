@@ -1,32 +1,16 @@
+from datetime import datetime
 import pytest
 from app.models import (
     validate_stock,
     validate_date,
     desired_dates,
     Quotation,
-    Security,
-    CompanyDetails,
     Watchlist,
     all_sectors,
     all_sector_stocks,
     all_stocks,
     user_watchlist,
 )
-from datetime import datetime
-
-
-def test_validate_stock():
-    validate_stock("ANZ")  # NB: must not assert
-    with pytest.raises(AssertionError):
-        validate_stock("AN")
-
-
-def test_validate_date():
-    validate_date("2020-01-01")
-    validate_date("2020-12-30")
-    with pytest.raises(AssertionError):
-        validate_date("2020-2-2")
-
 
 def test_desired_dates():
     # 1. must specify at least 1 day
@@ -73,7 +57,7 @@ def test_validate_stock():
     for stock in bad_stocks:
         with pytest.raises(AssertionError):
             validate_stock(stock)
-    good_stocks = ["ABC", "ABCDE", "AB2", "abcde"]
+    good_stocks = ["ABC", "ABCDE", "AB2", "abcde", "ANZ"]
     for stock in good_stocks:
         validate_stock(stock)
 
@@ -108,6 +92,7 @@ def users_and_watchlists(django_user_model):
     u1 = django_user_model.objects.create(username='U1', password='U1')
     u2 = django_user_model.objects.create(username='u2', password='u2')
     Watchlist.objects.create(user=u1, asx_code='ASX1')
+    assert u2.is_active and u1.is_active
 
 @pytest.mark.django_db
 def test_user_watchlist(users_and_watchlists, django_user_model):
