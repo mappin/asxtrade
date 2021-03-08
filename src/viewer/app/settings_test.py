@@ -80,17 +80,6 @@ WSGI_APPLICATION = 'app.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'djongo',
-        'NAME': 'asxtrade',
-        'ENFORCE_SCHEMA': False,
-        'CLIENT': {
-            'host': 'pi1',
-            'port': 27017,
-            'username': 'rw',
-            'password': os.getenv('PASSWORD'),
-        }
-    },
-    'djongo_test': {
-        'ENGINE': 'djongo',
         'CLIENT': {
             'name': 'djongo_test',
             'enforce_schema': False,
