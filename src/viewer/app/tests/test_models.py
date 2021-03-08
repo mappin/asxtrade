@@ -1,6 +1,7 @@
 import pytest
-from app.models import validate_stock, validate_date, desired_dates, Quotation, Security, all_sectors, CompanyDetails
+from app.models import validate_stock, validate_date, desired_dates, Quotation, Security, CompanyDetails, all_sectors
 from datetime import datetime
+from app.factories import CompanyDetailsFactory
 
 def test_validate_stock():
     validate_stock('ANZ') # NB: must not assert
@@ -62,6 +63,7 @@ def test_validate_date():
         validate_date(d)
 
 @pytest.mark.django_db
-def test_all_sectors(company_details_factory):
+def test_all_sectors(company_details):
+    assert company_details is not None
     # since company_details_factory gives a single ANZ company details record, this test will work...
     assert all_sectors() == [('Financials', 'Financials')]
