@@ -314,7 +314,6 @@ def all_stocks():
     all_securities = Security.objects.values_list("asx_code", flat=True)
     return set(all_securities)
 
-
 def find_movers(threshold, required_dates):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
