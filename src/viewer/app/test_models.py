@@ -1,5 +1,5 @@
 import pytest
-from app.models import validate_stock, validate_date, desired_dates, Quotation
+from app.models import validate_stock, validate_date, desired_dates, Quotation, Security, all_sectors, CompanyDetails
 from datetime import datetime
 
 def test_validate_stock():
@@ -60,3 +60,8 @@ def test_validate_date():
     good_dates = ['2020-02-02', '2020-02-01', '2021-12-31']
     for d in good_dates:
         validate_date(d)
+
+@pytest.mark.django_db
+def test_all_sectors(company_details_factory):
+    # since company_details_factory gives a single ANZ company details record, this test will work...
+    assert all_sectors() == [('Financials', 'Financials')]
