@@ -14,3 +14,4 @@ sqlparse==0.2.4
 pytest-django
 pytest-mock
 pytest-factoryboy
+pytest-cov
