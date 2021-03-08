@@ -1,16 +1,33 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from app.models import CompanyDetails, all_sectors
+from app.models import all_sector_stocks, all_sectors
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
         raise ValidationError("Invalid value - cannot be blank")
 
 def is_valid_sector(value):
-    return list(CompanyDetails.objects.mongo_distinct('sector_name')).count(value) > 0
+    assert value is not None
+    return len(all_sector_stocks(value)) > 0
 
 class SectorSearchForm(forms.Form):
-    sector = forms.ChoiceField(choices=all_sectors(), required=True, validators=[is_not_blank, is_valid_sector])
+    SECTOR_CHOICES = (
+        ("Class Pend", "Class Pend"),
+        ("Communication Services", "Communication Services"),
+        ("Consumer Discretionary", "Consumer Discretionary"),
+        ("Consumer Staples", "Consumer Staples"),
+        ("Energy", "Energy"),
+        ("Financials", "Financials"),
+        ("Health Care", "Health Care"),
+        ("Industrials", "Industrials"),
+        ("Information Technology", "Information Technology"),
+        ("Materials", "Materials"),
+        ("Metals & Mining", "Metals & Mining"),
+        ("Not Applic", "Not Applic"),
+        ("Real Estate", "Real Estate"),
+        ("Utilities", "Utilities"), 
+    )
+    sector = forms.ChoiceField(choices=SECTOR_CHOICES, required=True, validators=[is_not_blank, is_valid_sector])
     best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")
     worst10 = forms.BooleanField(required=False, label="Worst 10 performers (past 3 months)")
 
