@@ -1,6 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from app.models import all_sector_stocks, all_sectors
+from app.models import all_sector_stocks
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
@@ -25,7 +25,7 @@ class SectorSearchForm(forms.Form):
         ("Metals & Mining", "Metals & Mining"),
         ("Not Applic", "Not Applic"),
         ("Real Estate", "Real Estate"),
-        ("Utilities", "Utilities"), 
+        ("Utilities", "Utilities"),
     )
     sector = forms.ChoiceField(choices=SECTOR_CHOICES, required=True, validators=[is_not_blank, is_valid_sector])
     best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")

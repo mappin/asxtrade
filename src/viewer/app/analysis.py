@@ -1,11 +1,11 @@
-from app.models import Quotation, CompanyDetails, company_prices, day_low_high
-from app.plots import plot_series, plot_sector_performance, plot_company_versus_sector, plot_as_base64, stocks_by_sector, plot_as_inline_html_data
-from app.messages import warning
-from datetime import datetime, timedelta
+from collections import defaultdict, OrderedDict
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import defaultdict, OrderedDict
+from app.models import CompanyDetails, company_prices, day_low_high
+from app.plots import plot_sector_performance, plot_company_versus_sector, plot_as_base64, stocks_by_sector
+from app.messages import warning
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance
@@ -25,12 +25,16 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
     for stock in watchlist_stocks:
         series = cumulative_change_df.loc[stock]
         n = len(series)
+        assert n > 0
         series30 = series[-30:]
         coefficients, residuals, _, _, _ = np.polyfit(range(n), series, 1, full=True)
         coeff30, resid30, _, _, _ = np.polyfit(range(len(series30)), series30, 1, full=True)
         assert resid30 is not None
         mse = residuals[0] / n
-        nrmse = np.sqrt(mse) / (series.max() - series.min())
+        series_range = series.max() - series.min()
+        if series_range == 0.0:
+            continue
+        nrmse = np.sqrt(mse) / series_range
         if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): # ignore stocks which are barely moving either way
             pass
         else:
@@ -62,9 +66,9 @@ def rank_cumulative_change(df, all_dates):
     df['asx_code'] = df.index
     df['sector'] = [CompanyDetails.objects.get(asx_code=code).sector_name for code in df.index]
     df = pd.melt(df, id_vars=['asx_code', 'bin', 'sector', 'x', 'y'],
-                     var_name='date',
-                     value_name='rank',
-                     value_vars=all_available_dates)
+                 var_name='date',
+                 value_name='rank',
+                 value_vars=all_available_dates)
     df['date'] = pd.to_datetime(df['date'], format="%Y-%m-%d")
     df['x'] = pd.to_datetime(df['x'], format="%Y-%m-%d")
     return df
@@ -76,9 +80,7 @@ def rule_move_up(state: dict):
     assert state is not None
 
     move = state.get('stock_move')
-    if move > 0.0:
-       return 1
-    return 0
+    return 1 if move > 0.0 else 0
 
 def rule_market_avg(state: dict):
     """
@@ -151,10 +153,10 @@ def rule_at_end_of_daily_range(state: dict):
         last_price = day_low_high_df.at[date, 'last_price']
         if np.isnan(day_low) and np.isnan(day_high):
             return 0
-        range = (day_high - day_low) * threshold # 20% at either end of daily range
-        if last_price >= day_high - range:
+        day_range = (day_high - day_low) * threshold # 20% at either end of daily range
+        if last_price >= day_high - day_range:
             return 1
-        elif last_price <= day_low + range:
+        elif last_price <= day_low + day_range:
             return -1
         # else FALLTHRU...
     except KeyError:

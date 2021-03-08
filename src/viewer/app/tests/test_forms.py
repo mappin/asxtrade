@@ -1,3 +1,6 @@
+"""
+Responsible for testing forms.py and all related state (validation functions etc.)
+"""
 import pytest
 from django.core.exceptions import ValidationError
 from app.forms import (
@@ -18,10 +21,11 @@ def test_is_not_blank():
     is_not_blank("false")
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db # needs access to the database to validate sector name
 def test_is_valid_sector():
     for item1, item2 in SectorSearchForm.SECTOR_CHOICES:
         # the database is not populated so we cant check return value, check for an exception
+        assert len(item1) == len(item2) and len(item1) > 0
         is_valid_sector(item1)
 
 
