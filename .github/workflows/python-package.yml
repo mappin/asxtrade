@@ -16,13 +16,14 @@ jobs:
     strategy:
       matrix:
         python-version: [3.7, 3.8]
-
+    env:
+      MONGO_INITDB_ROOT_USERNAME: mongoadmin
+      MONGO_INITDB_ROOT_PASSWORD: root
     services:
       mongodb:
         image: mongo:4.4.4
         ports:
           - 27017:27017
-
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
