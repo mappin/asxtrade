@@ -88,14 +88,14 @@ def test_all_stocks(security):
     assert all_stocks() == set([security.asx_code])
 
 @pytest.fixture
-def users_and_watchlists(django_user_model):
+def uw_fixture(django_user_model):
     u1 = django_user_model.objects.create(username='U1', password='U1')
     u2 = django_user_model.objects.create(username='u2', password='u2')
     Watchlist.objects.create(user=u1, asx_code='ASX1')
     assert u2.is_active and u1.is_active
 
 @pytest.mark.django_db
-def test_user_watchlist(users_and_watchlists, django_user_model):
+def test_user_watchlist(uw_fixture, django_user_model):
     u1 = django_user_model.objects.get(username='U1')
     assert user_watchlist(u1) == set(['ASX1'])
     u2 = django_user_model.objects.get(username='u2')

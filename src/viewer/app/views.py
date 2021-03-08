@@ -1,18 +1,48 @@
-from django.shortcuts import render, get_object_or_404
+"""
+Responsible for handling requests for pages from the website and delegating the analysis
+and visualisation as required.
+"""
+from collections import defaultdict
+import tempfile
+from datetime import datetime
+import pandas as pd
+import numpy as np
+from bson.objectid import ObjectId
+from django import forms
+from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django import forms
-import tempfile
 from django.views.generic.list import (
     MultipleObjectTemplateResponseMixin,
     MultipleObjectMixin,
 )
-from bson.objectid import ObjectId
-from collections import defaultdict
-from app.models import *
+from app.models import (
+    Quotation,
+    user_watchlist,
+    latest_quotation_date,
+    find_movers,
+    Sector,
+    all_available_dates,
+    all_sector_stocks,
+    desired_dates,
+    latest_quote,
+    find_named_companies,
+    validate_user,
+    validate_stock,
+    company_prices,
+    Security,
+    CompanyDetails,
+    all_quotes,
+    all_etfs,
+    increasing_eps,
+    increasing_yield,
+    user_purchases,
+    Watchlist,
+    VirtualPurchase
+)
 from app.mixins import SearchMixin
 from app.messages import info, warning, add_messages
 from app.forms import (
@@ -29,9 +59,16 @@ from app.analysis import (
     detect_outliers,
     default_point_score_rules,
 )
-from app.plots import *
-import numpy as np
-
+from app.plots import (
+    plot_heatmap,
+    make_rsi_plot,
+    plot_point_scores,
+    plot_key_stock_indicators,
+    plot_market_wide_sector_performance,
+    plot_company_rank,
+    plot_portfolio,
+    plot_best_monthly_price_trend
+)
 
 class SectorSearchView(
         SearchMixin,
@@ -444,15 +481,15 @@ def get_dataset(dataset_wanted):
 
 
 @login_required
-def download_data(request, dataset=None, format="csv"):
+def download_data(request, dataset=None, output_format="csv"):
     validate_user(request.user)
 
     with tempfile.NamedTemporaryFile() as fh:
         df = get_dataset(dataset)
-        content_type = save_dataframe_to_file(df, fh.name, format)
+        content_type = save_dataframe_to_file(df, fh.name, output_format)
         fh.seek(0)
         response = HttpResponse(fh.read(), content_type=content_type)
-        response["Content-Disposition"] = "inline; filename=temp.{}".format(format)
+        response["Content-Disposition"] = "inline; filename=temp.{}".format(output_format)
         return response
 
 
@@ -742,7 +779,7 @@ def show_matching_companies(
             n_top_bottom=n_top_bottom,
         )
     else:
-        page_obj = top10 = bottom10 = user_purchases = sentiment_heatmap_data = None
+        page_obj = top10 = bottom10 = sentiment_heatmap_data = None
         n_top_bottom = n_days = 0
         warning(request, "No matching companies found.")
 
