@@ -5,6 +5,8 @@ from app.forms import (
     is_valid_sector,
     SectorSearchForm,
     MoverSearchForm,
+    DividendSearchForm,
+    CompanySearchForm,
 )
 
 
@@ -19,19 +21,38 @@ def test_is_not_blank():
 @pytest.mark.django_db
 def test_is_valid_sector():
     for item1, item2 in SectorSearchForm.SECTOR_CHOICES:
-        # the database is not populated so we cant check return value, but we can check for an exception
+        # the database is not populated so we cant check return value, check for an exception
         is_valid_sector(item1)
 
 
 @pytest.mark.django_db
 def test_sector_search_form():
-    f = SectorSearchForm(data={"sector": SectorSearchForm.SECTOR_CHOICES[0][1]})
-    assert f.is_valid()
-    f = SectorSearchForm(data={})
-    assert not f.is_valid()
+    fm1 = SectorSearchForm(data={"sector": SectorSearchForm.SECTOR_CHOICES[0][1]})
+    assert fm1.is_valid()
+    fm2 = SectorSearchForm(data={})
+    assert not fm2.is_valid()
 
 def test_mover_search_form():
-    f = MoverSearchForm(data={})
-    assert not f.is_valid()
-    f = MoverSearchForm(data={'threshold': 50.0, 'timeframe_in_days': 10})
-    assert f.is_valid()
+    fm1 = MoverSearchForm(data={})
+    assert not fm1.is_valid()
+    fm2 = MoverSearchForm(data={'threshold': 50.0, 'timeframe_in_days': 10})
+    assert fm2.is_valid()
+
+def test_dividend_search_form():
+    # nothing set is ok for this form
+    fm1 = DividendSearchForm(data={})
+    assert fm1.is_valid()
+    fm2 = DividendSearchForm(data={
+        'min_yield': 0.0,
+        'max_yield': 10.0,
+        'min_pe':    0.0,
+        'max_pe':    12.0,
+        'min_eps_aud': 0.01
+    })
+    assert fm2.is_valid()
+
+def test_company_search():
+    fm1 = CompanySearchForm(data={})
+    assert fm1.is_valid()
+    fm2 = CompanySearchForm(data={'name': 'sydney', 'activity': 'air'})
+    assert fm2.is_valid()
