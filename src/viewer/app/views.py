@@ -283,7 +283,7 @@ class MoverSearch(DividendYieldSearch):
             matching_companies.update(df[df > 0.0].index)
         if kwargs.get("show_decreasing", False):
             matching_companies.update(df[df < 0.0].index)
-        results, latest_date = latest_quote(tuple(matching_companies))
+        results, _ = latest_quote(tuple(matching_companies))
         return self.sort_by(results, user_sort)
 
 
@@ -350,9 +350,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     validate_stock(stock)
     validate_user(request.user)
 
-    window_size = (
-        14  # since must have a full window before computing momentum over sector_n_days
-    )
+    window_size = 14  # since must have a full window before computing momentum over sector_n_days
     stock_dates = desired_dates(start_date=stock_n_days + window_size)
     wanted_fields = [
         "last_price",
@@ -364,7 +362,11 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         "annual_dividend_yield",
     ]
     stock_df = company_prices(
-        [stock], all_dates=stock_dates, fields=wanted_fields, fail_missing_months=False
+        [stock], 
+        all_dates=stock_dates, 
+        fields=wanted_fields, 
+        fail_missing_months=False, 
+        missing_cb=None,
     )
     # print(stock_df)
 
@@ -374,9 +376,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         warning(request, "No details available for {}".format(stock))
 
     n_dates = len(stock_df)
-    if (
-        n_dates < 14
-    ):  # RSI requires at least 14 prices to plot so reject recently added stocks
+    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
         raise Http404(
             "Insufficient price quotes for {} - only {}".format(stock, n_dates)
         )
@@ -384,7 +384,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     # plot relative strength
     fig = make_rsi_plot(stock, stock_df)
 
-    # show sector performance over past 3 months
+    # show sector performance over past 180 days
     sector_dates = desired_dates(start_date=180)
     all_stocks_cip = company_prices(
         None,

@@ -5,6 +5,7 @@ and the free ASX API endpoint
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
+from django.contrib.auth import get_user_model
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from app.messages import warning
@@ -206,8 +207,24 @@ class Watchlist(model.Model):
         managed = True  # viewer application is responsible NOT asxtrade.py
         db_table = "user_watchlist"
 
+@lru_cache(maxsize=16)
+def find_user(username: str):
+    return get_user_model().objects.filter(username=username).first()
 
+@lru_cache(maxsize=1024)
+def is_in_watchlist(username: str, asx_code: str) -> bool:
+    user = find_user(username)
+    if user is None:
+        return False
+    else:
+        rec = Watchlist.objects.filter(asx_code=asx_code, user=user).first()
+        return rec is not None
+    
 def user_watchlist(user):
+    """
+    Given a user object eg. from find_user() return the set of stock codes which the user
+    has indicated an interest in
+    """
     hits = Watchlist.objects.filter(user=user).values_list("asx_code", flat=True)
     results = set(hits)
     print("Found {} stocks in user watchlist".format(len(results)))

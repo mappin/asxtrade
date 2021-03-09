@@ -4,7 +4,9 @@ Responsible for providing django template helpers to get the page rendered
 import re
 from functools import lru_cache
 from django.template.defaulttags import register
-from app.models import CompanyDetails
+from django.templatetags.static import static
+from django.utils.safestring import mark_safe
+from app.models import CompanyDetails, Watchlist, is_in_watchlist
 
 @register.filter
 def get_item(d, key):
@@ -39,3 +41,35 @@ def stock_sector(stock_code):
         return ''
     s = rec.sector_name
     return s
+
+@register.simple_tag
+@lru_cache(maxsize=1024)
+def clickable_stock(asx_code: str, **kwargs):
+    assert asx_code is not None
+    user = kwargs.get('user')
+    path = kwargs.get('next')
+    assert user is not None
+    assert path is not None and len(path) > 0
+    print("Checking {} is in {} user watchlist".format(asx_code, user))
+    found = is_in_watchlist(user, asx_code)
+    print("in watchlist? {}".format(found))
+    star_elem = '<a href="/watchlist/{}?next={}">'.format(asx_code, path)
+    star_png = '<img src="{}" width="12" />'.format(static("star.png"))
+    empty_star_png = '<img src="{}" width="12" />'.format(static("empty-star.png"))
+    star_content = star_png if found else empty_star_png
+    end_star_elem = "</a>"
+    purchase_elem = '<a href="/purchase/{}?next={}">'.format(asx_code, path)
+    money_static = static("money.png")
+    money_png = '<img src="{}" width="12" />'.format(money_static)
+    end_purchase_elem = "</a>&nbsp;"
+    content = '<a href="/show/{}">{}</a>'.format(asx_code, asx_code)
+    elements = (
+        star_elem,
+        star_content,
+        end_star_elem,
+        purchase_elem,
+        money_png,
+        end_purchase_elem,
+        content
+    )
+    return mark_safe("".join(elements))
