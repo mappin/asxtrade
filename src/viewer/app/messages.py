@@ -26,6 +26,6 @@ def add_messages(request, context):
     as_at = context.get('most_recent_date', None)
     sector = context.get('sector', None)
     if as_at:
-        info(request, 'Prices current as at {}.'.format(as_at))
+        info(request, 'Prices current as at {}'.format(as_at))
     if sector:
-        info(request, "Only stocks from {} are shown.".format(sector))
+        info(request, "Only stocks from {} are shown".format(sector))
