@@ -391,7 +391,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         all_dates=sector_dates,
         fail_missing_months=False,
         fields="change_in_percent",
-        fix_missing=False,
+        missing_cb = None
     )
     sector = company_details.sector_name if company_details else None
     if sector is not None:  # not an ETF? ie. sector information available?
