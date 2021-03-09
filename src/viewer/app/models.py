@@ -213,7 +213,7 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(results)))
     return results
 
-@lru_cache
+@lru_cache(maxsize=16)
 def all_available_dates(reference_stock="ANZ"):
     """
     Returns a sorted list of available dates where the reference stock has a price. stocks
@@ -522,6 +522,14 @@ def increasing_yield(stock_codes, past_n_days=300):
     ]
     return increasing_yield_stocks
 
+def get_required_tags(all_dates, fields):
+    required_tags = set()
+    for d in all_dates:
+        validate_date(d)
+        yyyy = d[0:4]
+        mm = d[5:7]
+        required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
+    return required_tags
 
 def company_prices(
     stock_codes,
@@ -562,12 +570,7 @@ def company_prices(
     if all_dates is None:
         all_dates = [datetime.strftime(datetime.now(), "%Y-%m-%d")]
 
-    required_tags = set()
-    for date in all_dates:
-        validate_date(date)
-        yyyy = date[0:4]
-        mm = date[5:7]
-        required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
+    required_tags = get_required_tags(all_dates, fields)
     which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)

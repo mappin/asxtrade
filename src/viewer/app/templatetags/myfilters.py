@@ -1,6 +1,9 @@
-from django.template.defaulttags import register
+"""
+Responsible for providing django template helpers to get the page rendered
+"""
 import re
 from functools import lru_cache
+from django.template.defaulttags import register
 from app.models import CompanyDetails
 
 @register.filter
@@ -8,13 +11,14 @@ def get_item(d, key):
     assert isinstance(d, dict)
     assert isinstance(key, str)
     assert key is not None and len(key) > 0
-    assert re.match('^\w+$', key)
+    assert re.match(r'^\w+$', key)
     return d.get(key)
 
 @register.filter
 def has_item(d, key):
     try:
         val = get_item(d, key)
+        assert val is not None
         return True
     except KeyError:
         return False

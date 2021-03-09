@@ -71,11 +71,11 @@ from app.plots import (
 )
 
 class DividendYieldSearch(
-    SearchMixin,
-    LoginRequiredMixin,
-    MultipleObjectMixin,
-    MultipleObjectTemplateResponseMixin,
-    FormView,
+        SearchMixin,
+        LoginRequiredMixin,
+        MultipleObjectMixin,
+        MultipleObjectTemplateResponseMixin,
+        FormView,
 ):
     form_class = DividendSearchForm
     template_name = "search_form.html"  # generic template, not specific to this view
@@ -173,7 +173,7 @@ class SectorSearchView(DividendYieldSearch):
         assert isinstance(self.sector, str)
         assert isinstance(self.sector_id, int)
 
-        ret = { 
+        ret = {
             # to highlight top10/bottom10 bookmarks correctly
             "watched": user_watchlist(self.request.user),  
             "title": "Find by company sector",
