@@ -11,6 +11,10 @@ div.menubar {
   margin-right: 25px;
 }
 
+td {
+    padding:0 10px;
+}
+
 tr.small {
   font-size: 8pt;
 }

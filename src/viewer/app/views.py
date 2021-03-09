@@ -70,110 +70,6 @@ from app.plots import (
     plot_best_monthly_price_trend
 )
 
-class SectorSearchView(
-        SearchMixin,
-        LoginRequiredMixin,
-        MultipleObjectMixin,
-        MultipleObjectTemplateResponseMixin,
-        FormView,
-):
-    form_class = SectorSearchForm
-    template_name = "search_form.html"  # generic template, not specific to this view
-    action_url = "/search/by-sector"
-    paginate_by = 50
-    ordering = (
-        "-annual_dividend_yield",
-        "asx_code",
-    )  # keep pagination happy, but not used by get_queryset()
-    template_values_dict = {
-        "sector_name": None,
-        "sector_id": None,
-        "most_recent_date": None,
-        "sentiment_heatmap": None,
-        "best_ten": None,
-        "worst_ten": None,
-        "n_days": 30,
-        "n_top_bottom": 20,
-    }
-
-    def render_to_response(self, context):
-        context.update(self.template_values_dict)
-        context.update(
-            {  # NB: we use update() to not destroy page_obj
-                "watched": user_watchlist(
-                    self.request.user
-                ),  # to highlight top10/bottom10 bookmarks correctly
-                "title": "Find by company sector",
-            }
-        )
-        assert context["sector_id"] is not None and isinstance(
-            context["sector_id"], int
-        )
-        context["sentiment_heatmap_title"] = "{}: past {} days".format(
-            context["sector_name"], context["n_days"]
-        )
-        add_messages(self.request, context)
-        return super().render_to_response(context)
-
-    def get_queryset(self, **kwargs):
-        # if not specified, we default to Comms Services
-        sector = kwargs.get("sector", "Communication Services")
-        sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
-        if kwargs == {}:
-            self.template_values_dict.update(
-                {
-                    "top10": None,
-                    "bottom10": None,
-                    "sector_id": sector_id,
-                    "sector_name": sector,
-                }
-            )
-            return Quotation.objects.none()
-        all_dates = all_available_dates()
-        wanted_stocks = all_sector_stocks(sector)
-        n_days = self.template_values_dict.get("n_days", 30)
-        n_top_bottom = self.template_values_dict.get("n_top_bottom", 20)
-        wanted_dates = desired_dates(start_date=n_days)
-        heatmap, _, top10, bottom10, _ = plot_heatmap(
-            wanted_stocks, all_dates=wanted_dates, n_top_bottom=n_top_bottom
-        )
-
-        if any(["best10" in kwargs, "worst10" in kwargs]):
-            wanted = set()
-            restricted = False
-            if kwargs.get("best10", False):
-                wanted = wanted.union(top10.index)
-                restricted = True
-            if kwargs.get("worst10", False):
-                wanted = wanted.union(bottom10.index)
-                restricted = True
-            if restricted:
-                wanted_stocks = wanted_stocks.intersection(wanted)
-            # FALLTHRU...
-
-        when_date = all_dates[-1]
-        print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
-        self.template_values_dict.update(
-            {
-                "sector_name": sector,
-                "most_recent_date": when_date,
-                "sentiment_heatmap": heatmap,
-                "best_ten": top10,
-                "worst_ten": bottom10,
-                "sector_id": sector_id,
-                "wanted_stocks": wanted_stocks,
-            }
-        )
-        results = Quotation.objects.filter(
-            asx_code__in=wanted_stocks, fetch_date=when_date
-        ).exclude(error_code="id-or-code-invalid")
-        results = results.order_by(*self.ordering)
-        return results
-
-
-sector_search = SectorSearchView.as_view()
-
-
 class DividendYieldSearch(
     SearchMixin,
     LoginRequiredMixin,
@@ -251,11 +147,10 @@ class DividendYieldSearch(
         self.as_at_date = latest_quotation_date("ANZ")
         min_yield = kwargs.get("min_yield") if "min_yield" in kwargs else 0.0
         max_yield = kwargs.get("max_yield") if "max_yield" in kwargs else 10000.0
-        results = (
-            Quotation.objects.filter(fetch_date=self.as_at_date)
-            .filter(annual_dividend_yield__gte=min_yield)
-            .filter(annual_dividend_yield__lte=max_yield)
-        )
+        results = Quotation.objects.filter(fetch_date=self.as_at_date).\
+                                    filter(annual_dividend_yield__gte=min_yield).\
+                                    filter(annual_dividend_yield__lte=max_yield)
+        
         if "min_pe" in kwargs:
             results = results.filter(pe__gte=kwargs.get("min_pe"))
         if "max_pe" in kwargs:
@@ -267,6 +162,103 @@ class DividendYieldSearch(
 
 dividend_search = DividendYieldSearch.as_view()
 
+class SectorSearchView(DividendYieldSearch):
+    form_class = SectorSearchForm
+    action_url = "/search/by-sector"
+    sector = "Communication Services"   # default to Comms. Services if not specified
+    sector_id = None
+    query_state = None
+
+    def additional_context(self, context):
+        assert isinstance(self.sector, str)
+        assert isinstance(self.sector_id, int)
+
+        ret = { 
+            # to highlight top10/bottom10 bookmarks correctly
+            "watched": user_watchlist(self.request.user),  
+            "title": "Find by company sector",
+            "sector_name": self.sector,
+            "sector_id": self.sector_id,
+        }
+        if self.query_state is not None:
+            ret.update(self.query_state)
+
+        ret["sentiment_heatmap_title"] = "{}: past {} days".format(
+            self.sector, self.query_defaults("n_days")
+        )
+        if 'top10' not in context:
+            ret['top10'] = None
+        if 'bottom10' not in context:
+            ret['bottom10'] = None
+
+        add_messages(self.request, ret)
+        return ret
+
+    def get_desired_stocks(self, wanted_stocks, want_best10, want_worst10, top10, bottom10):
+        assert wanted_stocks is not None
+
+        if want_best10 or want_worst10:
+            wanted = set()
+            restricted = False
+            if want_best10:
+                wanted = wanted.union(top10.index)
+                restricted = True
+            if want_worst10:
+                wanted = wanted.union(bottom10.index)
+                restricted = True
+            if restricted:
+                return set(wanted_stocks.intersection(wanted))
+
+        return set(wanted_stocks)
+
+    def query_defaults(self, field_name):
+        if field_name == "n_days":
+            return 30
+        elif field_name == "n_top_bottom":
+            return self.n_top_bottom
+   
+        assert False # field_name not known
+        return None
+
+    def get_queryset(self, **kwargs):
+        # user never run this view before?
+        if kwargs == {}:
+            print("WARNING: no form parameters specified - returning empty queryset")
+            return Quotation.objects.none()
+
+        self.sector = kwargs.get("sector", self.sector)
+        self.sector_id = int(Sector.objects.get(sector_name=self.sector).sector_id)
+        wanted_stocks = all_sector_stocks(self.sector)
+        print("Found {} stocks matching sector={}".format(len(wanted_stocks), self.sector))
+        n_days = self.query_defaults("n_days")
+        n_top_bottom = self.query_defaults("n_top_bottom")
+        wanted_dates = desired_dates(start_date=n_days)
+        heatmap, _, top10, bottom10, _ = plot_heatmap(
+            wanted_stocks, all_dates=wanted_dates, n_top_bottom=n_top_bottom
+        )
+
+        wanted_stocks = self.get_desired_stocks(wanted_stocks, 
+                                                kwargs.get('best10', False),
+                                                kwargs.get('worst10', False),
+                                                top10, bottom10)
+
+        when_date = wanted_dates[-1]
+        print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
+        self.query_state = {
+            "most_recent_date":  when_date,
+            "sentiment_heatmap": heatmap,
+            "best_ten":          top10,
+            "worst_ten":         bottom10,
+            "wanted_stocks":     wanted_stocks,
+            "n_top_bottom":      n_top_bottom,
+        }
+        
+        results = Quotation.objects.filter(
+            asx_code__in=wanted_stocks, fetch_date=when_date
+        ).exclude(error_code="id-or-code-invalid")
+        return self.sort_by(results, self.request.GET.get('sort_by'))
+
+sector_search = SectorSearchView.as_view()
 
 class MoverSearch(DividendYieldSearch):
     form_class = MoverSearchForm
