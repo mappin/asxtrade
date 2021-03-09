@@ -377,7 +377,7 @@ def make_rsi_plot(stock, stock_df):
     rect2 = [left, 0.3, width, 0.4]
     rect3 = [left, 0.1, width, 0.2]
 
-    fig = plt.figure(facecolor='white')
+    fig = plt.figure(facecolor='white', figsize=(12,6))
     axescolor = '#f6f6f6'  # the axes background color
 
     ax1 = fig.add_axes(rect1, facecolor=axescolor)  # left, bottom, width, height
