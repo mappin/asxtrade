@@ -31,14 +31,15 @@
         <table style="width: 100%">
            <tr>
               <th>ASX Code</th>
-              <th>Annual yield</th>
-              <th>Price ($AUD)</th>
+              <th>Annual<br/>yield</th>
+              <th>Price<br/>($AUD)</th>
               <th>Day change</th>
-              <th>Volume ($AUD Mil.)</th>
+              <th>Volume<br/>($AUD Mil.)</th>
               <th>EPS</th>
-              <th>Price/Earnings</th>
-              <th>Year high price</th>
-              <th>Year low price</th>
+              <th>PE</th>
+              <th>Year high</th>
+              <th>Year low</th>
+              <th>Sector</th>
            </tr>
            {% for stock in page_obj %}
                <tr class="small" style="margin-bottom: 5px">
@@ -61,7 +62,8 @@
                   <td align="center">{{ stock.pe|floatformat }}</td>
                   <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
                   <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
-               </tr>
+                  <td>{{ stock.asx_code | stock_sector }}</td>
+                </tr>
                {% if stock.asx_code in virtual_purchases %}
                    {% for purchase in virtual_purchases|get_item:stock.asx_code %}
                    <tr>

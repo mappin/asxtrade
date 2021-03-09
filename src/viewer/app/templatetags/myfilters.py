@@ -1,6 +1,7 @@
 from django.template.defaulttags import register
 import re
-
+from functools import lru_cache
+from app.models import CompanyDetails
 
 @register.filter
 def get_item(d, key):
@@ -24,3 +25,13 @@ def percentage(value):
         return value * 100.0
     except TypeError:
         return 0.0
+
+@register.filter
+@lru_cache(maxsize=1024)
+def stock_sector(stock_code):
+    assert stock_code is not None and len(stock_code) >= 3
+    rec = CompanyDetails.objects.filter(asx_code=stock_code).first()
+    if rec is None:
+        return ''
+    s = rec.sector_name
+    return s

@@ -1,14 +1,18 @@
+"""
+Data models structured to be identical to the format specified by asxtrade.py
+and the free ASX API endpoint
+"""
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from app.messages import warning
-import pylru
 from collections import defaultdict
 from datetime import datetime, timedelta, date
 import re
 import io
+from functools import lru_cache
 import pandas as pd
 
 
@@ -205,30 +209,23 @@ class Watchlist(model.Model):
 
 def user_watchlist(user):
     hits = Watchlist.objects.filter(user=user).values_list("asx_code", flat=True)
-    print("Found {} stocks in user watchlist".format(hits.count()))
-    return set(hits)
+    results = set(hits)
+    print("Found {} stocks in user watchlist".format(len(results)))
+    return results
 
-
-date_cache = pylru.lrucache(100)
-
-
+@lru_cache
 def all_available_dates(reference_stock="ANZ"):
     """
     Returns a sorted list of available dates where the reference stock has a price. stocks
-    which are suspended/delisted may have limited dates. The list is sorted from oldest to newest (ascending sort)
-    As this is a frequently used query, an LRU cache is implemented to avoid hitting the database too much.
+    which are suspended/delisted may have limited dates. The list is sorted from oldest to 
+    newest (ascending sort). As this is a frequently used query, an LRU cache is implemented 
+    to avoid hitting the database too much.
     """
-    global date_cache
-
-    if reference_stock in date_cache:
-        return date_cache[reference_stock]
-
     # use reference_stock to quickly search the db by limiting the stocks searched
     dates = Quotation.objects.mongo_distinct(
         "fetch_date", {"asx_code": reference_stock}
     )
     ret = sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
-    date_cache[reference_stock] = ret
     return ret
 
 
