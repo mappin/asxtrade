@@ -532,11 +532,11 @@ def get_required_tags(all_dates, fields):
     return required_tags
 
 def company_prices(
-    stock_codes,
-    all_dates=None,
-    fields="last_price",
-    fail_missing_months=True,
-    fix_missing=True,
+        stock_codes,
+        all_dates=None,
+        fields="last_price",
+        fail_missing_months=True,
+        missing_cb=impute_missing, # or None if you want missing values 
 ):
     """
     Return a dataframe with the required companies (iff quoted) over the
@@ -591,14 +591,8 @@ def company_prices(
         list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d")
     )
     superdf = superdf[dates]
-    if fix_missing and superdf.isnull().values.any():
-        warning(
-            None,
-            "Missing data found in fields={} stocks={} over dates: {}-{}".format(
-                fields, stock_codes, all_dates[0], all_dates[-1]
-            ),
-        )
-        superdf = impute_missing(superdf)
+    if missing_cb is not None and superdf.isnull().values.any():
+        superdf = missing_cb(superdf)
     return superdf
 
 
