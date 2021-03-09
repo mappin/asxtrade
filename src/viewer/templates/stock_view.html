@@ -32,15 +32,7 @@
                 </tr>
             {% for s in securities %}
                 <tr class="small" style="margin-bottom: 5px">
-                  <td> <a href="/watchlist/{{ s.asx_code }}?next={{ request.path }}">
-                    {% if s.asx_code in watched %}
-                        <img src="{% static "star.png" %}" width="12" />
-                    {% else %}
-                        <img src="{% static "empty-star.png" %}" width="12" />
-                    {% endif %}
-                  </a><a href="/purchase/{{ s.asx_code }}?next={{ request.path }}">
-                        <img src="{% static "money.png" %}" width="12" />
-                  </a>&nbsp;{{ s.asx_code }}</td>
+                  <td>{% clickable_stock s.asx_code user=request.user next=request.path %}</td>
                   <td>{{ s.company_name }}</td>
                   <td>{{ s.asx_isin_code }}</td>
                   <td>{{ s.security_name }}</td>
