@@ -266,9 +266,10 @@ def optimise_portfolio(stocks, desired_dates):
     # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     df = company_prices(stocks, 
                         all_dates=desired_dates, 
-                        fail_missing_months=False)
+                        fail_missing_months=False, 
+                        missing_cb=None)
     stock_prices = df.transpose()
-    #print(df)
+    print(stock_prices)
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
     messages = [] # messages to add to page to warn users of problems with computational stability/data quality
@@ -326,7 +327,7 @@ def optimise_portfolio(stocks, desired_dates):
             # only plot covariances for significant holdings
             #assert covar_stocks.isna().sum() == 0 and covar_stocks.isnull().sum() == 0
             m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())]).ledoit_wolf()
-            print(m)
+            #print(m)
             ax = plot_covariance(m, plot_correlation=True)
             correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
             plt.close(ax.figure)
