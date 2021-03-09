@@ -556,7 +556,7 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     assert stocks is not None
     assert n_days is not None  # typically integer, but desired_dates() is polymorphic
     all_dates = desired_dates(start_date=n_days)
-    cip = company_prices(stocks, all_dates=all_dates, fields="change_in_percent")
+    cip = company_prices(stocks, all_dates=all_dates, fields="change_in_percent", missing_cb=None)
     outliers = detect_outliers(stocks, cip)
     return show_matching_companies(
         outliers,
