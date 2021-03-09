@@ -269,7 +269,7 @@ def optimise_portfolio(stocks, desired_dates):
                         fail_missing_months=False, 
                         missing_cb=None)
     stock_prices = df.transpose()
-    print(stock_prices)
+    #print(stock_prices)
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
     messages = [] # messages to add to page to warn users of problems with computational stability/data quality
