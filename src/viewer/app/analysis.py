@@ -8,7 +8,7 @@ from app.plots import plot_sector_performance, plot_company_versus_sector, plot_
 from app.messages import warning
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
-from pypfopt.plotting import plot_covariance
+from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.expected_returns import returns_from_prices
 
@@ -179,6 +179,7 @@ def default_point_score_rules():
 def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     """
     Returns a dataframe describing those outliers present in stocks based on the provided rules.
+    All_stocks_cip is the "change in percent" for at least the stocks present in the specified list
     """
     if rules is None:
         rules = default_point_score_rules()
@@ -189,13 +190,13 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     for stock in stocks:
         #print("Processing stock: ", stock)
         try:
-           sector = stocks_by_sector_df.at[stock, 'sector_name']
-           sector_companies = list(stocks_by_sector_df.loc[stocks_by_sector_df['sector_name'] == sector].asx_code)
-           # day_low_high() may raise KeyError when data is currently being fetched, so it appears here...
-           day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
+            sector = stocks_by_sector_df.at[stock, 'sector_name']
+            sector_companies = list(stocks_by_sector_df.loc[stocks_by_sector_df['sector_name'] == sector].asx_code)
+            # day_low_high() may raise KeyError when data is currently being fetched, so it appears here...
+            day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
         except KeyError:
-           warning(None, "Unable to locate watchlist entry: {} - continuing without it".format(stock))
-           continue
+            warning(None, "Unable to locate watchlist entry: {} - continuing without it".format(stock))
+            continue
         state = {
             'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
             'all_stocks_change_in_percent_df': all_stocks_cip,
