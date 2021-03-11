@@ -50,6 +50,7 @@ from app.forms import (
     DividendSearchForm,
     CompanySearchForm,
     MoverSearchForm,
+    SectorSentimentSearchForm
 )
 from app.analysis import (
     analyse_sector,
@@ -927,16 +928,24 @@ class DeleteVirtualPurchaseView(LoginRequiredMixin, MyObjectMixin, DeleteView):
 
 delete_virtual_stock = DeleteVirtualPurchaseView.as_view()
 
-@login_required
-def show_recent_sector(request):
-    sector = request.GET.get("sector", "Communication Services")
-    n_days = request.GET.get('n', 30)
-    stocks = all_sector_stocks(sector)
-    dd = desired_dates(start_date=n_days)
-    cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None)
-    context = {
-        'title': "Past {} day sector performance: box plot trends".format(n_days),
-        'sector': sector,
-        'plot': plot_boxplot_series(cip)
-    }
-    return render(request, "recent_sector_performance.html", context)
+class ShowRecentSectorView(LoginRequiredMixin, FormView):
+    template_name = 'recent_sector_performance.html'
+    form_class = SectorSentimentSearchForm
+    action_url = "/show/recent_sector_performance"
+
+    def form_valid(self, form):
+        sector = form.cleaned_data.get('sector', "Communication Services")
+        norm_method = form.cleaned_data.get('normalisation_method', None)
+        n_days = form.cleaned_data.get('n_days', 30)
+        stocks = all_sector_stocks(sector)
+        dd = desired_dates(start_date=n_days)
+        cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None)
+        context = self.get_context_data()
+        context.update({
+            'title': "Past {} day sector performance: box plot trends".format(n_days),
+            'sector': sector,
+            'plot': plot_boxplot_series(cip, normalisation_method=norm_method),
+        })
+        return render(self.request, self.template_name, context)
+
+show_recent_sector = ShowRecentSectorView.as_view()

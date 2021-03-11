@@ -52,8 +52,9 @@ class MoverSearchForm(forms.Form):
 class SectorSentimentSearchForm(forms.Form):
     normalisation_choices = (
         (1, 'None'),
-        (2, 'Min/Max. Scaler'),
-        (3, 'Divide by Max')
+        (2, 'Min/Max. scaling'),
+        (3, 'Divide by maximum')
     )
     sector = forms.ChoiceField(required=True, choices=SectorSearchForm.SECTOR_CHOICES)
     normalisation_method = forms.ChoiceField(required=True, choices=normalisation_choices)
+    n_days = forms.IntegerField(required=True, max_value=200, min_value=10, initial=30)

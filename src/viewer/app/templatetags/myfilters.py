@@ -43,7 +43,6 @@ def stock_sector(stock_code):
     return s
 
 @register.simple_tag
-@lru_cache(maxsize=1024)
 def clickable_stock(asx_code: str, **kwargs):
     assert asx_code is not None
     user = kwargs.get('user')
