@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from app.models import all_sector_stocks
+from django.db import models
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
@@ -47,3 +48,12 @@ class MoverSearchForm(forms.Form):
     timeframe_in_days = forms.IntegerField(required=True, min_value=1, max_value=365, initial=7, label="Timeframe (days)")
     show_increasing = forms.BooleanField(required=False, initial=True, label="Increasing")
     show_decreasing = forms.BooleanField(required=False, initial=True, label="Decreasing")
+
+class SectorSentimentSearchForm(forms.Form):
+    normalisation_choices = (
+        (1, 'None'),
+        (2, 'Min/Max. Scaler'),
+        (3, 'Divide by Max')
+    )
+    sector = forms.ChoiceField(required=True, choices=SectorSearchForm.SECTOR_CHOICES)
+    normalisation_method = forms.ChoiceField(required=True, choices=normalisation_choices)
