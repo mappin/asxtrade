@@ -67,6 +67,7 @@ from app.plots import (
     plot_market_wide_sector_performance,
     plot_company_rank,
     plot_portfolio,
+    plot_boxplot_series,
     plot_best_monthly_price_trend
 )
 
@@ -925,3 +926,17 @@ class DeleteVirtualPurchaseView(LoginRequiredMixin, MyObjectMixin, DeleteView):
 
 
 delete_virtual_stock = DeleteVirtualPurchaseView.as_view()
+
+@login_required
+def show_recent_sector(request):
+    sector = request.GET.get("sector", "Communication Services")
+    n_days = request.GET.get('n', 30)
+    stocks = all_sector_stocks(sector)
+    dd = desired_dates(start_date=n_days)
+    cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None)
+    context = {
+        'title': "Past {} day sector performance: box plot trends".format(n_days),
+        'sector': sector,
+        'plot': plot_boxplot_series(cip)
+    }
+    return render(request, "recent_sector_performance.html", context)

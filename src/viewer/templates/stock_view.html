@@ -32,7 +32,7 @@
                 </tr>
             {% for s in securities %}
                 <tr class="small" style="margin-bottom: 5px">
-                  <td>{% clickable_stock s.asx_code user=request.user next=request.path %}</td>
+                  <td>{% clickable_stock s.asx_code user=request.user.username next=request.path %}</td>
                   <td>{{ s.company_name }}</td>
                   <td>{{ s.asx_isin_code }}</td>
                   <td>{{ s.security_name }}</td>

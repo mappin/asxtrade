@@ -43,7 +43,7 @@
            </tr>
            {% for stock in page_obj %}
                <tr class="small" style="margin-bottom: 5px">
-                  <td>{% clickable_stock stock.asx_code user=request.user next=request.path %}</td>
+                  <td>{% clickable_stock stock.asx_code user=request.user.username next=request.path %}</td>
                   <td>{{ stock.annual_dividend_yield |floatformat }}</td>
                   <td>{{ stock.last_price }}</td>
                   <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>

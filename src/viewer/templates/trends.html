@@ -10,7 +10,7 @@
         <tr><th>Stock</th><th>Overall slope</th><th>NRMSE</th><th>30 day slope</th></tr>
         {% for stock, tuple in watchlist_trends.items %}
             <tr class="{{ tuple.3 }}">
-                <td>{% clickable_stock stock user=request.user next=request.path %}</td>
+                <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
                 <td>{{ tuple.0 |floatformat }}</td>
                 <td>{{ tuple.1 |floatformat }}</td>
                 <td>{{ tuple.2 }}</td>
