@@ -542,3 +542,22 @@ def plot_point_scores(stock: str, sector_companies,
             + p9.coord_flip()
     )
     return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)
+
+def plot_boxplot_series(df):
+    """
+    Treating each column as a separate boxplot and each row as an independent observation 
+    (ie. different company)
+    render a series of box plots to identify a shift in performance from the observations.
+    """
+    #normalized_df = (df-df.min()) / (df.max()-df.min())
+    #normalized_df = df / df.max(axis=0)
+    normalized_df = df
+    melted = normalized_df.melt(ignore_index=False).dropna()
+    plot = (p9.ggplot(melted, p9.aes(x='fetch_date', y='value'))
+            + p9.geom_boxplot(outlier_colour="blue")
+            + p9.theme(axis_text_x=p9.element_text(size=7),
+                       axis_text_y=p9.element_text(size=7))
+            + p9.labs(x="Date (YYYY-MM-DD)", y="Min/Max normalised percentage change data")
+            + p9.coord_flip())
+    return plot_as_inline_html_data(plot)
+        

@@ -1,16 +1,24 @@
+"""
+Responsible for performing computations to support a visualisation/analysis result
+"""
 from collections import defaultdict, OrderedDict
 from datetime import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from app.models import CompanyDetails, company_prices, day_low_high
-from app.plots import plot_sector_performance, plot_company_versus_sector, plot_as_base64, stocks_by_sector
-from app.messages import warning
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
-from pypfopt.plotting import plot_covariance, plot_efficient_frontier
+from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.expected_returns import returns_from_prices
+from app.models import CompanyDetails, company_prices, day_low_high
+from app.plots import (
+    plot_sector_performance,
+    plot_company_versus_sector,
+    plot_as_base64,
+    stocks_by_sector
+)
+from app.messages import warning
 
 def as_css_class(thirty_day_slope, three_hundred_day_slope):
     if thirty_day_slope > 0.0 and three_hundred_day_slope < 0.0:
