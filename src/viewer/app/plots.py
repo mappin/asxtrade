@@ -543,21 +543,31 @@ def plot_point_scores(stock: str, sector_companies,
     )
     return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)
 
-def plot_boxplot_series(df):
+def plot_boxplot_series(df, normalisation_method=None):
     """
     Treating each column as a separate boxplot and each row as an independent observation 
     (ie. different company)
     render a series of box plots to identify a shift in performance from the observations.
+    normalisation_method should be one of the values present in SectorSentimentSearchForm.normalisation_choices
     """
-    #normalized_df = (df-df.min()) / (df.max()-df.min())
-    #normalized_df = df / df.max(axis=0)
-    normalized_df = df
+    if normalisation_method == None or normalisation_method == '1':
+        normalized_df = df
+        y_label = "Percentage change"
+    elif normalisation_method == '2':
+        normalized_df = (df-df.min()) / (df.max()-df.min())
+        y_label = "Percentage change (min/max. scaled)"
+    else:
+        normalized_df = df / df.max(axis=0)  # div by max if all else fails...
+        y_label = "Percentage change (normalised by dividing by max)"
+
+    n_inches = len(df.columns) / 5
     melted = normalized_df.melt(ignore_index=False).dropna()
     plot = (p9.ggplot(melted, p9.aes(x='fetch_date', y='value'))
             + p9.geom_boxplot(outlier_colour="blue")
             + p9.theme(axis_text_x=p9.element_text(size=7),
-                       axis_text_y=p9.element_text(size=7))
-            + p9.labs(x="Date (YYYY-MM-DD)", y="Min/Max normalised percentage change data")
+                       axis_text_y=p9.element_text(size=7),
+                       figure_size=(12, n_inches))
+            + p9.labs(x="Date (YYYY-MM-DD)", y=y_label)
             + p9.coord_flip())
     return plot_as_inline_html_data(plot)
         
