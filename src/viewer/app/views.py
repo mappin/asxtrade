@@ -152,7 +152,7 @@ class DividendYieldSearch(
         results = Quotation.objects.filter(fetch_date=self.as_at_date).\
                                     filter(annual_dividend_yield__gte=min_yield).\
                                     filter(annual_dividend_yield__lte=max_yield)
-        
+
         if "min_pe" in kwargs:
             results = results.filter(pe__gte=kwargs.get("min_pe"))
         if "max_pe" in kwargs:
@@ -218,7 +218,7 @@ class SectorSearchView(DividendYieldSearch):
             return 30
         elif field_name == "n_top_bottom":
             return self.n_top_bottom
-   
+
         assert False # field_name not known
         return None
 
@@ -239,7 +239,7 @@ class SectorSearchView(DividendYieldSearch):
             wanted_stocks, all_dates=wanted_dates, n_top_bottom=n_top_bottom
         )
 
-        wanted_stocks = self.get_desired_stocks(wanted_stocks, 
+        wanted_stocks = self.get_desired_stocks(wanted_stocks,
                                                 kwargs.get('best10', False),
                                                 kwargs.get('worst10', False),
                                                 top10, bottom10)
@@ -254,7 +254,7 @@ class SectorSearchView(DividendYieldSearch):
             "wanted_stocks":     wanted_stocks,
             "n_top_bottom":      n_top_bottom,
         }
-        
+
         results = Quotation.objects.filter(
             asx_code__in=wanted_stocks, fetch_date=when_date
         ).exclude(error_code="id-or-code-invalid")
@@ -609,16 +609,13 @@ def show_optimised_sector(request, sector_id=None, exclude=None):
     stocks = all_sector_stocks(sector_name)
     return show_optimised_stocks(request, stocks, exclude=exclude)
 
-
 @login_required
 def show_optimised_watchlist(request, exclude=None):
     return show_optimised_stocks(request, user_watchlist(request.user), exclude=exclude)
 
-
 @login_required
 def show_optimised_etfs(request, exclude=None):
     return show_optimised_stocks(request, all_etfs(), exclude=exclude)
-
 
 @login_required
 def show_sector_outliers(request, sector_id=None, n_days=30):

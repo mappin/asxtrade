@@ -40,13 +40,13 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     for column in filter(lambda c: c.startswith("bin_"), sentiment_df.columns):
         c = Counter(sentiment_df[column])
         date = column[4:]
-        for bin, val in c.items():
-            if exclude_zero_bin and (bin == '0.0' or not isinstance(bin, str)):
+        for bin_name, val in c.items():
+            if exclude_zero_bin and (bin_name == '0.0' or not isinstance(bin_name, str)):
                 continue
-            bin = str(bin)
-            assert isinstance(bin, str)
+            bin_name = str(bin_name)
+            assert isinstance(bin_name, str)
             val = int(val)
-            rows.append({ 'date': datetime.strptime(date, "%Y-%m-%d"), 'bin': bin, 'value': val })
+            rows.append({'date': datetime.strptime(date, "%Y-%m-%d"), 'bin': bin_name, 'value': val})
 
     df = pd.DataFrame.from_records(rows)
     #print(df['bin'].unique())
@@ -58,7 +58,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     plot = (p9.ggplot(df, p9.aes('date', 'bin_ordered', fill='value'))
             + p9.geom_tile(show_legend=False) + p9.theme_bw()
             + p9.xlab("") + p9.ylab("Percentage daily change")
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7), figure_size=(10,5)))
+            + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), figure_size=(10,5)))
     if plot_text_labels:
         plot = plot + p9.geom_text(p9.aes(label='value'), size=8, color="white")
     return plot_as_inline_html_data(plot)
@@ -70,9 +70,9 @@ def plot_key_stock_indicators(df, stock):
     df['volume'] = df['last_price'] * df['volume'] / 1000000 # again, express as $(M)
     df['fetch_date'] = df.index
     plot_df = pd.melt(df, id_vars='fetch_date',
-                 value_vars=['pe', 'eps', 'annual_dividend_yield', 'volume', 'last_price'],
-                 var_name='indicator',
-                 value_name='value')
+                      value_vars=['pe', 'eps', 'annual_dividend_yield', 'volume', 'last_price'],
+                      var_name='indicator',
+                      value_name='value')
     plot_df['value'] = pd.to_numeric(plot_df['value'])
     plot_df['fetch_date'] = pd.to_datetime(plot_df['fetch_date'])
 
@@ -105,10 +105,14 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
     assert portfolio_df is not None
     #print(portfolio_df)
     portfolio_df['date'] = pd.to_datetime(portfolio_df['date'])
-    avg_profit_over_period = portfolio_df.filter(items=['stock', 'stock_profit']).groupby('stock').mean()
-    avg_profit_over_period['contribution'] = ['positive' if profit >= 0.0 else 'negative' for profit in avg_profit_over_period.stock_profit]
-    avg_profit_over_period = avg_profit_over_period.drop('stock_profit', axis='columns') # dont want to override actual profit with average
-    portfolio_df = portfolio_df.merge(avg_profit_over_period, left_on='stock', right_index=True, how='inner')
+    avg_profit_over_period = portfolio_df.filter(items=['stock', 'stock_profit'])\
+                                         .groupby('stock').mean()
+    avg_profit_over_period['contribution'] = ['positive' if profit >= 0.0 else 'negative' 
+                                              for profit in avg_profit_over_period.stock_profit]
+    # dont want to override actual profit with average
+    avg_profit_over_period = avg_profit_over_period.drop('stock_profit', axis='columns') 
+    portfolio_df = portfolio_df.merge(avg_profit_over_period, left_on='stock', 
+                                      right_index=True, how='inner')
     #print(portfolio_df)
 
     # 1. overall performance
@@ -121,7 +125,7 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
             + p9.theme(axis_text_x=p9.element_text(angle=30, size=date_text_size),
                        figure_size=figure_size,
                        legend_position='none')
-    )
+            )
     overall_figure = plot_as_inline_html_data(plot)
 
     df = portfolio_df.filter(items=['stock', 'date', 'stock_profit', 'stock_worth', 'contribution'])
@@ -137,7 +141,7 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
             + p9.labs(x='', y='$ AUD')
             + p9.facet_grid('contribution ~ field', scales="free_y")
             + p9.theme(legend_position='none', figure_size=figure_size)
-    )
+           )
     profit_contributors = plot_as_inline_html_data(plot)
 
     # 3. per purchased stock performance
@@ -256,9 +260,9 @@ def plot_heatmap(companies, all_dates=None, field_name='change_in_percent', bins
         all_dates = desired_dates(start_date=30)
     df = company_prices(companies, all_dates=all_dates, fields=field_name) # by default change_in_percent will be used
     n_stocks = len(df)
-    sum = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
-    top10 = sum.nlargest(n_top_bottom)
-    bottom10 = sum.nsmallest(n_top_bottom)
+    sum_by_company = df.sum(axis=1) # compute totals across all dates for the specified companies to look at performance across the observation period
+    top10 = sum_by_company.nlargest(n_top_bottom)
+    bottom10 = sum_by_company.nsmallest(n_top_bottom)
     #print(df.columns)
     #print(bins)
     try:
@@ -535,11 +539,11 @@ def plot_point_scores(stock: str, sector_companies,
         rows.append({ 'rule': str(k), 'net_points': v})
     df = pd.DataFrame.from_records(rows)
     net_rule_contributors_plot = (p9.ggplot(df, p9.aes(x='rule', y='net_points'))
-            + p9.labs(x="Rule", y="Contribution to points by rule")
-            + p9.geom_bar(stat="identity")
-            + p9.theme(axis_text_y = p9.element_text(size=7),
-                       subplots_adjust={'left': 0.2})
-            + p9.coord_flip()
+                                  + p9.labs(x="Rule", y="Contribution to points by rule")
+                                  + p9.geom_bar(stat="identity")
+                                  + p9.theme(axis_text_y=p9.element_text(size=7),
+                                            subplots_adjust={'left': 0.2})
+                                  + p9.coord_flip()
     )
     return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)
 
