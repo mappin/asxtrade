@@ -32,8 +32,34 @@ This visualisation shows:
 
 {% if plot %}
 <div class="row mt-4">
-<img class="market-sentiment" src="data:image/png;base64, {{ plot }}" alt="ASX sector recent performance box plot">
+    <img class="market-sentiment" src="data:image/png;base64, {{ plot }}" 
+         alt="ASX sector recent performance box plot" />
 </div>
 {% endif %}
+
+<div class="row mt-4">
+    <h3>Winning stocks</h3>
+</div>
+
+<div class="row mt-4">
+    <p>
+    Stocks which beat the mean daily sector performance (% change) are reported
+    here. Only the chosen timeframe is considered (past {{ n_days }}).
+    </p>
+</div>
+
+<div class="mt-4 row">
+    <table>
+        <tr><th>Stock</th><th>Wins</th><th>Total move (%)</th></tr>
+        {% for asx_code, n_wins, total_move_pct in winning_stocks %}
+        <tr>
+            <td>{% clickable_stock asx_code user=request.user.username next=request.path %}</td>
+            <td>{{ n_wins }}</td>
+            <td>{{ total_move_pct |floatformat }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
 
 {% endblock %}

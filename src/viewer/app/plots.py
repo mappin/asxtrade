@@ -550,6 +550,19 @@ def plot_boxplot_series(df, normalisation_method=None):
     render a series of box plots to identify a shift in performance from the observations.
     normalisation_method should be one of the values present in SectorSentimentSearchForm.normalisation_choices
     """
+    # compute star performers: those who are above the mean on a given day counted over all days
+    count = defaultdict(int)
+    for col in df.columns:
+        avg = df.mean(axis=0)
+        winners = df[df[col] > avg[col]][col]
+        for winner in winners.index:
+            count[winner] += 1
+    winner_results = []
+    for asx_code, n_wins in count.items():
+        x = df.loc[asx_code].sum()
+        winner_results.append((asx_code, n_wins, x))
+
+    # and plot the normalised data
     if normalisation_method == None or normalisation_method == '1':
         normalized_df = df
         y_label = "Percentage change"
@@ -569,5 +582,5 @@ def plot_boxplot_series(df, normalisation_method=None):
                        figure_size=(12, n_inches))
             + p9.labs(x="Date (YYYY-MM-DD)", y=y_label)
             + p9.coord_flip())
-    return plot_as_inline_html_data(plot)
+    return plot_as_inline_html_data(plot), winner_results
         
