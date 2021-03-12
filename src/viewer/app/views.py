@@ -40,7 +40,7 @@ from app.models import (
     increasing_eps,
     increasing_yield,
     user_purchases,
-    Watchlist,
+    toggle_watchlist_entry,
     VirtualPurchase
 )
 from app.mixins import SearchMixin
@@ -830,12 +830,7 @@ def redirect_to_next(request, fallback_next="/"):
 def toggle_watched(request, stock=None):
     validate_stock(stock)
     validate_user(request.user)
-    current_watchlist = user_watchlist(request.user)
-    if stock in current_watchlist:  # remove from watchlist?
-        Watchlist.objects.filter(user=request.user, asx_code=stock).delete()
-    else:
-        Watchlist(user=request.user, asx_code=stock).save()
-
+    toggle_watchlist_entry(request.user, stock)
     return redirect_to_next(request)
 
 
