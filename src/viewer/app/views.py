@@ -936,10 +936,13 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
         dd = desired_dates(start_date=n_days)
         cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None)
         context = self.get_context_data()
+        boxplot, winner_results = plot_boxplot_series(cip, normalisation_method=norm_method)
         context.update({
             'title': "Past {} day sector performance: box plot trends".format(n_days),
+            'n_days': n_days,
             'sector': sector,
-            'plot': plot_boxplot_series(cip, normalisation_method=norm_method),
+            'plot': boxplot,
+            'winning_stocks': winner_results
         })
         return render(self.request, self.template_name, context)
 

@@ -246,7 +246,8 @@ def user_watchlist(user):
     """
     hits = Watchlist.objects.filter(user=user).values_list("asx_code", flat=True)
     results = set(hits)
-    print("Found {} stocks in user watchlist".format(len(results)))
+    #if logger:
+    #    logger.info("Found {} stocks in watchlist for user=".format(len(results), user.username))
     return results
 
 @func.lru_cache(maxsize=16)
