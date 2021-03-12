@@ -582,5 +582,5 @@ def plot_boxplot_series(df, normalisation_method=None):
                        figure_size=(12, n_inches))
             + p9.labs(x="Date (YYYY-MM-DD)", y=y_label)
             + p9.coord_flip())
-    return plot_as_inline_html_data(plot), winner_results
+    return plot_as_inline_html_data(plot), list(sorted(winner_results, key=lambda t: t[2]))
         
