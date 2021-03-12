@@ -13,9 +13,10 @@ from collections import defaultdict
 from datetime import datetime, timedelta, date
 import re
 import io
-from functools import lru_cache
 import pandas as pd
+from cachetools import cached, LRUCache, keys, func
 
+watchlist_cache = LRUCache(maxsize=1024)
 
 def validate_stock(stock):
     assert stock is not None
@@ -207,11 +208,11 @@ class Watchlist(model.Model):
         managed = True  # viewer application is responsible NOT asxtrade.py
         db_table = "user_watchlist"
 
-@lru_cache(maxsize=16)
+@func.lru_cache(maxsize=16)
 def find_user(username: str):
     return get_user_model().objects.filter(username=username).first()
 
-@lru_cache(maxsize=1024)
+@cached(watchlist_cache)
 def is_in_watchlist(username: str, asx_code: str) -> bool:
     user = find_user(username)
     if user is None:
@@ -219,7 +220,25 @@ def is_in_watchlist(username: str, asx_code: str) -> bool:
     else:
         rec = Watchlist.objects.filter(asx_code=asx_code, user=user).first()
         return rec is not None
-    
+
+def toggle_watchlist_entry(user, asx_stock):
+    assert user is not None
+    assert isinstance(asx_stock, str)
+    current_watchlist = user_watchlist(user)
+    # 1. update db
+    if asx_stock in current_watchlist:  # remove from watchlist?
+        Watchlist.objects.filter(user=user, asx_code=asx_stock).delete()
+    else:
+        Watchlist(user=user, asx_code=asx_stock).save()
+    # 2. invalidate from watchlist_cache as wrong cached value may be stored already
+    try:
+        # NB: must be the same key calculation and args as is_in_watchlist()
+        key = keys.hashkey(user.username, asx_stock)
+        watchlist_cache.pop(key=key)
+    except KeyError: # not in cache? thats ok so...
+        pass
+
+
 def user_watchlist(user):
     """
     Given a user object eg. from find_user() return the set of stock codes which the user
@@ -230,7 +249,7 @@ def user_watchlist(user):
     print("Found {} stocks in user watchlist".format(len(results)))
     return results
 
-@lru_cache(maxsize=16)
+@func.lru_cache(maxsize=16)
 def all_available_dates(reference_stock="ANZ"):
     """
     Returns a sorted list of available dates where the reference stock has a price. stocks
