@@ -13,7 +13,7 @@ import hashlib
 
 def dates_of_month(month, year):
     assert month >= 1 and month <= 12
-    assert year >= 2020
+    assert year >= 1995
     num_days = calendar.monthrange(year, month)[1]
     days = [str(date(year, month, day)) for day in range(1, num_days+1)]
     #print(month, year, " ", days)

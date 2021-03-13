@@ -682,7 +682,7 @@ class VirtualPurchase(model.Model):
             raise ValueError()
         buy_price = self.price_at_buy_date
         pct_move = (quote.last_price / buy_price) * 100.0 - 100.0 if buy_price > 0.0 else 0.0
-        return (self.n * p, pct_move)
+        return (self.n * quote.last_price, pct_move)
 
     def __str__(self):
         cur_price, pct_move = self.current_price()
