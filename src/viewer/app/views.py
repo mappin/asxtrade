@@ -370,7 +370,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         fail_missing_months=False, 
         missing_cb=None,
     )
-    # print(stock_df)
+    print(stock_df)
 
     securities = Security.objects.filter(asx_code=stock)
     company_details = CompanyDetails.objects.filter(asx_code=stock).first()
@@ -733,12 +733,12 @@ def show_purchase_performance(request):
 
 
 def show_matching_companies(
-    matching_companies,
-    title,
-    heatmap_title,
-    virtual_purchases_by_user,
-    request,
-    extra_context=None,
+        matching_companies,
+        title,
+        heatmap_title,
+        virtual_purchases_by_user,
+        request,
+        extra_context=None,
 ):
     """
     Support function to public-facing views to eliminate code redundancy
@@ -857,8 +857,8 @@ class BuyVirtualStock(LoginRequiredMixin, CreateView):
         return result
 
     def get_initial(self, **kwargs):
-        stock = self.kwargs.get("stock")
-        amount = self.kwargs.get("amount", 5000.0)
+        stock = kwargs.get("stock", self.kwargs.get("stock"))
+        amount = kwargs.get("amount", self.kwargs.get("stock", 5000.0))
         user = self.request.user
         validate_stock(stock)
         validate_user(user)

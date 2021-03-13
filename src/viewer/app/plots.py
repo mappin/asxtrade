@@ -1,3 +1,7 @@
+"""
+Responsible for production of data visualisations and rendering this data as inline
+base64 data for various django templates to use.
+"""
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager

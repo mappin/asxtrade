@@ -53,9 +53,7 @@ class Quotation(model.Model):
     code = model.TextField(blank=False, null=False, max_length=20)
     day_high_price = model.FloatField()
     day_low_price = model.FloatField()
-    deprecated_market_cap = (
-        model.IntegerField()
-    )  # NB: deprecated use market_cap instead
+    deprecated_market_cap = model.IntegerField()  # NB: deprecated use market_cap instead
     deprecated_number_of_shares = model.IntegerField()
     descr_full = model.TextField(max_length=100)  # eg. Ordinary Fully Paid
     eps = model.FloatField()
@@ -69,7 +67,7 @@ class Quotation(model.Model):
     pe = model.FloatField()
     previous_close_price = model.FloatField()
     previous_day_percentage_change = model.FloatField()
-    suspected = model.BooleanField()
+    suspended = model.BooleanField()
     volume = model.IntegerField()
     year_high_date = model.DateField()
     year_high_price = model.FloatField()
@@ -499,6 +497,7 @@ def day_low_high(stock, all_dates=None):
 
 def impute_missing(df, method="linear"):
     assert df is not None
+    print("impute_missing: ", df)
     if method == "linear":  # faster...
         result = df.interpolate(
             method=method, limit_direction="forward", axis="columns"
@@ -588,6 +587,7 @@ def company_prices(
                 all_dates=all_dates,
                 fields=field,
                 fail_missing_months=fail_missing_months,
+                missing_cb=missing_cb
             )
             for field in fields
         ]
@@ -599,7 +599,7 @@ def company_prices(
         assert list(result_df.columns) == fields
         # reject rows which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
-        result_df = result_df.dropna()
+        result_df = result_df.dropna(how='all')
         return result_df
 
     # print(stock_codes)
@@ -608,6 +608,7 @@ def company_prices(
         all_dates = [datetime.strftime(datetime.now(), "%Y-%m-%d")]
 
     required_tags = get_required_tags(all_dates, fields)
+    print(required_tags)
     which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
@@ -676,13 +677,11 @@ class VirtualPurchase(model.Model):
 
     def current_price(self):
         assert self.n > 0
-        q, as_at = latest_quote(self.asx_code)
-        p = q.last_price
+        quote, _ = latest_quote(self.asx_code)
+        if quote is None:
+            raise ValueError()
         buy_price = self.price_at_buy_date
-        if buy_price > 0:
-            pct_move = (p / buy_price) * 100.0 - 100.0
-        else:
-            pct_move = 0.0
+        pct_move = (quote.last_price / buy_price) * 100.0 - 100.0 if buy_price > 0.0 else 0.0
         return (self.n * p, pct_move)
 
     def __str__(self):

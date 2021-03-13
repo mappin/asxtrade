@@ -139,7 +139,10 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
                 df = pd.DataFrame(columns=d.keys())
             row = pd.Series(d, name=asx_code)
             df = df.append(row)
+	    assert 'descr_full' in d   # renamed in django app so we must do the same here...
             db.asx_prices.find_one_and_update({ 'asx_code': asx_code, 'fetch_date': fetch_date }, { '$set': d }, upsert=True)
+        except AssertionError:
+            raise
         except Exception as e:
             print("WARNING: unable to fetch data for {} -- ignored.".format(asx_code))
             print(str(e))
@@ -250,14 +253,7 @@ if __name__ == "__main__":
     args.add_argument('--stocks', help="JSON array with stocks to load for --want-prices", type=str, required=False)
     a = args.parse_args()
 
-    config = {}
-    with open(a.config, 'r') as fp:
-        config = json.loads(fp.read())
-    m = config.get('mongo')
-    print(m)
-    password = m.get('password')
-    if password.startswith('$'):
-        password = os.getenv(password[1:])
+    m, password = read_config(a.config)
     mongo = pymongo.MongoClient(m.get('host'), m.get('port'), username=m.get('user'), password=password)
     db = mongo[m.get('db')]
 
