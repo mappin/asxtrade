@@ -33,7 +33,7 @@ def fix_percentage(quotation: dict, field_name: str):
 
 def read_config(filename, verbose=True):
     """
-    Read config.json (as specified by command line args) and return the password and mongo host
+    Read config.json (as specified by command line args) and return the password and
     configuration as a tuple
     """
     assert isinstance(filename, str)
@@ -47,4 +47,4 @@ def read_config(filename, verbose=True):
         password = m.get('password')
         if password.startswith('$'):
             password = os.getenv(password[1:])
-        return m, password
+        return config, password
