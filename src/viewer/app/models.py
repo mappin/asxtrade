@@ -608,7 +608,7 @@ def company_prices(
         all_dates = [datetime.strftime(datetime.now(), "%Y-%m-%d")]
 
     required_tags = get_required_tags(all_dates, fields)
-    print(required_tags)
+    #print(required_tags)
     which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
