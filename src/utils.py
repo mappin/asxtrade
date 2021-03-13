@@ -1,3 +1,5 @@
+import json
+import os
 
 def is_error(quotation: dict):
     assert quotation is not None
@@ -28,3 +30,21 @@ def fix_percentage(quotation: dict, field_name: str):
     else:
         quotation[field_name] = field_value # assume already converted ie. float
         return field_value
+
+def read_config(filename, verbose=True):
+    """
+    Read config.json (as specified by command line args) and return the password and mongo host
+    configuration as a tuple
+    """
+    assert isinstance(filename, str)
+
+    config = {}
+    with open(filename, 'r') as fp:
+        config = json.loads(fp.read())
+        m = config.get('mongo')
+        if verbose:
+            print(m)
+        password = m.get('password')
+        if password.startswith('$'):
+            password = os.getenv(password[1:])
+        return m, password
