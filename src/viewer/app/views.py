@@ -69,7 +69,7 @@ from app.plots import (
     plot_company_rank,
     plot_portfolio,
     plot_boxplot_series,
-    plot_best_monthly_price_trend
+    plot_trend
 )
 
 class DividendYieldSearch(
@@ -345,7 +345,7 @@ def show_all_stocks(request):
 
 
 @login_required
-def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
+def show_stock(request, stock=None, sector_n_days=90, stock_n_days=730):
     """
     Displays a view of a single stock via the stock_view.html template and associated state
     """
@@ -387,10 +387,9 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     fig = make_rsi_plot(stock, stock_df)
 
     # show sector performance over past 180 days
-    sector_dates = desired_dates(start_date=180)
     all_stocks_cip = company_prices(
         None,
-        all_dates=sector_dates,
+        all_dates=stock_dates,
         fail_missing_months=False,
         fields="change_in_percent",
         missing_cb = None
@@ -413,9 +412,13 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
     # key indicator performance over past 90 days (for now): pe, eps, yield etc.
     key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
     # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
-    monthly_maximum_plot = plot_best_monthly_price_trend(
-        all_quotes(stock, all_dates=desired_dates(start_date=365))
-    )
+
+    open_prices = company_prices([stock], 
+                                 all_dates=stock_dates, 
+                                 fields="last_price", 
+                                 fail_missing_months=False, 
+                                 missing_cb=None)
+    monthly_maximum_plot = plot_trend(open_prices, sample_period='M')
 
     # populate template and render HTML page with context
     context = {

@@ -482,17 +482,20 @@ def make_rsi_plot(stock, stock_df):
     plt.close(fig)
     return rsi_data
 
-def plot_best_monthly_price_trend(dataframe, field='open_price'):
+def plot_trend(dataframe, sample_period='M'):
+    """
+    Given a dataframe of a single stock from company_prices() this plots the highest price
+    in each month over the time period of the dataframe.
+    """
     assert dataframe is not None
-    assert field in dataframe.columns
-    assert 'fetch_date' in dataframe.columns
-    dataframe = dataframe.filter(items=['fetch_date', field], axis='columns')
-    dataframe = dataframe.set_index(pd.to_datetime(dataframe['fetch_date']))
-    dataframe = dataframe.resample('M', kind='period').max()
-    plot = (p9.ggplot(dataframe, p9.aes(x='dataframe.index', y=field))
+
+    dataframe = dataframe.transpose()
+    dataframe.index = pd.to_datetime(dataframe.index)
+    dataframe = dataframe.resample(sample_period, kind='period').max()
+    plot = (p9.ggplot(dataframe, p9.aes(x='dataframe.index', y=dataframe.columns[0]))
             + p9.geom_bar(stat='identity', fill='#880000', alpha=0.5)
             + p9.labs(x='', y='$AUD')
-            + p9.theme(axis_text_x = p9.element_text(angle=30, size=7))
+            + p9.theme(axis_text_x=p9.element_text(angle=30, size=7))
            )
     return plot_as_inline_html_data(plot)
 
