@@ -686,8 +686,8 @@ class VirtualPurchase(model.Model):
 
     def __str__(self):
         cur_price, pct_move = self.current_price()
-        return "If purchased on {}: ${} ({} shares) are now worth ${:.2f} ({:.2f}%)".format(
-            self.buy_date, self.amount, self.n, cur_price, pct_move
+        return "Purchase on {}: ${} ({} shares@${:.2f}) is now ${:.2f} ({:.2f}%)".format(
+            self.buy_date, self.amount, self.price_at_buy_date, self.n, cur_price, pct_move
         )
 
     class Meta:
