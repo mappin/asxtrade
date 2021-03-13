@@ -139,7 +139,7 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
                 df = pd.DataFrame(columns=d.keys())
             row = pd.Series(d, name=asx_code)
             df = df.append(row)
-	    assert 'descr_full' in d   # renamed in django app so we must do the same here...
+            assert 'descr_full' in d    # renamed in django app so we must do the same here...
             db.asx_prices.find_one_and_update({ 'asx_code': asx_code, 'fetch_date': fetch_date }, { '$set': d }, upsert=True)
         except AssertionError:
             raise
