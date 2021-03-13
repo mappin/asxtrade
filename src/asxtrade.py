@@ -172,7 +172,7 @@ def available_stocks(db, config):
     print("Found {} suitable stocks on ASX...".format(len(ret)))
     return sorted(ret)
 
-def update_blacklist(db, config):
+def update_blacklist(db):
     assert db is not None
     bad_codes = {}
     for bad in db.asx_prices.find({ 'error_code': 'id-or-code-invalid'}):
@@ -253,12 +253,13 @@ if __name__ == "__main__":
     args.add_argument('--stocks', help="JSON array with stocks to load for --want-prices", type=str, required=False)
     a = args.parse_args()
 
-    m, password = read_config(a.config)
+    config, password = read_config(a.config)
+    m = config.get('mongo')
     mongo = pymongo.MongoClient(m.get('host'), m.get('port'), username=m.get('user'), password=password)
     db = mongo[m.get('db')]
 
     if a.blacklist:
-        update_blacklist(db, config)
+        update_blacklist(db)
 
     if a.want_companies:
         print("**** UPDATING ASX COMPANIES")

@@ -151,7 +151,8 @@ if __name__ == "__main__":
     args.add_argument('--config', help="Configuration file to use [config.json]", type=str, default="config.json")
     args.add_argument('--keep-delisted', help="Retain delisted stocks in DB", action='store_true')
     a = args.parse_args()
-    m, password = read_config(a.config)
+    config, password = read_config(a.config)
+    m = config.get('mongo')
     mongo = pymongo.MongoClient(m.get('host'), m.get('port'), username=m.get('user'), password=password)
     db = mongo[m.get('db')]
 
