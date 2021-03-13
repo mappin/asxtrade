@@ -370,7 +370,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=365):
         fail_missing_months=False, 
         missing_cb=None,
     )
-    print(stock_df)
+    #print(stock_df)
 
     securities = Security.objects.filter(asx_code=stock)
     company_details = CompanyDetails.objects.filter(asx_code=stock).first()
