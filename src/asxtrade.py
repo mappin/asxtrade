@@ -134,6 +134,7 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
             #assert len(d.keys()) > 10
             fix_percentage(d, 'change_in_percent')
             fix_percentage(d, 'previous_day_percentage_change')
+            d['descr_full'] = d.pop('desc_full', None) # rename to correspond to django model
             #print(d)
             if df is None:
                 df = pd.DataFrame(columns=d.keys())
