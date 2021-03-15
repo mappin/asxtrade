@@ -549,7 +549,7 @@ def plot_point_scores(stock: str, sector_companies,
                                   + p9.labs(x="Rule", y="Contribution to points by rule")
                                   + p9.geom_bar(stat="identity")
                                   + p9.theme(axis_text_y=p9.element_text(size=7),
-                                            subplots_adjust={'left': 0.2})
+                                             subplots_adjust={'left': 0.2})
                                   + p9.coord_flip()
     )
     return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)
@@ -571,7 +571,8 @@ def plot_boxplot_series(df, normalisation_method=None):
     winner_results = []
     for asx_code, n_wins in count.items():
         x = df.loc[asx_code].sum()
-        winner_results.append((asx_code, n_wins, x))
+        if x > 0.0:  # avoid "dead cat bounce" stocks which fall spectacularly and then post major increases in percentage terms
+            winner_results.append((asx_code, n_wins, x))
 
     # and plot the normalised data
     if normalisation_method == None or normalisation_method == '1':
@@ -593,5 +594,5 @@ def plot_boxplot_series(df, normalisation_method=None):
                        figure_size=(12, n_inches))
             + p9.labs(x="Date (YYYY-MM-DD)", y=y_label)
             + p9.coord_flip())
-    return plot_as_inline_html_data(plot), list(sorted(winner_results, key=lambda t: t[2]))
+    return plot_as_inline_html_data(plot), list(reversed(sorted(winner_results, key=lambda t: t[2])))
         
