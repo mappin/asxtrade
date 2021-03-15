@@ -5,16 +5,18 @@ from collections import defaultdict, OrderedDict
 from datetime import datetime
 import pandas as pd
 import numpy as np
+from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.expected_returns import returns_from_prices
-from app.models import CompanyDetails, company_prices, day_low_high
+from app.models import CompanyDetails, company_prices, day_low_high, all_sector_stocks
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
+    plot_point_scores,
     plot_as_base64,
     stocks_by_sector
 )
@@ -243,7 +245,7 @@ def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_
     assert sector_companies is not None
 
     if len(sector_companies) == 0:
-       return None, None
+        return None, None
 
     cip = all_stocks_cip.filter(items=sector_companies, axis='index')
     cip = cip.fillna(0.0)
@@ -347,3 +349,31 @@ def optimise_portfolio(stocks, desired_dates):
 
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages)
+
+def key_sector_performance(stock, stock_dates, sector, window_size):
+    assert stock is not None        # avoid pylint unused warning
+    assert stock_dates is not None
+    # stock and stock_dates are ignored for the cache key since we need performance here
+    return keys.hashkey(sector, window_size)
+
+@cached(LRUCache(maxsize=16), key=key_sector_performance)
+def show_sector_performance(stock, stock_dates, sector, window_size):
+    assert isinstance(stock, str)
+
+    # show sector performance over past 180 days
+    all_stocks_cip = company_prices(
+        None,
+        all_dates=stock_dates,
+        fail_missing_months=False,
+        fields="change_in_percent",
+        missing_cb=None
+    )
+    if sector is not None:  # not an ETF? ie. sector information available?
+        sector_companies = all_sector_stocks(sector)
+        c_vs_s_plot, sector_momentum_plot = analyse_sector(
+            stock, sector, sector_companies, all_stocks_cip, window_size=window_size
+        )
+        return c_vs_s_plot, sector_momentum_plot, all_stocks_cip, sector_companies
+    else:
+        return (None, None, all_stocks_cip, None)
+

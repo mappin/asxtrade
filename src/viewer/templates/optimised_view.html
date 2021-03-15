@@ -28,7 +28,7 @@
         <tr><th>Stock</th><th>Weight (%)</th></tr>
         {% for stock, weight in cleaned_weights.items %}
             <tr>
-                <td><a href="/show/{{ stock }}">{{ stock }}</a></td>
+                <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
                 <td>{{ weight|percentage|floatformat }}</td>
             </tr>
         {% endfor %}

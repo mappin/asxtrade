@@ -35,7 +35,6 @@ from app.models import (
     company_prices,
     Security,
     CompanyDetails,
-    all_quotes,
     all_etfs,
     increasing_eps,
     increasing_yield,
@@ -59,6 +58,7 @@ from app.analysis import (
     optimise_portfolio,
     detect_outliers,
     default_point_score_rules,
+    show_sector_performance,
 )
 from app.plots import (
     plot_heatmap,
@@ -345,14 +345,13 @@ def show_all_stocks(request):
 
 
 @login_required
-def show_stock(request, stock=None, sector_n_days=90, stock_n_days=730):
+def show_stock(request, stock=None, stock_n_days=730, window_size=14):
     """
     Displays a view of a single stock via the stock_view.html template and associated state
     """
     validate_stock(stock)
     validate_user(request.user)
 
-    window_size = 14  # since must have a full window before computing momentum over sector_n_days
     stock_dates = desired_dates(start_date=stock_n_days + window_size)
     wanted_fields = [
         "last_price",
@@ -386,39 +385,23 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=730):
     # plot relative strength
     fig = make_rsi_plot(stock, stock_df)
 
-    # show sector performance over past 180 days
-    all_stocks_cip = company_prices(
-        None,
-        all_dates=stock_dates,
-        fail_missing_months=False,
-        fields="change_in_percent",
-        missing_cb = None
-    )
+    # invoke separate function to cache the calls when we can
     sector = company_details.sector_name if company_details else None
-    if sector is not None:  # not an ETF? ie. sector information available?
-        sector_companies = all_sector_stocks(sector)
-        c_vs_s_plot, sector_momentum_plot = analyse_sector(
-            stock, sector, sector_companies, all_stocks_cip, window_size=window_size
-        )
-        t = plot_point_scores(
-            stock, sector_companies, all_stocks_cip, default_point_score_rules()
-        )
-        point_score_plot, net_rule_contributors_plot = t
+    c_vs_s_plot, sector_momentum_plot, all_stocks_cip, sector_companies = \
+            show_sector_performance(stock, stock_dates, sector, window_size)
+    if sector_companies is not None:
+        point_score_plot, net_rule_contributors_plot = \
+                plot_point_scores(stock, sector_companies, all_stocks_cip, default_point_score_rules())
     else:
-        c_vs_s_plot = (
-            sector_momentum_plot
-        ) = point_score_plot = net_rule_contributors_plot = None
-
-    # key indicator performance over past 90 days (for now): pe, eps, yield etc.
+        point_score_plot = net_rule_contributors_plot = None
+      
+    # key indicator performance over timeframe: pe, eps, yield etc.
     key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
-    # plot the price over last 600 days in monthly blocks ie. max 24 bars which is still readable
 
-    open_prices = company_prices([stock], 
-                                 all_dates=stock_dates, 
-                                 fields="last_price", 
-                                 fail_missing_months=False, 
-                                 missing_cb=None)
-    monthly_maximum_plot = plot_trend(open_prices, sample_period='M')
+    # plot the price over timeframe in monthly blocks
+    prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
+    #print(prices)
+    monthly_maximum_plot = plot_trend(prices, sample_period='M')
 
     # populate template and render HTML page with context
     context = {
@@ -427,9 +410,7 @@ def show_stock(request, stock=None, sector_n_days=90, stock_n_days=730):
         "securities": securities,
         "cd": company_details,
         "sector_momentum_plot": sector_momentum_plot,
-        "sector_momentum_title": "{} sector stocks: {} day performance".format(
-            sector, sector_n_days
-        ),
+        "sector_momentum_title": "{} sector stocks".format(sector),
         "company_versus_sector_plot": c_vs_s_plot,
         "company_versus_sector_title": "{} vs. {} performance".format(stock, sector),
         "key_indicators_plot": key_indicator_plot,
