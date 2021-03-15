@@ -497,7 +497,7 @@ def day_low_high(stock, all_dates=None):
 
 def impute_missing(df, method="linear"):
     assert df is not None
-    print("impute_missing: ", df)
+    #print("impute_missing: ", df)
     if method == "linear":  # faster...
         result = df.interpolate(
             method=method, limit_direction="forward", axis="columns"
