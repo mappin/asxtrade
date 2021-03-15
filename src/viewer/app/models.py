@@ -2,18 +2,17 @@
 Data models structured to be identical to the format specified by asxtrade.py
 and the free ASX API endpoint
 """
+from datetime import datetime, timedelta, date
+import re
+import io
+from collections import defaultdict
+import pandas as pd
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
-from app.messages import warning
-from collections import defaultdict
-from datetime import datetime, timedelta, date
-import re
-import io
-import pandas as pd
 from cachetools import cached, LRUCache, keys, func
 
 watchlist_cache = LRUCache(maxsize=1024)
@@ -291,6 +290,7 @@ class Sector(model.Model):
         managed = False
         db_table = "sector"
 
+@func.lru_cache(maxsize=1)
 def all_sectors():
     iterable = list(CompanyDetails.objects.order_by().values_list('sector_name', flat=True).distinct())
     #print(iterable)
@@ -299,7 +299,7 @@ def all_sectors():
     ]  # as tuples since we want to use it in django form choice field
     return results
 
-
+@func.lru_cache(maxsize=16)
 def all_sector_stocks(sector_name):
     """
     Return a set of unique ASX stock codes for every security designated as part of the specified sector
@@ -341,7 +341,7 @@ def desired_dates(
     assert len(all_dates) > 0
     return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
-
+@func.lru_cache(maxsize=1)
 def all_stocks():
     all_securities = Security.objects.values_list("asx_code", flat=True)
     return set(all_securities)
@@ -412,7 +412,6 @@ def all_quotes(stock, all_dates=None):
     rows = [model_to_dict(quote) for quote in quotes]
     df = pd.DataFrame.from_records(rows)
     return df
-
 
 def latest_quote(stocks):
     """
@@ -513,6 +512,7 @@ def impute_missing(df, method="linear"):
         return df
 
 
+@func.lru_cache(maxsize=1)
 def all_etfs():
     etf_codes = [
         s.asx_code
