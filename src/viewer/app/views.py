@@ -571,6 +571,7 @@ def show_optimised_stocks(request, stocks, past_n_days=365, exclude=None):
         efficient_frontier_plot,
         correlation_plot,
         messages,
+        title,
     ) = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
 
     for msg in messages:
@@ -582,6 +583,7 @@ def show_optimised_stocks(request, stocks, past_n_days=365, exclude=None):
         "portfolio_performance": performance,
         "efficient_frontier_plot": efficient_frontier_plot,
         "correlation_plot": correlation_plot,
+        "algo": title,
     }
     add_messages(request, context)
     return render(request, "optimised_view.html", context=context)
@@ -728,7 +730,7 @@ def show_matching_companies(
     Support function to public-facing views to eliminate code redundancy
     """
     assert isinstance(title, str) and isinstance(heatmap_title, str)
-    sort_by = request.GET.get("sort_by") or "asx_code"
+    sort_by = request.GET.get("sort_by", "asx_code")
     info(request, "Sorting by {}".format(sort_by))
 
     if len(matching_companies) > 0:
