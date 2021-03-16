@@ -433,36 +433,41 @@ def latest_quote(stocks):
                 qs = qs.filter(asx_code__in=stocks)
         return (qs, latest_date)
 
+# NB: careful sizing the cache - dont want to use too much memory!
+@func.lru_cache(maxsize=300)
+def get_dataframe(tag):
+    """
+    To save reading parquet files and constructing each pandas dataframe, we cache all that logic
+    so that repeated requests for a given tag dont hit the database. Hopefully.
+    """
+    cached_frame = MarketDataCache.objects.filter(tag=tag).first()
+    if cached_frame is not None:
+        with io.BytesIO(cached_frame.dataframe) as fp:
+            df = pd.read_parquet(fp)
+            if len(df) == 0: # dont return empty dataframes
+                return None
+            return df
+    return None
 
 def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
-    dataframes = MarketDataCache.objects.filter(
-        tag__in=required_tags, dataframe_format="parquet"
-    ).values_list("dataframe", flat=True)
+    dataframes = list(filter(lambda df: df is not None, [get_dataframe(tag) for tag in required_tags]))
     superdf = None
-    n = 0
-    for parquet_bytes in dataframes:
-        n += 1
-        with io.BytesIO(parquet_bytes) as fp:
-            df = pd.read_parquet(fp)
-            if (
-                len(df) == 0
-            ):  # skip empty frames: not that persist_dataframes.py has a bug where the matrix has wrong/index columns when empty so be careful not to merge them!
-                continue
-            # remove rows which are not relevant before merge to speed things...
-            if stock_codes is not None:
-                # print("Before {}".format(len(df)))
-                df = df.reindex(tuple(stock_codes))
-                # print("After {} (had {} stocks)".format(len(df), len(stock_codes)))
-            # print(df)
-            if superdf is None:
-                superdf = df
-            else:
-                superdf = superdf.merge(
-                    df, how="outer", left_index=True, right_index=True
-                )
-    return (superdf, n)
+    for df in dataframes:
+        # remove rows which are not relevant before merge to speed things...
+        if stock_codes is not None:
+            # print("Before {}".format(len(df)))
+            df = df.reindex(tuple(stock_codes))
+            # print("After {} (had {} stocks)".format(len(df), len(stock_codes)))
+        # print(df)
+        if superdf is None:
+            superdf = df
+        else:
+            superdf = superdf.merge(
+                df, how="outer", left_index=True, right_index=True
+            )
+    return (superdf, len(dataframes))
 
 
 def day_low_high(stock, all_dates=None):
@@ -687,7 +692,7 @@ class VirtualPurchase(model.Model):
     def __str__(self):
         cur_price, pct_move = self.current_price()
         return "Purchase on {}: ${} ({} shares@${:.2f}) is now ${:.2f} ({:.2f}%)".format(
-            self.buy_date, self.amount, self.price_at_buy_date, self.n, cur_price, pct_move
+            self.buy_date, self.amount, self.n, self.price_at_buy_date, cur_price, pct_move
         )
 
     class Meta:

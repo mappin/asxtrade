@@ -84,8 +84,7 @@
              src="data:image/png;base64, {{ monthly_highest_price_plot }}"
              alt="{{ monthly_highest_price_plot_title }}" />
 
-        <p>Plot the maximum daily open price each month over the past 24 months. Note that this is <b>not</b>
-           the last trading price used in most other figures.</p>
+        <p>Plot the maximum of last trade price encountered each day of the month over the past 24 months.</p>
         {% endif %}
 
         {% if point_score_plot is None %}
