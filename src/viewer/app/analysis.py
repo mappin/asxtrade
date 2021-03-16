@@ -8,15 +8,16 @@ import numpy as np
 from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
 from pypfopt.expected_returns import mean_historical_return
+from pypfopt.efficient_frontier import EfficientFrontier
+from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
-from pypfopt.plotting import plot_covariance
+from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.expected_returns import returns_from_prices
 from app.models import CompanyDetails, company_prices, day_low_high, all_sector_stocks
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
-    plot_point_scores,
     plot_as_base64,
     stocks_by_sector
 )
@@ -273,17 +274,50 @@ def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_
     c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
     return c_vs_s_plot, sector_momentum_plot
 
-def optimise_portfolio(stocks, desired_dates):
+def hrp_strategy(returns):
+    assert returns is not None
+    ef = HRPOpt(returns=returns)
+    ef.optimize()
+    cw = ef.clean_weights()
+    pt = ef.portfolio_performance()
+    return cw, pt, ef
+
+def ef_sharpe_strategy(returns=None, cov_matrix=None):
+    assert returns is not None
+    ef = EfficientFrontier(returns, cov_matrix)
+    ef.add_objective(objective_functions.L2_reg, gamma=0.1) # eliminate minor weights
+    ef.max_sharpe()
+    cw = ef.clean_weights()
+    pt = ef.portfolio_performance()
+    return cw, pt, ef
+
+def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=0.01):
+    assert returns is not None
+    ef = EfficientFrontier(returns, cov_matrix)
+    ef.add_objective(objective_functions.L2_reg, gamma=0.1)
+    ef.efficient_risk(target_volatility=target_volatility)
+    cw = ef.clean_weights()
+    pt = ef.portfolio_performance()
+    return cw, pt, ef
+
+def ef_minvol_strategy(returns=None, cov_matrix=None):
+    ef = EfficientFrontier(returns, cov_matrix)
+    ef.add_objective(objective_functions.L2_reg, gamma=0.1)
+    ef.min_volatility()
+    cw = ef.clean_weights()
+    pt = ef.portfolio_performance()
+    return cw, pt, ef
+
+def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
     # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     df = company_prices(stocks, 
                         all_dates=desired_dates, 
                         fail_missing_months=False, 
                         missing_cb=None)
     stock_prices = df.transpose()
-    #print(stock_prices)
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
-    messages = [] # messages to add to page to warn users of problems with computational stability/data quality
+    messages = set() # messages to warn users of problems with computational stability/data quality
     for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         n_unique_min, var_min = t
 
@@ -304,16 +338,33 @@ def optimise_portfolio(stocks, desired_dates):
         mu = mean_historical_return(filtered_stocks)
         s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
 
-        ef = HRPOpt(returns=returns)
+        if algo == "hrp":
+            strategy, title, kwargs = (hrp_strategy, 
+                                       "HRP optimised", 
+                                       {'returns': returns})
+        elif algo == "ef-sharpe":
+            strategy, title, kwargs = (ef_sharpe_strategy, 
+                                       "Efficient Frontier - max. sharpe", 
+                                       {'returns': mu, 'cov_matrix': s})
+        elif algo == "ef-risk":
+            strategy, title, kwargs = (ef_risk_strategy,
+                                       "Efficient Frontier - efficient risk",
+                                       {'returns': mu, 'cov_matrix': s, 'target_volatility': 2.0})
+        elif algo == "ef-minvol":
+            strategy, title, kwargs = (ef_minvol_strategy,
+                                       "Efficient Frontier - minimum volatility",
+                                       {'returns': mu, 'cov_matrix': s})
+
         try: 
-            ef.optimize()
+            clean_weights, performance_tuple, ef = strategy(**kwargs)
             fig, ax = plt.subplots()
 
-            cleaned_weights = ef.clean_weights()
             # sort the clean weights by decreasing weight
-            cleaned_weights = OrderedDict(list(sorted(cleaned_weights.items(), key=lambda x: -x[1]))[:30])
-            #print(cleaned_weights)
-            performance_tuple = ef.portfolio_performance()
+            clean_weights = OrderedDict(list(sorted(clean_weights.items(), key=lambda x: -x[1]))[:30])
+            #print(clean_weights)
+            # disabled due to TypeError during deepcopy of OSQP results object
+            #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
+            #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
             ax.scatter(performance_tuple[1], performance_tuple[0], 
                        marker="*", s=100, c="r", label="Max Sharpe")
             ax.set_xlabel("Volatility")
@@ -328,7 +379,7 @@ def optimise_portfolio(stocks, desired_dates):
             ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
 
             # Output
-            ax.set_title("Efficient Frontier with random portfolios")
+            ax.set_title(title)
             ax.legend()
             plt.tight_layout()
             fig = plt.gcf()
@@ -337,18 +388,19 @@ def optimise_portfolio(stocks, desired_dates):
         
             # only plot covariances for significant holdings
             #assert covar_stocks.isna().sum() == 0 and covar_stocks.isnull().sum() == 0
-            m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())]).ledoit_wolf()
+            m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())]).ledoit_wolf()
             #print(m)
             ax = plot_covariance(m, plot_correlation=True)
             correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
             plt.close(ax.figure)
-            return cleaned_weights, performance_tuple, efficient_frontier_plot, correlation_plot, messages
+            return clean_weights, performance_tuple, \
+                   efficient_frontier_plot, correlation_plot, messages, title
         except ValueError as ve:
-            messages.append("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={}".format(n_unique_min, var_min, len(returns.columns)))
+            messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(n_unique_min, var_min, len(returns.columns), str(ve)))
             pass # try next iteration
 
     print("*** WARNING: unable to optimise portolio!")
-    return (None, None, None, None, messages)
+    return (None, None, None, None, messages, title)
 
 def key_sector_performance(stock, stock_dates, sector, window_size):
     assert stock is not None        # avoid pylint unused warning
