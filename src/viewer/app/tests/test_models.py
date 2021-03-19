@@ -81,6 +81,7 @@ def test_all_sectors(company_details):
     #print(ret)
     assert ret == [('Financials', 'Financials')]
     # and check the reverse is true: financials -> ANZ
+    all_sector_stocks.cache_clear()
     assert all_sector_stocks('Financials') == set(['ANZ'])
 
 @pytest.mark.django_db
