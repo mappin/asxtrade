@@ -1,14 +1,19 @@
 from datetime import datetime
 import pytest
+from django.db.models.query import QuerySet
 from app.models import (
     validate_stock,
     validate_sector,
     validate_user,
     validate_date,
+    all_available_dates,
     desired_dates,
+    stock_info,
     find_user,
     Quotation,
     Watchlist,
+    CompanyDetails,
+    Security,
     is_in_watchlist,
     all_sectors,
     all_sector_stocks,
@@ -56,7 +61,7 @@ def test_quotation_eps_handling(quotation_factory):
     assert q.eps is None
     assert q.eps_as_cents() == 0.0
 
-@pytest.fixture()
+@pytest.fixture
 def crafted_quotation_fixture(quotation_factory):
     Quotation.objects.all().delete() # ensure no cruft ruins test associated with fixture
     quotation_factory.create(asx_code=None, error_code="id-or-code-invalid")
@@ -146,3 +151,29 @@ def test_in_watchlist(uw_fixture):
     find_user.cache_clear()
     assert is_in_watchlist('U1', 'ASX1')
     assert not is_in_watchlist('u2', 'ASX1')
+
+
+@pytest.mark.django_db
+def test_all_available_dates(crafted_quotation_fixture):
+    assert all_available_dates() == ['2021-01-01']
+    assert all_available_dates(reference_stock='ASX1') == []
+
+@pytest.fixture
+def comp_deets(company_details_factory, security_factory):
+    CompanyDetails.objects.all().delete()
+    Security.objects.all().delete()
+    company_details_factory.create(asx_code='ANZ')
+    security_factory.create(asx_code='ANZ')
+
+@pytest.mark.django_db
+def test_stock_info(comp_deets):
+    t = stock_info('ANZ')
+    assert isinstance(t, tuple)
+    assert len(t) == 2
+    assert len(t[0]) == 1
+    assert isinstance(t[0], QuerySet)
+    s = t[0].first()
+    assert s.asx_code == 'ANZ'
+    assert s.asx_isin_code == 'ISIN000001'
+    assert isinstance(t[1], CompanyDetails)
+    assert t[1].asx_code == 'ANZ'
