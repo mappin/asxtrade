@@ -30,6 +30,8 @@ from app.views import (
     show_watched,
     show_etfs,
     show_stock,
+    show_fundamentals,
+    show_stock_sector,
     show_sector_outliers,
     show_watchlist_outliers,
     toggle_watched,
@@ -59,7 +61,9 @@ urlpatterns = [
     path("show/purchase-performance", show_purchase_performance),
     path("show/watched", show_watched, name="show-watched"),
     path("show/etfs", show_etfs, name="show-etfs"),
+    path("show/fundamentals/<str:stock>", show_fundamentals),
     path("show/recent_sector_performance", show_recent_sector, name="recent-sector-performance"),
+    path("show/stock_sector/<str:stock>", show_stock_sector),
     path("show/<str:stock>", show_stock, name="show-stock"),
     path(
         "show/outliers/sector/<int:sector_id>/<int:n_days>",
