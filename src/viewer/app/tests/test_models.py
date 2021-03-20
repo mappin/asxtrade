@@ -6,6 +6,7 @@ from app.models import (
     validate_user,
     validate_date,
     desired_dates,
+    find_user,
     Quotation,
     Watchlist,
     is_in_watchlist,
@@ -140,7 +141,8 @@ def test_validate_user(uw_fixture, django_user_model):
     u2 = django_user_model.objects.get(username='u2')
     validate_user(u2)
 
-def is_in_watchlist(uw_fixture):
-    assert uw_fixture is not None
+@pytest.mark.django_db
+def test_in_watchlist(uw_fixture):
+    find_user.cache_clear()
     assert is_in_watchlist('U1', 'ASX1')
-    assert not is_in_watchlist('U2', 'ASX1')
+    assert not is_in_watchlist('u2', 'ASX1')
