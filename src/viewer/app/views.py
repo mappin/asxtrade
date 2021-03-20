@@ -15,6 +15,7 @@ from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
+from cachetools import func, keys, cached, LRUCache
 from django.views.generic.list import (
     MultipleObjectTemplateResponseMixin,
     MultipleObjectMixin,
@@ -29,12 +30,12 @@ from app.models import (
     all_sector_stocks,
     desired_dates,
     latest_quote,
+    valid_quotes_only,
     find_named_companies,
     validate_user,
     validate_stock,
     company_prices,
-    Security,
-    CompanyDetails,
+    stock_info,
     all_etfs,
     increasing_eps,
     increasing_yield,
@@ -58,13 +59,13 @@ from app.analysis import (
     optimise_portfolio,
     detect_outliers,
     default_point_score_rules,
-    show_sector_performance,
+    analyse_sector_performance,
 )
 from app.plots import (
     plot_heatmap,
     make_rsi_plot,
     plot_point_scores,
-    plot_key_stock_indicators,
+    plot_fundamentals,
     plot_market_wide_sector_performance,
     plot_company_rank,
     plot_portfolio,
@@ -321,17 +322,7 @@ def show_all_stocks(request):
         raise Http404("No ASX price data available!")
     ymd = all_dates[-1]
     assert isinstance(ymd, str) and len(ymd) > 8
-    qs = (
-        Quotation.objects.filter(fetch_date=ymd)
-        .exclude(asx_code__isnull=True)
-        .exclude(last_price__isnull=True)
-        .exclude(volume=0)
-        .order_by("-annual_dividend_yield", "-last_price", "-volume")
-    )
-    sort_by = request.GET.get("sort_by", None)
-    if sort_by is not None:
-        qs = qs.order_by(sort_by)
-    assert qs is not None
+    qs = valid_quotes_only(ymd, sort_by=request.GET.get("sort_by", None))
     paginator = Paginator(qs, 50)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
@@ -343,60 +334,108 @@ def show_all_stocks(request):
     }
     return render(request, "all_stocks.html", context=context)
 
+def first_arg_only(*args):
+    return keys.hashkey(args[0])
+
+@cached(LRUCache(maxsize=16), key=first_arg_only)
+def cached_rsi_data(stock, stock_dates):
+    stock_df = company_prices(
+        [stock],
+        all_dates=stock_dates,
+        fields=["last_price", "volume", "day_low_price", "day_high_price"],
+        fail_missing_months=False,
+        missing_cb=None,
+    )
+    n_dates = len(stock_df)
+    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+        raise Http404(
+            "Insufficient price quotes for {} - only {}".format(stock, n_dates)
+        )
+    #print(stock_df)
+    return stock_df
+
+@func.lru_cache(maxsize=2)
+def cached_all_stocks_cip(n_days=2 * 365):
+    assert n_days > 0
+    stock_dates = desired_dates(start_date=n_days)
+    all_stocks_cip = company_prices(
+        None, all_dates=stock_dates,
+        fields="change_in_percent",
+        fail_missing_months=False,
+        missing_cb=None
+    )
+    return all_stocks_cip
 
 @login_required
-def show_stock(request, stock=None, stock_n_days=730, window_size=14):
+def show_stock_sector(request, stock):
+    validate_stock(stock)
+    validate_user(request.user)
+
+    _, company_details = stock_info(stock, lambda msg: warning(request, msg))
+    sector = company_details.sector_name if company_details else None
+    all_stocks_cip = cached_all_stocks_cip()
+
+    # invoke separate function to cache the calls when we can
+    c_vs_s_plot, sector_momentum_plot, sector_companies = \
+            analyse_sector_performance(stock, sector, all_stocks_cip)
+    point_score_plot = net_rule_contributors_plot = None
+    if sector_companies is not None:
+        point_score_plot, net_rule_contributors_plot = \
+                plot_point_scores(stock,
+                                  sector_companies,
+                                  all_stocks_cip,
+                                  default_point_score_rules())
+                        
+    context = {
+        "is_sector": True,
+        "asx_code": stock,
+        "sector_momentum_plot": sector_momentum_plot,
+        "sector_momentum_title": "{} sector stocks".format(sector),
+        "company_versus_sector_plot": c_vs_s_plot,
+        "company_versus_sector_title": "{} vs. {} performance".format(stock, sector),
+        "point_score_plot": point_score_plot,
+        "point_score_plot_title": "Points score due to price movements",
+        "net_contributors_plot": net_rule_contributors_plot,
+        "net_contributors_plot_title": "Contributions to point score by rule",
+    }
+    return render(request, "stock_sector.html", context)
+
+@login_required
+def show_fundamentals(request, stock=None, n_days=2 * 365):
+    validate_user(request.user)
+    validate_stock(stock)
+    stock_dates = desired_dates(start_date=n_days)
+    df = company_prices(
+        [stock],
+        all_dates=stock_dates,
+        fields=["eps", "volume", "last_price", "annual_dividend_yield", "pe", "change_in_percent", "change_price"],
+        fail_missing_months=False,
+        missing_cb=None
+    )
+    #print(df)
+    df['change_in_percent_cumulative'] = df['change_in_percent'].cumsum() # nicer to display cumulative
+    df = df.drop('change_in_percent', axis=1)
+    fundamentals_plot = plot_fundamentals(df, stock)
+    context = {
+        "asx_code": stock,
+        "is_fundamentals": True,
+        "fundamentals_plot": fundamentals_plot
+    }
+    return render(request, "stock_fundamentals.html", context)
+
+@login_required
+def show_stock(request, stock=None, n_days=2 * 365):
     """
     Displays a view of a single stock via the stock_view.html template and associated state
     """
     validate_stock(stock)
     validate_user(request.user)
 
-    stock_dates = desired_dates(start_date=stock_n_days + window_size)
-    wanted_fields = [
-        "last_price",
-        "volume",
-        "day_low_price",
-        "day_high_price",
-        "eps",
-        "pe",
-        "annual_dividend_yield",
-    ]
-    stock_df = company_prices(
-        [stock], 
-        all_dates=stock_dates, 
-        fields=wanted_fields, 
-        fail_missing_months=False, 
-        missing_cb=None,
-    )
-    #print(stock_df)
+    stock_dates = desired_dates(start_date=n_days)
+    stock_df = cached_rsi_data(stock, stock_dates) # may raise 404 if too little data available
+    securities, company_details = stock_info(stock, lambda msg: warning(request, msg))
 
-    securities = Security.objects.filter(asx_code=stock)
-    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
-    if company_details is None:
-        warning(request, "No details available for {}".format(stock))
-
-    n_dates = len(stock_df)
-    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-        raise Http404(
-            "Insufficient price quotes for {} - only {}".format(stock, n_dates)
-        )
-
-    # plot relative strength
-    fig = make_rsi_plot(stock, stock_df)
-
-    # invoke separate function to cache the calls when we can
-    sector = company_details.sector_name if company_details else None
-    c_vs_s_plot, sector_momentum_plot, all_stocks_cip, sector_companies = \
-            show_sector_performance(stock, stock_dates, sector, window_size)
-    if sector_companies is not None:
-        point_score_plot, net_rule_contributors_plot = \
-                plot_point_scores(stock, sector_companies, all_stocks_cip, default_point_score_rules())
-    else:
-        point_score_plot = net_rule_contributors_plot = None
-      
-    # key indicator performance over timeframe: pe, eps, yield etc.
-    key_indicator_plot = plot_key_stock_indicators(stock_df, stock)
+    momentum_plot = make_rsi_plot(stock, stock_df)
 
     # plot the price over timeframe in monthly blocks
     prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
@@ -405,21 +444,14 @@ def show_stock(request, stock=None, stock_n_days=730, window_size=14):
 
     # populate template and render HTML page with context
     context = {
-        "rsi_data": fig,
         "asx_code": stock,
         "securities": securities,
         "cd": company_details,
-        "sector_momentum_plot": sector_momentum_plot,
-        "sector_momentum_title": "{} sector stocks".format(sector),
-        "company_versus_sector_plot": c_vs_s_plot,
-        "company_versus_sector_title": "{} vs. {} performance".format(stock, sector),
-        "key_indicators_plot": key_indicator_plot,
+        "rsi_plot": momentum_plot,
+        "is_momentum": True,
         "monthly_highest_price_plot_title": "Maximum price each month trend",
         "monthly_highest_price_plot": monthly_maximum_plot,
-        "point_score_plot": point_score_plot,
-        "point_score_plot_title": "Points score due to price movements",
-        "net_contributors_plot": net_rule_contributors_plot,
-        "net_contributors_plot_title": "Contributions to point score by rule",
+        "timeframe": f"{n_days} days",
         "watched": user_watchlist(request.user),
     }
     return render(request, "stock_view.html", context=context)

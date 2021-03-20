@@ -118,10 +118,14 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     return plot_as_inline_html_data(plot)
 
 
-def plot_key_stock_indicators(df, stock):
+def plot_fundamentals(df, stock):
     assert isinstance(df, pd.DataFrame)
     assert all(
-        ["eps" in df.columns, "pe" in df.columns, "annual_dividend_yield" in df.columns]
+        ["eps" in df.columns, 
+         "pe" in df.columns, 
+         "annual_dividend_yield" in df.columns,
+         "volume" in df.columns
+        ]
     )
 
     df["volume"] = df["last_price"] * df["volume"] / 1000000  # again, express as $(M)
@@ -129,7 +133,7 @@ def plot_key_stock_indicators(df, stock):
     plot_df = pd.melt(
         df,
         id_vars="fetch_date",
-        value_vars=["pe", "eps", "annual_dividend_yield", "volume", "last_price"],
+        value_vars=["pe", "eps", "annual_dividend_yield", "volume", "last_price", "change_in_percent_cumulative", "change_price"],
         var_name="indicator",
         value_name="value",
     )
@@ -139,7 +143,7 @@ def plot_key_stock_indicators(df, stock):
     plot = (
         p9.ggplot(plot_df, p9.aes("fetch_date", "value", color="indicator"))
         + p9.geom_line(size=1.5, show_legend=False)
-        + p9.facet_wrap("~ indicator", nrow=6, ncol=1, scales="free_y")
+        + p9.facet_wrap("~ indicator", nrow=8, ncol=1, scales="free_y")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), figure_size=(8, 7))
         #    + p9.aes(ymin=0)
         + p9.xlab("")
@@ -148,7 +152,7 @@ def plot_key_stock_indicators(df, stock):
     return plot_as_inline_html_data(plot)
 
 
-def plot_as_inline_html_data(plot, charset="utf-8"):
+def plot_as_inline_html_data(plot, charset="utf-8") -> str:
     """
     Return utf-8 encoded base64 image data for inline insertion into HTML content
     using the template engine. Plot must be a valid plotnine ggplot instance (or compatible)

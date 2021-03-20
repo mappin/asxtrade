@@ -402,30 +402,25 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages, title)
 
-def key_sector_performance(stock, stock_dates, sector, window_size):
+def key_sector_performance(stock, sector, all_stocks_cip, window_size=10):
     assert stock is not None        # avoid pylint unused warning
-    assert stock_dates is not None
+    # NB: sector may be none eg. ETF but we hash on stock in that case
+    key = sector if sector is not None else stock
+    
     # stock and stock_dates are ignored for the cache key since we need performance here
-    return keys.hashkey(sector, window_size)
+    return keys.hashkey(key, window_size)
 
 @cached(LRUCache(maxsize=16), key=key_sector_performance)
-def show_sector_performance(stock, stock_dates, sector, window_size):
+def analyse_sector_performance(stock, sector, all_stocks_cip, window_size=10) -> tuple:
     assert isinstance(stock, str)
+    assert isinstance(all_stocks_cip, pd.DataFrame)
 
-    # show sector performance over past 180 days
-    all_stocks_cip = company_prices(
-        None,
-        all_dates=stock_dates,
-        fail_missing_months=False,
-        fields="change_in_percent",
-        missing_cb=None
-    )
     if sector is not None:  # not an ETF? ie. sector information available?
         sector_companies = all_sector_stocks(sector)
         c_vs_s_plot, sector_momentum_plot = analyse_sector(
             stock, sector, sector_companies, all_stocks_cip, window_size=window_size
         )
-        return c_vs_s_plot, sector_momentum_plot, all_stocks_cip, sector_companies
+        return c_vs_s_plot, sector_momentum_plot, sector_companies
     else:
-        return (None, None, all_stocks_cip, None)
+        return (None, None, None)
 

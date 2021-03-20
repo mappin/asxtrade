@@ -96,8 +96,8 @@ DATABASES = {
             'enforce_schema': False,
             'host': 'localhost',
             'port': 27017,
-            'username': 'mongoadmin',
-            'password': 'root',
+            #'username': 'mongoadmin',
+            #'password': 'root',
         }
     }
 }
