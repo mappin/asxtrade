@@ -8,6 +8,7 @@ from app.models import (
     desired_dates,
     Quotation,
     Watchlist,
+    is_in_watchlist,
     all_sectors,
     all_sector_stocks,
     all_stocks,
@@ -135,7 +136,11 @@ def test_validate_user(uw_fixture, django_user_model):
     # since u1 is not active...
     with pytest.raises(AssertionError):
         validate_user(u1)
-    
+
     u2 = django_user_model.objects.get(username='u2')
     validate_user(u2)
 
+def is_in_watchlist(uw_fixture):
+    assert uw_fixture is not None
+    assert is_in_watchlist('U1', 'ASX1')
+    assert not is_in_watchlist('U2', 'ASX1')
