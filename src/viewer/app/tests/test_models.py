@@ -2,6 +2,8 @@ from datetime import datetime
 import pytest
 from app.models import (
     validate_stock,
+    validate_sector,
+    validate_user,
     validate_date,
     desired_dates,
     Quotation,
@@ -110,10 +112,10 @@ def test_all_stocks(security):
 
 @pytest.fixture
 def uw_fixture(django_user_model):
-    u1 = django_user_model.objects.create(username='U1', password='U1')
+    u1 = django_user_model.objects.create(username='U1', password='U1', is_active=False)
     u2 = django_user_model.objects.create(username='u2', password='u2')
     Watchlist.objects.create(user=u1, asx_code='ASX1')
-    assert u2.is_active and u1.is_active
+    assert u2.is_active and not u1.is_active
 
 @pytest.mark.django_db
 def test_user_watchlist(uw_fixture, django_user_model):
@@ -121,3 +123,19 @@ def test_user_watchlist(uw_fixture, django_user_model):
     assert user_watchlist(u1) == set(['ASX1'])
     u2 = django_user_model.objects.get(username='u2')
     assert user_watchlist(u2) == set()
+
+@pytest.mark.django_db
+def test_validate_sector(company_details):
+    assert company_details is not None # avoid pylint warning
+    validate_sector('Financials') # must not raise exception
+
+@pytest.mark.django_db
+def test_validate_user(uw_fixture, django_user_model):
+    u1 = django_user_model.objects.get(username='U1')
+    # since u1 is not active...
+    with pytest.raises(AssertionError):
+        validate_user(u1)
+    
+    u2 = django_user_model.objects.get(username='u2')
+    validate_user(u2)
+
