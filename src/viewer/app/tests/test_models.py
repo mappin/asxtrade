@@ -10,6 +10,7 @@ from app.models import (
     all_sector_stocks,
     all_stocks,
     user_watchlist,
+    valid_quotes_only
 )
 
 def test_desired_dates():
@@ -51,6 +52,22 @@ def test_quotation_eps_handling(quotation_factory):
     assert q.eps is None
     assert q.eps_as_cents() == 0.0
 
+@pytest.fixture()
+def crafted_quotation_fixture(quotation_factory):
+    quotation_factory.create(asx_code=None, error_code="id-or-code-invalid")
+    quotation_factory.create(asx_code='ABC', last_price=None)
+    quotation_factory.create(asx_code='ANZ', fetch_date='2021-01-01', last_price=10.10, volume=1)
+
+
+@pytest.mark.django_db
+def test_valid_quotes_only(crafted_quotation_fixture):
+    result = valid_quotes_only('2021-01-01')
+    assert result is not None
+    assert len(result) == 1
+    assert result[0].asx_code == 'ANZ'
+    assert result[0].fetch_date == '2021-01-01'
+    assert result[0].last_price == 10.10
+    assert result[0].volume == 1
 
 def test_validate_stock():
     bad_stocks = [None, "AB", "---"]
