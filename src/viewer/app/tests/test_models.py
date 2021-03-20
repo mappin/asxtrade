@@ -54,6 +54,7 @@ def test_quotation_eps_handling(quotation_factory):
 
 @pytest.fixture()
 def crafted_quotation_fixture(quotation_factory):
+    Quotation.objects.all().delete() # ensure no cruft ruins test associated with fixture
     quotation_factory.create(asx_code=None, error_code="id-or-code-invalid")
     quotation_factory.create(asx_code='ABC', last_price=None)
     quotation_factory.create(asx_code='ANZ', fetch_date='2021-01-01', last_price=10.10, volume=1)

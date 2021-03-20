@@ -17,16 +17,18 @@ from cachetools import cached, LRUCache, keys, func
 
 watchlist_cache = LRUCache(maxsize=1024)
 
-def validate_stock(stock):
+def validate_stock(stock: str) -> None:
     assert stock is not None
     assert isinstance(stock, str) and len(stock) >= 3
     assert re.match(r"^\w+$", stock)
 
-
-def validate_date(d):
+def validate_date(d: str) -> None:
     assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
     assert re.match(r"^\d{4}-\d{2}-\d{2}$", d)
 
+def validate_sector(sector: str) -> None:
+    assert len(sector) > 0
+    assert sector in set([sector1 for sector1, sector2 in all_sectors()])
 
 def validate_user(user):
     assert user is not None
@@ -262,6 +264,15 @@ def all_available_dates(reference_stock="ANZ"):
     ret = sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
     return ret
 
+def stock_info(stock, warning_cb=None):
+    assert len(stock) > 0
+    securities = Security.objects.filter(asx_code=stock)
+    if securities is None:
+        warning_cb(f"No securities available for {stock}")
+    company_details = CompanyDetails.objects.filter(asx_code=stock).first()
+    if company_details is None and warning_cb:
+        warning_cb(f"No details available for {stock}")
+    return securities, company_details
 
 def stocks_by_sector():
     rows = [
@@ -312,6 +323,20 @@ def all_sector_stocks(sector_name):
     )
     return stocks
 
+@func.lfu_cache(maxsize=2) # cache today's data only to save memory 
+def valid_quotes_only(ymd: str, sort_by=None):
+    results = (
+        Quotation.objects.filter(fetch_date=ymd)
+        .exclude(asx_code__isnull=True)
+        .exclude(error_code="id-or-code-invalid")
+        .exclude(last_price__isnull=True)
+        .exclude(volume=0)
+        .order_by("-annual_dividend_yield", "-last_price", "-volume") # default order_by, see below
+    )
+    if sort_by is not None:
+        results = results.order_by(sort_by)
+    assert results is not None # POST-CONDITION: must be valid queryset
+    return results
 
 def desired_dates(
     today=None, start_date=None
@@ -501,7 +526,7 @@ def day_low_high(stock, all_dates=None):
 
 def impute_missing(df, method="linear"):
     assert df is not None
-    #print("impute_missing: ", df)
+    print("impute_missing: ", df)
     if method == "linear":  # faster...
         result = df.interpolate(
             method=method, limit_direction="forward", axis="columns"
