@@ -1,6 +1,7 @@
 from datetime import datetime
 import pytest
 from django.db.models.query import QuerySet
+import pandas as pd
 from app.models import (
     validate_stock,
     validate_sector,
@@ -17,6 +18,7 @@ from app.models import (
     is_in_watchlist,
     all_sectors,
     all_sector_stocks,
+    stocks_by_sector,
     all_stocks,
     user_watchlist,
     valid_quotes_only
@@ -177,3 +179,12 @@ def test_stock_info(comp_deets):
     assert s.asx_isin_code == 'ISIN000001'
     assert isinstance(t[1], CompanyDetails)
     assert t[1].asx_code == 'ANZ'
+
+@pytest.mark.django_db
+def test_stocks_by_sector(comp_deets):
+    df = stocks_by_sector()
+    assert df is not None
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 1
+    assert df.iloc[0].asx_code == 'ANZ'
+    assert df.iloc[0].sector_name == 'Financials'
