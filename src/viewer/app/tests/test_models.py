@@ -1,7 +1,10 @@
 from datetime import datetime
 import pytest
 from django.db.models.query import QuerySet
+from django.forms.models import model_to_dict
 import pandas as pd
+import app.models as mdl
+import numpy as np
 from app.models import (
     validate_stock,
     validate_sector,
@@ -21,7 +24,8 @@ from app.models import (
     stocks_by_sector,
     all_stocks,
     user_watchlist,
-    valid_quotes_only
+    valid_quotes_only,
+    company_prices
 )
 
 def test_desired_dates():
@@ -101,10 +105,13 @@ def test_validate_date():
     for d in good_dates:
         validate_date(d)
 
+@pytest.fixture
+def all_sector_fixture(company_details_factory):
+    CompanyDetails.objects.all().delete()
+    company_details_factory.create()
 
 @pytest.mark.django_db
-def test_all_sectors(company_details):
-    assert company_details is not None
+def test_all_sectors(all_sector_fixture):
     # since company_details_factory gives a single ANZ company details record, this test will work...
     ret = all_sectors()
     #print(ret)
@@ -188,3 +195,82 @@ def test_stocks_by_sector(comp_deets):
     assert len(df) == 1
     assert df.iloc[0].asx_code == 'ANZ'
     assert df.iloc[0].sector_name == 'Financials'
+
+@pytest.fixture
+def quotation_fixture(quotation_factory, company_details_factory):
+    CompanyDetails.objects.all().delete()
+    Quotation.objects.all().delete()
+    
+    company_details_factory.create(asx_code='ABC', sector_name='Financials')
+    company_details_factory.create(asx_code='OTHER', sector_name='Mining & Minerals')
+    l = [
+        (1.0, 5.0, '2021-01-01'), 
+        (1.1, 4.9, '2021-01-02'), 
+        (1.2, 4.8, '2021-01-03'), 
+        (1.3, 4.7, '2021-01-04'), 
+        (1.4, 4.6, '2021-01-05'), 
+        (1.5, 4.5, '2021-01-06')
+    ]
+    for quote in l:
+        quotation_factory.create(asx_code='ABC', 
+                                 fetch_date=quote[2],
+                                 last_price=quote[0], 
+                                 annual_dividend_yield=quote[1],
+                                 eps=0.10,
+                                 pe=0.10 / quote[0],
+                                 change_price=0.10,
+                                 change_in_percent=10)
+    quotation_factory.create(asx_code='OTHER', fetch_date='2021-01-01', last_price=0.0, annual_dividend_yield=0.0)
+
+def mock_superdf_all_stocks(*args, **kwargs):
+    assert args[0] == {'last_price-01-2021-asx'}
+    assert args[1] == ['ABC', 'OTHER']
+    assert kwargs == {}
+    rows = [{'asx_code': q.asx_code, 'last_price': q.last_price, 'fetch_date': q.fetch_date} for q in Quotation.objects.all()]
+
+    raw_df = pd.DataFrame.from_records(rows)
+    #print(raw_df)
+    df = raw_df.pivot(index='asx_code', columns='fetch_date', values='last_price')
+    return df, 1
+
+def mock_superdf_many_fields(*args, **kwargs):
+    expected_set = set(['last_price-01-2021-asx', 
+                        'annual_dividend_yield-01-2021-asx',
+                        'pe-01-2021-asx',
+                        'eps-01-2021-asx',
+                        ])
+    assert expected_set.intersection(args[0]) == args[0]
+    assert args[1] == ["ABC"]
+    assert kwargs == {}
+    for raw_field in args[0]:
+        field = raw_field[0:raw_field.index('-')]
+        #print(field)
+        rows = [{'fetch_date': q.fetch_date, field: model_to_dict(q).get(field), 'asx_code': q.asx_code } for q in Quotation.objects.filter(asx_code='ABC')]
+        df = pd.DataFrame.from_records(rows)
+        #print(df)
+        return df, 1
+
+@pytest.mark.django_db
+def test_company_prices(quotation_fixture, monkeypatch):
+    expected_dates = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
+    monkeypatch.setattr(mdl, 'make_superdf', mock_superdf_all_stocks)
+
+    # basic check
+    df = company_prices(['ABC', 'OTHER'], fields='last_price', missing_cb=None, all_dates=expected_dates)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 2
+    assert list(df.index) == ['ABC', 'OTHER']
+    assert list(df.columns) == ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
+    is_other_nan = list(np.isnan(df.loc['OTHER']))
+    assert is_other_nan == [False, True, True, True, True, True]
+   
+    # check impute missing functionality
+    df2 = company_prices(['ABC', 'OTHER'], fields='last_price', all_dates=expected_dates)
+    assert list(df2.loc['OTHER']) == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    # finally check that a multi-field DataFrame is as requested
+    monkeypatch.setattr(mdl, 'make_superdf', mock_superdf_many_fields)
+    #df3 = company_prices(["ABC"], 
+    #                     fields=["last_price", "annual_dividend_yield", "pe", "eps"],
+    #                     all_dates=expected_dates)
+    #print(df3)
