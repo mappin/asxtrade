@@ -737,5 +737,5 @@ def user_purchases(user):
     for purchase in VirtualPurchase.objects.filter(user=user):
         code = purchase.asx_code
         purchases[code].append(purchase)
-    print("Found virtual purchases for {} stocks".format(len(purchases)))
+    #print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
