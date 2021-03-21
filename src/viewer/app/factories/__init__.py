@@ -42,5 +42,7 @@ class WatchlistFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = "app.Watchlist"
 
-    user = factory.SubFactory(get_user_model())
-    asx_code = factory.Iterator(["ASX1", "ASX2", "BHCD"])
+class PurchaseFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = "app.VirtualPurchase"
+    
