@@ -8,6 +8,7 @@ import numpy as np
 from app.models import (
     validate_stock,
     validate_sector,
+    toggle_watchlist_entry,
     validate_user,
     validate_date,
     all_available_dates,
@@ -274,3 +275,16 @@ def test_company_prices(quotation_fixture, monkeypatch):
     #                     fields=["last_price", "annual_dividend_yield", "pe", "eps"],
     #                     all_dates=expected_dates)
     #print(df3)
+
+@pytest.mark.django_db
+def test_toggle_watchlist_entry(uw_fixture, django_user_model):
+    u1 = django_user_model.objects.filter(username='U1').first()
+    assert u1 is not None
+    uname = u1.username
+    assert is_in_watchlist(uname, 'ASX1')
+    toggle_watchlist_entry(u1, 'ASX1')
+    assert not is_in_watchlist(uname, 'ASX1')
+    assert not is_in_watchlist(uname, 'ASX2')
+    toggle_watchlist_entry(u1, 'ASX2')
+    ret = user_watchlist(u1)
+    assert 'ASX2' in ret
