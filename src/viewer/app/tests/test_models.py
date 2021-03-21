@@ -15,6 +15,7 @@ from app.models import (
     desired_dates,
     stock_info,
     find_user,
+    user_purchases,
     Quotation,
     Watchlist,
     CompanyDetails,
@@ -278,13 +279,32 @@ def test_company_prices(quotation_fixture, monkeypatch):
 
 @pytest.mark.django_db
 def test_toggle_watchlist_entry(uw_fixture, django_user_model):
-    u1 = django_user_model.objects.filter(username='U1').first()
-    assert u1 is not None
-    uname = u1.username
-    assert is_in_watchlist(uname, 'ASX1')
-    toggle_watchlist_entry(u1, 'ASX1')
+    u = find_user('u2')
+    assert u is not None
+    uname = u.username
     assert not is_in_watchlist(uname, 'ASX1')
+    toggle_watchlist_entry(u, 'ASX1')
+    assert is_in_watchlist(uname, 'ASX1')
     assert not is_in_watchlist(uname, 'ASX2')
-    toggle_watchlist_entry(u1, 'ASX2')
-    ret = user_watchlist(u1)
+    toggle_watchlist_entry(u, 'ASX2')
+    ret = user_watchlist(u)
     assert 'ASX2' in ret
+
+@pytest.mark.django_db
+def test_user_purchases(uw_fixture, purchase_factory, monkeypatch):
+    def mock_current_price(self):
+        return (2.0 * self.n, 200.0)
+
+    u = find_user('u2')
+    assert u is not None
+    monkeypatch.setattr(mdl.VirtualPurchase, 'current_price', mock_current_price)
+    purchases = user_purchases(u)
+    assert dict(purchases) == {}
+    purchase_factory.create(asx_code='ASX1',
+                            user=u,
+                            buy_date='2021-01-01',
+                            price_at_buy_date=1.0,
+                            amount=5000, n=5000)
+    purchases = user_purchases(u)
+    print(purchases)
+    
