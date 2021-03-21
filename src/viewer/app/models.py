@@ -211,7 +211,10 @@ class Watchlist(model.Model):
 def find_user(username: str):
     return get_user_model().objects.filter(username=username).first()
 
-@cached(watchlist_cache)
+def hash_watchlist_key(username, asx_code, **kwargs):
+    return keys.hashkey(username, asx_code)
+
+@cached(watchlist_cache, key=hash_watchlist_key)
 def is_in_watchlist(username: str, asx_code: str) -> bool:
     user = find_user(username)
     if user is None:
@@ -232,8 +235,7 @@ def toggle_watchlist_entry(user, asx_stock):
     # 2. invalidate from watchlist_cache as wrong cached value may be stored already
     try:
         # NB: must be the same key calculation and args as is_in_watchlist()
-        key = keys.hashkey(user.username, asx_stock)
-        watchlist_cache.pop(key=key)
+        watchlist_cache.pop(key=hash_watchlist_key(user.username, asx_stock))
     except KeyError: # not in cache? thats ok so...
         pass
 
