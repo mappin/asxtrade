@@ -292,13 +292,14 @@ def test_toggle_watchlist_entry(uw_fixture, django_user_model):
     assert 'ASX2' in ret
 
 @pytest.mark.django_db
-def test_user_purchases(uw_fixture, purchase_factory, monkeypatch):
-    def mock_current_price(self):
-        return (2.0 * self.n, 200.0)
+def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeypatch):
+    def mock_latest_quote(stock):
+        assert stock == "ASX1"
+        return quotation_factory.create(asx_code='ASX1', last_price=2.0), '2021-01-01'
 
     u = find_user('u2')
     assert u is not None
-    monkeypatch.setattr(mdl.VirtualPurchase, 'current_price', mock_current_price)
+    monkeypatch.setattr(mdl, 'latest_quote', mock_latest_quote)
     purchases = user_purchases(u)
     assert dict(purchases) == {}
     purchase_factory.create(asx_code='ASX1',
@@ -310,6 +311,6 @@ def test_user_purchases(uw_fixture, purchase_factory, monkeypatch):
     assert 'ASX1' in purchases
     result = purchases['ASX1'][0]
     assert isinstance(result, VirtualPurchase)
-    assert str(result) == "Purchase on 2021-01-01: $5000.0 (5000 shares@$1.00) is now $10000.00 (200.00%)"
+    assert str(result) == "Purchase on 2021-01-01: $5000.0 (5000 shares@$1.00) is now $10000.00 (100.00%)"
 
     
