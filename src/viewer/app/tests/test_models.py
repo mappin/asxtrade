@@ -16,6 +16,7 @@ from app.models import (
     stock_info,
     find_user,
     user_purchases,
+    VirtualPurchase,
     Quotation,
     Watchlist,
     CompanyDetails,
@@ -306,5 +307,9 @@ def test_user_purchases(uw_fixture, purchase_factory, monkeypatch):
                             price_at_buy_date=1.0,
                             amount=5000, n=5000)
     purchases = user_purchases(u)
-    print(purchases)
+    assert 'ASX1' in purchases
+    result = purchases['ASX1'][0]
+    assert isinstance(result, VirtualPurchase)
+    assert str(result) == "Purchase on 2021-01-01: $5000.0 (5000 shares@$1.00) is now $10000.00 (200.00%)"
+
     
