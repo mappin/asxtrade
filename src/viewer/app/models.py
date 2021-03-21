@@ -526,7 +526,7 @@ def day_low_high(stock, all_dates=None):
 
 def impute_missing(df, method="linear"):
     assert df is not None
-    print("impute_missing: ", df)
+    #print("impute_missing: ", df)
     if method == "linear":  # faster...
         result = df.interpolate(
             method=method, limit_direction="forward", axis="columns"
@@ -642,6 +642,7 @@ def company_prices(
     which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
+    #print(superdf)
 
     # drop columns not present in all_dates to ensure we are giving just the results requested
     cols_to_drop = [date for date in superdf.columns if date not in which_cols]
