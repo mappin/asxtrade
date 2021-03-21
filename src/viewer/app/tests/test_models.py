@@ -28,7 +28,9 @@ from app.models import (
     all_stocks,
     user_watchlist,
     valid_quotes_only,
-    company_prices
+    company_prices,
+    find_movers,
+    find_named_companies
 )
 
 def test_desired_dates():
@@ -313,4 +315,37 @@ def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeyp
     assert isinstance(result, VirtualPurchase)
     assert str(result) == "Purchase on 2021-01-01: $5000.0 (5000 shares@$1.00) is now $10000.00 (100.00%)"
 
-    
+@pytest.mark.django_db
+def test_find_movers(quotation_fixture, monkeypatch):
+    def mock_all_stocks(): # to correspond to fixture data
+        return set(['ABC', 'OTHER'])
+
+    def mock_superdf(*args, **kwargs): # to correspond to fixture data
+        assert args[0] == {'change_in_percent-01-2021-asx'}
+        assert args[1] == {'ABC', 'OTHER'}
+        assert kwargs == {}
+        rows = [{'asx_code': q.asx_code, 'change_in_percent': q.change_in_percent, 'fetch_date': q.fetch_date} for q in Quotation.objects.all()]
+
+        raw_df = pd.DataFrame.from_records(rows)
+        #print(raw_df)
+        df = raw_df.pivot(index='asx_code', columns='fetch_date', values='change_in_percent')
+        return df, 1
+
+    all_dates = all_available_dates(reference_stock='ABC')
+    assert len(all_dates) > 5
+    monkeypatch.setattr(mdl, 'all_stocks', mock_all_stocks)
+    monkeypatch.setattr(mdl, 'make_superdf', mock_superdf)
+    results = find_movers(10.0, all_dates)
+    assert results is not None
+    #print(results)
+    assert len(results) == 1
+    assert results.loc['ABC'] == 60.0
+
+@pytest.mark.django_db
+def test_find_named_companies(quotation_fixture, monkeypatch):
+    def mock_quot_date(*args, **kwargs):
+        return '2021-01-01'
+
+    monkeypatch.setattr(mdl, 'latest_quotation_date', mock_quot_date)
+    result = find_named_companies('anz', 'anz')
+    assert result == set()
