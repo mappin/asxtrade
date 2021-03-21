@@ -380,7 +380,8 @@ def find_movers(threshold, required_dates):
     implies a decrease, positive an increase in price over the observation period.
     """
     assert threshold >= 0.0
-    assert desired_dates is not None
+    assert required_dates is not None
+    # NB: missing values will be imputed here, for now.
     cip = company_prices(all_stocks(), required_dates, fields="change_in_percent")
     movements = cip.sum(axis=1)
     return movements[movements.abs() >= threshold]
