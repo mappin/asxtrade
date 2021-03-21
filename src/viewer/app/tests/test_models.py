@@ -30,7 +30,8 @@ from app.models import (
     valid_quotes_only,
     company_prices,
     find_movers,
-    find_named_companies
+    find_named_companies,
+    latest_quote
 )
 
 def test_desired_dates():
@@ -349,3 +350,16 @@ def test_find_named_companies(quotation_fixture, monkeypatch):
     monkeypatch.setattr(mdl, 'latest_quotation_date', mock_quot_date)
     result = find_named_companies('anz', 'anz')
     assert result == set()
+
+@pytest.mark.django_db
+def test_latest_quote(quotation_fixture, monkeypatch):
+    def mock_quot_date(*args, **kwargs):
+        return '2021-01-01'
+
+    quote, quote_date = latest_quote('ABC')
+    assert isinstance(quote, Quotation)
+    assert quote_date == '2021-01-06'
+    monkeypatch.setattr(mdl, 'latest_quotation_date', mock_quot_date)
+    qs, latest_date = latest_quote(['ABC', 'OTHER'])
+    assert isinstance(qs, QuerySet)
+    assert qs.count() == 2
