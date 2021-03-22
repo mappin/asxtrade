@@ -354,7 +354,7 @@ def test_find_named_companies(quotation_fixture, monkeypatch):
 @pytest.mark.django_db
 def test_latest_quote(quotation_fixture, monkeypatch):
     def mock_quot_date(*args, **kwargs):
-        return '2021-01-01'
+        return '2021-01-01' # to get 2 quotes, we have to lie and say the latest is Jan 1
 
     quote, quote_date = latest_quote('ABC')
     assert isinstance(quote, Quotation)
