@@ -5,8 +5,8 @@ for unit tests
 from pytest_factoryboy import register
 
 from app.factories import (
-    CompanyDetailsFactory, 
-    QuotationFactory, 
+    CompanyDetailsFactory,
+    QuotationFactory,
     SecurityFactory,
     PurchaseFactory,
     WatchlistFactory
