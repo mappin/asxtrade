@@ -53,7 +53,6 @@ from app.forms import (
     SectorSentimentSearchForm
 )
 from app.analysis import (
-    analyse_sector,
     calculate_trends,
     rank_cumulative_change,
     optimise_portfolio,
