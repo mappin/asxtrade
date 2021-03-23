@@ -15,11 +15,11 @@ from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from cachetools import func, keys, cached, LRUCache
 from django.views.generic.list import (
     MultipleObjectTemplateResponseMixin,
     MultipleObjectMixin,
 )
+from cachetools import func, keys, cached, LRUCache
 from app.models import (
     Quotation,
     user_watchlist,
@@ -50,7 +50,9 @@ from app.forms import (
     DividendSearchForm,
     CompanySearchForm,
     MoverSearchForm,
-    SectorSentimentSearchForm
+    SectorSentimentSearchForm,
+    OptimisePortfolioForm,
+    OptimiseSectorForm
 )
 from app.analysis import (
     calculate_trends,
@@ -585,54 +587,103 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     )
 
 
-def show_optimised_stocks(request, stocks, past_n_days=365, exclude=None):
-    """
-       Backend function to implement function-based views. Default is to use past year of data
-       and perform HRP Optimisation
-    """
-    validate_user(request.user)
+class OptimisedWatchlistView(DividendYieldSearch):
+    action_url = '/show/optimized/watchlist/'
+    template_name = 'optimised_view.html'
+    form_class = OptimisePortfolioForm
+    n_days = 365
+    results = tuple()
+    stock_title = "Watchlist"
 
-    if exclude is not None:
-        if isinstance(exclude, str):
-            exclude = exclude.split(",")
-        stocks = set(stocks).difference(exclude)
-    (
-        cleaned_weights,
-        performance,
-        efficient_frontier_plot,
-        correlation_plot,
-        messages,
-        title,
-    ) = optimise_portfolio(stocks, desired_dates(start_date=past_n_days))
+    def additional_context(self, context):
+        (
+            cleaned_weights,
+            performance,
+            efficient_frontier_plot,
+            correlation_plot,
+            messages,
+            title,
+            portfolio_cost,
+            leftover_funds
+        ) = self.results
+        for msg in messages:
+            info(self.request, msg)
+        total_pct_cw = sum(map(lambda t: t[1], cleaned_weights.values())) * 100.0
+        return {
+            "cleaned_weights": cleaned_weights,
+            "algo": title,
+            "portfolio_performance": performance,
+            "efficient_frontier_plot": efficient_frontier_plot,
+            "correlation_plot": correlation_plot,
+            "portfolio_cost": portfolio_cost,
+            "total_cleaned_weight_pct": total_pct_cw,
+            "leftover_funds": leftover_funds,
+            "stock_selector": self.stock_title,
+        }
 
-    for msg in messages:
-        warning(request, msg)
+    def stocks(self):
+        return list(user_watchlist(self.request.user))
 
-    context = {
-        "n_stocks": len(stocks),
-        "cleaned_weights": cleaned_weights,
-        "portfolio_performance": performance,
-        "efficient_frontier_plot": efficient_frontier_plot,
-        "correlation_plot": correlation_plot,
-        "algo": title,
-    }
-    add_messages(request, context)
-    return render(request, "optimised_view.html", context=context)
+    def optimise(self, stocks, start_date, algo, total_portfolio_value=100*1000):
+        self.results = optimise_portfolio(stocks,
+                                          desired_dates(start_date=start_date),
+                                          algo=algo,
+                                          total_portfolio_value=total_portfolio_value)
 
+    def get_form(self, form_class=None):
+        if form_class is None:
+            form_class = self.get_form_class()
+        return form_class(sorted(self.stocks()), **self.get_form_kwargs())
 
-@login_required
-def show_optimised_sector(request, sector_id=None, exclude=None):
-    sector_name = Sector.objects.get(sector_id=sector_id).sector_name
-    stocks = all_sector_stocks(sector_name)
-    return show_optimised_stocks(request, stocks, exclude=exclude)
+    def get_initial_form(self, form_values):
+        form_class = self.get_form_class()
+        return form_class(sorted(self.stocks()), initial=form_values)
 
-@login_required
-def show_optimised_watchlist(request, exclude=None):
-    return show_optimised_stocks(request, user_watchlist(request.user), exclude=exclude)
+    def get_queryset(self, **kwargs):
+        exclude = kwargs.get("excluded_stocks", None)
+        algo = kwargs.get("method", "ef-minvol")
+        n_days = kwargs.get("n_days", 365)
+        portfolio_cost = kwargs.get("portfolio_cost", 100 * 1000)
+        stocks = self.stocks()
 
-@login_required
-def show_optimised_etfs(request, exclude=None):
-    return show_optimised_stocks(request, all_etfs(), exclude=exclude)
+        if exclude is not None:
+            if isinstance(exclude, str):
+                exclude = exclude.split(",")
+            stocks = set(stocks).difference(exclude)
+
+        self.optimise(stocks, n_days, algo, total_portfolio_value=portfolio_cost)
+        return Quotation.objects.none()
+
+optimised_watchlist_view = OptimisedWatchlistView.as_view()
+
+class OptimisedSectorView(OptimisedWatchlistView):
+    sector = None # initialised by get_queryset()
+    action_url = '/show/optimized/sector/'
+    stock_title = "Sector"
+    form_class = OptimiseSectorForm
+
+    def stocks(self):
+        if self.sector is None:
+            self.sector = 'Information Technology'
+        return sorted(all_sector_stocks(self.sector))
+
+    def get_queryset(self, **kwargs):
+        #print(kwargs)
+        self.sector = kwargs.get('sector', 'Information Technology')
+        self.stock_title = "{} sector".format(self.sector)
+        return super().get_queryset(**kwargs)
+
+optimised_sector_view = OptimisedSectorView.as_view()
+
+class OptimisedETFView(OptimisedWatchlistView):
+    sector = ''
+    action_url = '/show/optimized/etfs/'
+    stock_title = "ETFs"
+
+    def stocks(self):
+        return sorted(all_etfs())
+
+optimised_etf_view = OptimisedETFView.as_view()
 
 @login_required
 def show_sector_outliers(request, sector_id=None, n_days=30):
@@ -675,6 +726,15 @@ def show_trends(request):
     return render(request, "trends.html", context=context)
 
 
+def sum_portfolio(df, date_str, stock_items):
+    assert isinstance(df, pd.DataFrame)
+    assert len(date_str) > 8
+    
+    portfolio_worth = sum(
+            map(lambda t: df.at[t[0], date_str] * t[1], stock_items)
+    )
+    return portfolio_worth
+
 @login_required
 def show_purchase_performance(request):
     purchase_buy_dates = []
@@ -700,17 +760,15 @@ def show_purchase_performance(request):
         d_str = str(d)
         if d_str not in df.columns:  # not a trading day?
             continue
-        purchases_to_date = filter(lambda vp: vp.buy_date <= d, purchases)
+        purchases_to_date = filter(lambda vp, d=d: vp.buy_date <= d, purchases)
         for purchase in purchases_to_date:
             if purchase.buy_date == d:
                 portfolio_cost += purchase.amount
                 stock_count[purchase.asx_code] += purchase.n
                 stock_cost[purchase.asx_code] += purchase.amount
 
-        portfolio_worth = sum(
-            map(lambda t: df.at[t[0], d_str] * t[1], stock_count.items())
-        )
-
+        portfolio_worth = sum_portfolio(df, d_str, stock_count.items())
+       
         # emit rows for each stock and aggregate portfolio
         for asx_code in stocks:
             cur_price = df.at[asx_code, d_str]
@@ -875,7 +933,7 @@ class BuyVirtualStock(LoginRequiredMixin, CreateView):
 
     def get_initial(self, **kwargs):
         stock = kwargs.get("stock", self.kwargs.get("stock"))
-        amount = kwargs.get("amount", self.kwargs.get("stock", 5000.0))
+        amount = kwargs.get("amount", self.kwargs.get("amount", 5000.0))
         user = self.request.user
         validate_stock(stock)
         validate_user(user)
