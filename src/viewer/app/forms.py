@@ -45,7 +45,11 @@ class CompanySearchForm(forms.Form):
 
 class MoverSearchForm(forms.Form):
     threshold = forms.FloatField(required=True, min_value=0.0, max_value=10000.0, initial=50.0)
-    timeframe_in_days = forms.IntegerField(required=True, min_value=1, max_value=365, initial=7, label="Timeframe (days)")
+    timeframe_in_days = forms.IntegerField(required=True,
+                                           min_value=1,
+                                           max_value=365,
+                                           initial=7,
+                                           label="Timeframe (days)")
     show_increasing = forms.BooleanField(required=False, initial=True, label="Increasing")
     show_decreasing = forms.BooleanField(required=False, initial=True, label="Decreasing")
 
@@ -83,8 +87,8 @@ class OptimisePortfolioForm(forms.Form):
                                         required=True, 
                                         min_value=1000,
                                         label='Show share portfolio having dollar value: ($AUD)')
-    max_stocks = forms.IntegerField(min_value=10, 
-                                    max_value=200, 
+    max_stocks = forms.IntegerField(min_value=10,
+                                    max_value=200,
                                     initial=80,
                                     label="Maximum stocks to consider (random sample taken)")
 
@@ -94,4 +98,6 @@ class OptimisePortfolioForm(forms.Form):
             self.fields['excluded_stocks'].choices = [(s, s) for s in excluded_stocks]
 
 class OptimiseSectorForm(OptimisePortfolioForm):
-    sector = forms.ChoiceField(choices=SectorSearchForm.SECTOR_CHOICES, required=True, initial=SectorSearchForm.SECTOR_CHOICES[0][0])
+    sector = forms.ChoiceField(choices=SectorSearchForm.SECTOR_CHOICES,
+                               required=True,
+                               initial=SectorSearchForm.SECTOR_CHOICES[0][0])
