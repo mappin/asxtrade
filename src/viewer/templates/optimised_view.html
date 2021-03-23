@@ -3,36 +3,70 @@
 {% block content %}
 
 <div class="row mt-2">
-    <h2>Portfolio optimiser: {{ n_stocks }} stocks</h2>
+    <h2>Portfolio optimisation: {{ stock_selector }}</h2>
 </div>
 
-<div class="row mt-2">
 
-<p>
-    Not all stocks are shown:
-</p>
-<ol>
-    <li>Stocks with little change in prices are removed</li>
-    <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
-    <li>80 stocks are chosen at random from the input stocks and only this is optimised: large pools of stocks are impractical to compute</li>
-    <li>only stock prices are considered: dividends, stock splits, capital raisings and any other events are ignored</li>
-</ol>
-</div>
-
-<div class="row mt-2">
-    <h3>{{ algo |title }} cleaned weights</h3>
+<div class="row mt-4">
+    <form action="{{ action_url }}" method="POST">
+        <table>
+           {% csrf_token %}
+           {{ form.as_table }}
+           <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+        </table>
+    </form>
 </div>
 
 <div class="row mt-4">
-    <table style="width: 60%" class="mt-4">
-        <tr><th>Stock</th><th>Weight (%)</th></tr>
-        {% for stock, weight in cleaned_weights.items %}
+    <h2>Results</h2>
+</div>
+
+<div class="row mt-2">
+
+    <p>
+        Not all stocks are shown:
+    </p>
+    <ol>
+        <li>Stocks with little change in prices are excluded</li>
+        <li>Stocks with no current price data are also excluded (unable to price share allocation)</li>
+        <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
+        <li>The most weights stocks reported must explain at least 80% of the portfolio: remainder may not be reported as too small a part of the portfolio</li>
+        <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random</li>
+        <li>Only stock prices are considered: dividends, stock splits, capital raisings and any other events are ignored</li>
+    </ol>
+</div>
+    
+<div class="row mt-2">
+    <h4>{{ algo |title }} cleaned weights and share allocation</h4>
+</div>
+
+<div class="row mt-4">
+    <table style="width: 60%">
+        <tr><th>Stock</th>
+            <th>Weight (%)</th>
+            <th>Number of shares in ${{ portfolio_cost }} portfolio</th>
+            <th>Cost per share ($AUD)</th>
+        </tr>
+        {% for stock, tuple in cleaned_weights.items %}
             <tr>
                 <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
-                <td>{{ weight|percentage|floatformat }}</td>
+                <td>{{ tuple.1|percentage|floatformat }}</td>
+                <td>{{ tuple.2 }}</td>
+                <td>{{ tuple.3 }}</td>
             </tr>
         {% endfor %}
     </table>
+</div>
+
+<div class="row mt-4">
+    <ul>
+        {% if total_cleaned_weight_pct < 99.5 %}
+        <li>{{ total_cleaned_weight_pct | floatformat }}% of the total allocation is shown above (small allocations not shown)</li>
+        {% endif %}
+        {% if leftover_funds > 0.0 %}
+        <li>Due to whole share purchases, some funds could not be allocated: ${{ leftover_funds|floatformat }}</li>
+        {% endif %}
+    </ul>
 </div>
 
 <div class="row mt-2">

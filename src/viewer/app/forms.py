@@ -58,3 +58,40 @@ class SectorSentimentSearchForm(forms.Form):
     sector = forms.ChoiceField(required=True, choices=SectorSearchForm.SECTOR_CHOICES)
     normalisation_method = forms.ChoiceField(required=True, choices=normalisation_choices)
     n_days = forms.IntegerField(required=True, max_value=200, min_value=10, initial=30)
+
+class OptimisePortfolioForm(forms.Form):
+    method_choices = (
+        ('hrp', 'Hierarchical Risk Parity'),
+        ('ef-sharpe', 'Efficient Frontier - Max Sharpe'),
+        ('ef-risk', 'Efficient Frontier - efficient risk'),
+        ('ef-minvol', 'Efficient Frontier - minimum volatility')
+    )
+    n_days = forms.IntegerField(required=True, 
+                                max_value=1000, 
+                                min_value=10, 
+                                initial=180,
+                                label="Timeframe for data to use (days relative to now)")
+    method = forms.ChoiceField(required=True, 
+                               choices=method_choices, 
+                               initial=method_choices[0][0],
+                               label="Optimisation method to use")
+    excluded_stocks = forms.MultipleChoiceField(choices=(), 
+                                                required=False, 
+                                                widget=forms.SelectMultiple(attrs={'size': 10}),
+                                                label="Stocks to exclude from optimisation")
+    portfolio_cost = forms.IntegerField(initial=100*1000, 
+                                        required=True, 
+                                        min_value=1000,
+                                        label='Show share portfolio having dollar value: ($AUD)')
+    max_stocks = forms.IntegerField(min_value=10, 
+                                    max_value=200, 
+                                    initial=80,
+                                    label="Maximum stocks to consider (random sample taken)")
+
+    def __init__(self, excluded_stocks, **kwargs):
+        super(OptimisePortfolioForm, self).__init__(**kwargs)
+        if excluded_stocks is not None:
+            self.fields['excluded_stocks'].choices = [(s, s) for s in excluded_stocks]
+
+class OptimiseSectorForm(OptimisePortfolioForm):
+    sector = forms.ChoiceField(choices=SectorSearchForm.SECTOR_CHOICES, required=True, initial=SectorSearchForm.SECTOR_CHOICES[0][0])
