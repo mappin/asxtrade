@@ -8,6 +8,7 @@ import numpy as np
 from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
 from pypfopt.expected_returns import mean_historical_return
+from pypfopt.discrete_allocation import DiscreteAllocation
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
@@ -308,22 +309,47 @@ def ef_minvol_strategy(returns=None, cov_matrix=None):
     pt = ef.portfolio_performance()
     return cw, pt, ef
 
-def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
-    # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
+def setup_optimisation_matrices(stocks, desired_dates):
+     # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     df = company_prices(stocks, 
                         all_dates=desired_dates, 
                         fail_missing_months=False, 
                         missing_cb=None)
     stock_prices = df.transpose()
+    latest_date = stock_prices.index[-1]
+    #print(latest_date)
+
+    missing_latest_prices = list(stock_prices.columns[stock_prices.loc[latest_date].isna()])
+    if len(missing_latest_prices) > 0:
+        stock_prices = stock_prices.drop(columns=missing_latest_prices)
+    
+    latest_prices = stock_prices.loc[latest_date]
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
-    messages = set() # messages to warn users of problems with computational stability/data quality
+    # check that the matrices are consistent to each other
+    assert stock_prices.shape[1] == latest_prices.shape[0]
+    assert stock_prices.shape[1] == all_returns.shape[1]
+    assert all_returns.shape[0] == stock_prices.shape[0] - 1
+    #print(stock_prices.shape)
+    #print(latest_prices.shape)
+    #print(all_returns.shape)
+
+    return all_returns, stock_prices, latest_prices
+
+def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
+    assert len(stocks) >= 1
+    assert len(desired_dates) >= 10
+    assert total_portfolio_value > 0
+    assert max_stocks >= 5
+
+    messages = set()
+    all_returns, stock_prices, latest_prices = setup_optimisation_matrices(stocks, desired_dates)
     for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         n_unique_min, var_min = t
 
         # drop columns were there is no activity (ie. same value) in the observation period
         cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
-        
+
         print("Dropping due to inactivity: {}".format(cols_to_drop))
         # drop columns with very low variance
         v = all_returns.var()
@@ -332,7 +358,7 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
         cols_to_drop.extend(low_var.index)
         #print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
         filtered_stocks = stock_prices.drop(columns=cols_to_drop)
-        n_stocks = 80 if len(filtered_stocks.columns) > 80 else len(filtered_stocks.columns)
+        n_stocks = max_stocks if len(filtered_stocks.columns) > max_stocks else len(filtered_stocks.columns)
         filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
         returns = returns_from_prices(filtered_stocks, log_returns=False)
         mu = mean_historical_return(filtered_stocks)
@@ -356,11 +382,21 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
                                        {'returns': mu, 'cov_matrix': s})
 
         try: 
-            clean_weights, performance_tuple, ef = strategy(**kwargs)
+            weights, performance_tuple, ef = strategy(**kwargs)
+            allocator = DiscreteAllocation(weights,
+                                           latest_prices,
+                                           total_portfolio_value=total_portfolio_value)
             fig, ax = plt.subplots()
-
-            # sort the clean weights by decreasing weight
-            clean_weights = OrderedDict(list(sorted(clean_weights.items(), key=lambda x: -x[1]))[:30])
+            portfolio, leftover_funds = allocator.greedy_portfolio()
+            #print(portfolio)
+            clean_weights = OrderedDict()
+            total_weight = 0.0
+            # minimum volality can have lots of little stock weights, so we dont stop until we explain >80%
+            for stock, weight in sorted(weights.items(), key=lambda t: t[1], reverse=True):
+                total_weight += weight * 100.0
+                clean_weights[stock] = (stock, weight, portfolio[stock], latest_prices[stock])
+                if total_weight >= 80.5 and len(clean_weights.keys()) > 30:
+                    break
             #print(clean_weights)
             # disabled due to TypeError during deepcopy of OSQP results object
             #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
@@ -394,13 +430,13 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol"):
             correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
             plt.close(ax.figure)
             return clean_weights, performance_tuple, \
-                   efficient_frontier_plot, correlation_plot, messages, title
+                   efficient_frontier_plot, correlation_plot, messages, title, total_portfolio_value, leftover_funds
         except ValueError as ve:
             messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(n_unique_min, var_min, len(returns.columns), str(ve)))
             pass # try next iteration
 
     print("*** WARNING: unable to optimise portolio!")
-    return (None, None, None, None, messages, title)
+    return (None, None, None, None, messages, title, total_portfolio_value, 0.0)
 
 def key_sector_performance(stock, sector, all_stocks_cip, window_size=10):
     assert stock is not None        # avoid pylint unused warning

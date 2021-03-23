@@ -40,9 +40,9 @@ from app.views import (
     delete_virtual_stock,
     market_sentiment,
     download_data,
-    show_optimised_watchlist,
-    show_optimised_sector,
-    show_optimised_etfs,
+    optimised_watchlist_view,
+    optimised_etf_view,
+    optimised_sector_view
 )
 
 urlpatterns = [
@@ -83,30 +83,16 @@ urlpatterns = [
     path("data/<slug:dataset>/<str:format>/", download_data, name="data"),
     path(
         "show/optimized/watchlist/",
-        show_optimised_watchlist,
+        optimised_watchlist_view,
         name="show-optimised-watchlist",
     ),
     path(
-        "show/optimized/watchlist/<str:exclude>",
-        show_optimised_watchlist,
-        name="show-optimised-watchlist",
-    ),
-    path(
-        "show/optimized/sector/<int:sector_id>/",
-        show_optimised_sector,
+        "show/optimized/sector/",
+        optimised_sector_view,
         name="show-optimised-sector",
     ),
-    path(
-        "show/optimized/sector/<int:sector_id>/<str:exclude>",
-        show_optimised_sector,
-        name="show-optimised-sector",
-    ),
-    path("show/optimized/etfs/", show_optimised_etfs, name="show-optimised-etfs"),
-    path(
-        "show/optimized/etfs/<str:exclude>",
-        show_optimised_etfs,
-        name="show-optimised-etfs",
-    ),
+    path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
+    
 ]
 
 
