@@ -17,7 +17,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.views.generic.list import (
     MultipleObjectTemplateResponseMixin,
-    MultipleObjectMixin,
+    MultipleObjectMixin
 )
 from cachetools import func, keys, cached, LRUCache
 from app.models import (
@@ -174,12 +174,12 @@ class SectorSearchView(DividendYieldSearch):
     query_state = None
 
     def additional_context(self, context):
-        assert isinstance(self.sector, str)
-        assert isinstance(self.sector_id, int)
+        #assert isinstance(self.sector, str)
+        #assert isinstance(self.sector_id, int)
 
         ret = {
             # to highlight top10/bottom10 bookmarks correctly
-            "watched": user_watchlist(self.request.user),  
+            "watched": user_watchlist(self.request.user),
             "title": "Find by company sector",
             "sector_name": self.sector,
             "sector_id": self.sector_id,
@@ -587,72 +587,76 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     )
 
 
-class OptimisedWatchlistView(DividendYieldSearch):
+class OptimisedWatchlistView(
+        LoginRequiredMixin,
+        FormView
+):
     action_url = '/show/optimized/watchlist/'
     template_name = 'optimised_view.html'
     form_class = OptimisePortfolioForm
-    n_days = 365
-    results = tuple()
+    results = None # specified when valid form submitted
     stock_title = "Watchlist"
 
-    def additional_context(self, context):
-        (
-            cleaned_weights,
-            performance,
-            efficient_frontier_plot,
-            correlation_plot,
-            messages,
-            title,
-            portfolio_cost,
-            leftover_funds
-        ) = self.results
-        for msg in messages:
-            info(self.request, msg)
-        total_pct_cw = sum(map(lambda t: t[1], cleaned_weights.values())) * 100.0
-        return {
-            "cleaned_weights": cleaned_weights,
-            "algo": title,
-            "portfolio_performance": performance,
-            "efficient_frontier_plot": efficient_frontier_plot,
-            "correlation_plot": correlation_plot,
-            "portfolio_cost": portfolio_cost,
-            "total_cleaned_weight_pct": total_pct_cw,
-            "leftover_funds": leftover_funds,
-            "stock_selector": self.stock_title,
-        }
+    def get_context_data(self, **kwargs):
+        ret = super().get_context_data(**kwargs)
+        if self.results is not None:
+            (
+                cleaned_weights,
+                performance,
+                efficient_frontier_plot,
+                correlation_plot,
+                messages,
+                title,
+                portfolio_cost,
+                leftover_funds,
+                n_stocks,
+            ) = self.results
+            for msg in messages:
+                info(self.request, msg)
+            total_pct_cw = sum(map(lambda t: t[1], cleaned_weights.values())) * 100.0
+            ret.update({
+                "cleaned_weights": cleaned_weights,
+                "algo": title,
+                "portfolio_performance": performance,
+                "efficient_frontier_plot": efficient_frontier_plot,
+                "correlation_plot": correlation_plot,
+                "portfolio_cost": portfolio_cost,
+                "total_cleaned_weight_pct": total_pct_cw,
+                "leftover_funds": leftover_funds,
+                "stock_selector": self.stock_title,
+                "n_stocks_considered": n_stocks,
+                "n_stocks_in_portfolio": len(cleaned_weights.keys())
+            })
+        return ret
 
     def stocks(self):
         return list(user_watchlist(self.request.user))
 
     def optimise(self, stocks, start_date, algo, total_portfolio_value=100*1000):
-        self.results = optimise_portfolio(stocks,
-                                          desired_dates(start_date=start_date),
-                                          algo=algo,
-                                          total_portfolio_value=total_portfolio_value)
+        return optimise_portfolio(stocks,
+                                  desired_dates(start_date=start_date),
+                                  algo=algo,
+                                  total_portfolio_value=total_portfolio_value)
 
     def get_form(self, form_class=None):
         if form_class is None:
             form_class = self.get_form_class()
         return form_class(sorted(self.stocks()), **self.get_form_kwargs())
 
-    def get_initial_form(self, form_values):
-        form_class = self.get_form_class()
-        return form_class(sorted(self.stocks()), initial=form_values)
-
-    def get_queryset(self, **kwargs):
-        exclude = kwargs.get("excluded_stocks", None)
-        algo = kwargs.get("method", "ef-minvol")
-        n_days = kwargs.get("n_days", 365)
-        portfolio_cost = kwargs.get("portfolio_cost", 100 * 1000)
-        stocks = self.stocks()
+    def form_valid(self, form):
+        exclude = form.cleaned_data['excluded_stocks']
+        n_days  = form.cleaned_data['n_days']
+        algo    = form.cleaned_data['method']
+        portfolio_cost = form.cleaned_data['portfolio_cost']
+        stocks  = self.stocks()
 
         if exclude is not None:
             if isinstance(exclude, str):
                 exclude = exclude.split(",")
             stocks = set(stocks).difference(exclude)
 
-        self.optimise(stocks, n_days, algo, total_portfolio_value=portfolio_cost)
-        return Quotation.objects.none()
+        self.results = self.optimise(stocks, n_days, algo, total_portfolio_value=portfolio_cost)
+        return render(self.request, self.template_name, self.get_context_data())
 
 optimised_watchlist_view = OptimisedWatchlistView.as_view()
 
@@ -667,16 +671,14 @@ class OptimisedSectorView(OptimisedWatchlistView):
             self.sector = 'Information Technology'
         return sorted(all_sector_stocks(self.sector))
 
-    def get_queryset(self, **kwargs):
-        #print(kwargs)
-        self.sector = kwargs.get('sector', 'Information Technology')
+    def form_valid(self, form):
+        self.sector = form.cleaned_data['sector']
         self.stock_title = "{} sector".format(self.sector)
-        return super().get_queryset(**kwargs)
+        return super().form_valid(form)
 
 optimised_sector_view = OptimisedSectorView.as_view()
 
 class OptimisedETFView(OptimisedWatchlistView):
-    sector = ''
     action_url = '/show/optimized/etfs/'
     stock_title = "ETFs"
 

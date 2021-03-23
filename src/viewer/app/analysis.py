@@ -324,17 +324,19 @@ def setup_optimisation_matrices(stocks, desired_dates):
         stock_prices = stock_prices.drop(columns=missing_latest_prices)
     
     latest_prices = stock_prices.loc[latest_date]
+    first_prices = stock_prices.loc[stock_prices.index[0]]
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
     # check that the matrices are consistent to each other
     assert stock_prices.shape[1] == latest_prices.shape[0]
     assert stock_prices.shape[1] == all_returns.shape[1]
     assert all_returns.shape[0] == stock_prices.shape[0] - 1
+
     #print(stock_prices.shape)
-    #print(latest_prices.shape)
+    #print(latest_prices)
     #print(all_returns.shape)
 
-    return all_returns, stock_prices, latest_prices
+    return all_returns, stock_prices, latest_prices, first_prices
 
 def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
     assert len(stocks) >= 1
@@ -343,7 +345,7 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
     assert max_stocks >= 5
 
     messages = set()
-    all_returns, stock_prices, latest_prices = setup_optimisation_matrices(stocks, desired_dates)
+    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, desired_dates)
     for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         n_unique_min, var_min = t
 
@@ -394,7 +396,12 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
             # minimum volality can have lots of little stock weights, so we dont stop until we explain >80%
             for stock, weight in sorted(weights.items(), key=lambda t: t[1], reverse=True):
                 total_weight += weight * 100.0
-                clean_weights[stock] = (stock, weight, portfolio[stock], latest_prices[stock])
+                if not stock in portfolio:
+                    continue
+                n = portfolio[stock]
+                after = latest_prices[stock]
+                before = first_prices[stock]
+                clean_weights[stock] = (stock, weight, n, after, before, n * (after - before))
                 if total_weight >= 80.5 and len(clean_weights.keys()) > 30:
                     break
             #print(clean_weights)
@@ -422,21 +429,21 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
             efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
             plt.close(fig)
         
-            # only plot covariances for significant holdings
-            #assert covar_stocks.isna().sum() == 0 and covar_stocks.isnull().sum() == 0
-            m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())]).ledoit_wolf()
+            # only plot covariances for significant holdings to ensure readability
+            m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())[:30]]).ledoit_wolf()
             #print(m)
             ax = plot_covariance(m, plot_correlation=True)
             correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
             plt.close(ax.figure)
             return clean_weights, performance_tuple, \
-                   efficient_frontier_plot, correlation_plot, messages, title, total_portfolio_value, leftover_funds
+                   efficient_frontier_plot, correlation_plot, messages, \
+                   title, total_portfolio_value, leftover_funds, len(latest_prices)
         except ValueError as ve:
             messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(n_unique_min, var_min, len(returns.columns), str(ve)))
             pass # try next iteration
 
     print("*** WARNING: unable to optimise portolio!")
-    return (None, None, None, None, messages, title, total_portfolio_value, 0.0)
+    return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
 
 def key_sector_performance(stock, sector, all_stocks_cip, window_size=10):
     assert stock is not None        # avoid pylint unused warning

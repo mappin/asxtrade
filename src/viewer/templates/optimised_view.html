@@ -17,6 +17,7 @@
     </form>
 </div>
 
+{% if efficient_frontier_plot is not None %}
 <div class="row mt-4">
     <h2>Results</h2>
 </div>
@@ -29,6 +30,8 @@
     <ol>
         <li>Stocks with little change in prices are excluded</li>
         <li>Stocks with no current price data are also excluded (unable to price share allocation)</li>
+        <li>A total of {{ n_stocks_considered }} stocks were considered during portfolio optimisation</li>
+        <li>A total of {{ n_stocks_in_portfolio }} stocks are reported in the weights/share allocation below</li>
         <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
         <li>The most weights stocks reported must explain at least 80% of the portfolio: remainder may not be reported as too small a part of the portfolio</li>
         <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random</li>
@@ -41,18 +44,24 @@
 </div>
 
 <div class="row mt-4">
-    <table style="width: 60%">
+    <table style="width: 80%">
         <tr><th>Stock</th>
             <th>Weight (%)</th>
             <th>Number of shares in ${{ portfolio_cost }} portfolio</th>
-            <th>Cost per share ($AUD)</th>
+            <th>Cost per share today ($AUD)</th>
+            <th>Cost per share at start ($AUD)</th>
+            <th>Total profit ($AUD)</th>
+            <th>Sector</th>
         </tr>
         {% for stock, tuple in cleaned_weights.items %}
             <tr>
                 <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
                 <td>{{ tuple.1|percentage|floatformat }}</td>
                 <td>{{ tuple.2 }}</td>
-                <td>{{ tuple.3 }}</td>
+                <td>{{ tuple.3 |floatformat }}</td>
+                <td>{{ tuple.4 |floatformat }}</td>
+                <td>{{ tuple.5 |floatformat }}</td>
+                <td>{{ stock |stock_sector }}</td>
             </tr>
         {% endfor %}
     </table>
@@ -97,4 +106,5 @@
     <img src="data:image/png;base64, {{ correlation_plot }}" alt="Plot of stock correlation of optimal portfolio">
 </div>
 
+{% endif %}
 {% endblock %}
