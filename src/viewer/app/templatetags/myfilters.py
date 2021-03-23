@@ -6,7 +6,7 @@ from functools import lru_cache
 from django.template.defaulttags import register
 from django.templatetags.static import static
 from django.utils.safestring import mark_safe
-from app.models import CompanyDetails, Watchlist, is_in_watchlist
+from app.models import CompanyDetails, is_in_watchlist
 
 @register.filter
 def get_item(d, key):

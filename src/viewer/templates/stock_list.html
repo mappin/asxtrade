@@ -73,16 +73,18 @@
         <table style="width: 80%" align="center">
             <tr><td style="padding: 10px 10px" align="center">
                 <span class="step-links">
-                    {% if page_obj.has_previous %}
+                    {% if page_obj.number > 1 %}
                         <a href="?page=1" class="btn btn-primary" rel="keep-params">&laquo; first</a>
                         <a href="?page={{ page_obj.previous_page_number }}" rel="keep-params" class="btn btn-primary">previous</a>
                     {% endif %}
 
-                    <span class="current">
-                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
-                    </span>
+                    {% if page_obj.paginator.num_pages > 1 %}
+                        <span class="current">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                        </span>
+                    {% endif %}
 
-                    {% if page_obj.has_next %}
+                    {% if page_obj.number < page_obj.paginator.num_pages %}
                         <a href="?page={{ page_obj.next_page_number }}" rel="keep-params" class="btn btn-primary">next</a>
                         <a href="?page={{ page_obj.paginator.num_pages }}" rel="keep-params" class="btn btn-primary">last &raquo;</a>
                     {% endif %}
@@ -103,9 +105,9 @@
                     {% elif '/search/by-sector' in request.path %}
                     &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Outliers (past 30 days)</a>
                     &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Outliers (180 days, SLOW)</a>
-                    &nbsp;<a href="/show/optimized/sector/{{ sector_id }}" class="btn btn-primary">Optimise sector</a>
+                    &nbsp;<a href="/show/optimized/sector/" class="btn btn-primary">Sector optimisation</a>
                     {% elif '/show/etfs' in request.path %}
-                    &nbsp;<a href="/show/optimized/etfs" class="btn btn-primary">Optimise all ETFs</a>
+                    &nbsp;<a href="/show/optimized/etfs" class="btn btn-primary">ETF optimisation</a>
                     {% endif %}
                 </span>
                 {% endif %}
