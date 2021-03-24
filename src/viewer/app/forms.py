@@ -101,3 +101,9 @@ class OptimiseSectorForm(OptimisePortfolioForm):
     sector = forms.ChoiceField(choices=SectorSearchForm.SECTOR_CHOICES,
                                required=True,
                                initial=SectorSearchForm.SECTOR_CHOICES[0][0])
+
+    def __init__(self, *args, **kwargs):
+        sector = kwargs.pop('sector', None)
+        super(OptimiseSectorForm, self).__init__(*args, **kwargs)
+        if sector:
+            self.fields['sector'].initial = sector

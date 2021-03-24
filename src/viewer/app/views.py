@@ -645,10 +645,10 @@ class OptimisedWatchlistView(
 
     def form_valid(self, form):
         exclude = form.cleaned_data['excluded_stocks']
-        n_days  = form.cleaned_data['n_days']
-        algo    = form.cleaned_data['method']
+        n_days = form.cleaned_data['n_days']
+        algo = form.cleaned_data['method']
         portfolio_cost = form.cleaned_data['portfolio_cost']
-        stocks  = self.stocks()
+        stocks = self.stocks()
 
         if exclude is not None:
             if isinstance(exclude, str):
@@ -670,6 +670,14 @@ class OptimisedSectorView(OptimisedWatchlistView):
         if self.sector is None:
             self.sector = 'Information Technology'
         return sorted(all_sector_stocks(self.sector))
+
+    def get_form_kwargs(self):
+        """Permit the user to provide initial form value for sector as a HTTP GET query parameter"""
+        ret = super().get_form_kwargs()
+        sector = self.request.GET.get('sector', None)
+        if sector:
+            ret.update({'sector': sector})
+        return ret
 
     def form_valid(self, form):
         self.sector = form.cleaned_data['sector']
