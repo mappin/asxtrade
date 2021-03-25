@@ -295,7 +295,10 @@ def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent
     at the start of the observation period. A plot as base64 data is returned.
     """
     df = company_prices(
-        None, all_dates=all_dates, fields="change_in_percent"
+        None, 
+        all_dates=all_dates, 
+        fields="change_in_percent",
+        impute_missing=None,
     )  # None == all stocks
     n_stocks = len(df)
     # merge in sector information for each company
@@ -396,7 +399,10 @@ def plot_heatmap(
     if all_dates is None:
         all_dates = desired_dates(start_date=30)
     df = company_prices(
-        companies, all_dates=all_dates, fields=field_name
+        companies, 
+        all_dates=all_dates, 
+        fields=field_name,
+        missing_cb=None
     )  # by default change_in_percent will be used
     n_stocks = len(df)
     sum_by_company = df.sum(
