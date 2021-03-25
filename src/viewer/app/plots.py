@@ -49,11 +49,11 @@ def plot_as_base64(fig):
     for insertion into a page as a context attribute
     """
     assert fig is not None
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
-    buf.seek(0)
-    b64data = base64.b64encode(buf.read())
-    return b64data
+    with io.BytesIO(bytearray(200*1024)) as buf:
+        fig.savefig(buf, format="png")
+        buf.seek(0)
+        b64data = base64.b64encode(buf.read())
+        return b64data
 
 
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
