@@ -664,6 +664,8 @@ def company_prices(
     )
     superdf = superdf[dates]
     if missing_cb is not None and superdf.isnull().values.any():
+        if missing_cb == impute_missing and fields == 'change_in_percent':
+            print("WARNING: fields == change_in_percent with impute_missing() is likely nonsensical")
         superdf = missing_cb(superdf)
     return superdf
 
