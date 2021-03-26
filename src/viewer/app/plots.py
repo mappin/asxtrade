@@ -4,10 +4,10 @@ base64 data for various django templates to use.
 """
 import base64
 import io
-import numpy as np
-import pandas as pd
 from datetime import datetime
 from collections import Counter, defaultdict
+import numpy as np
+import pandas as pd
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
@@ -45,8 +45,8 @@ def price_change_bins():
 
 def plot_as_base64(fig, charset='utf-8'):
     """
-    Convert supplied figure into string buffer and then return as base64-encoded data
-    for insertion into a page as a context attribute
+    Convert supplied figure into string buffer and then return as base64-encoded string
+    (in the specified charset) for insertion into a page as a context attribute
     """
     assert fig is not None
     with io.BytesIO(bytearray(200*1024)) as buf:
@@ -759,7 +759,8 @@ def plot_boxplot_series(df, normalisation_method=None):
     Treating each column as a separate boxplot and each row as an independent observation 
     (ie. different company)
     render a series of box plots to identify a shift in performance from the observations.
-    normalisation_method should be one of the values present in SectorSentimentSearchForm.normalisation_choices
+    normalisation_method should be one of the values present in 
+    SectorSentimentSearchForm.normalisation_choices
     """
     # compute star performers: those who are above the mean on a given day counted over all days
     count = defaultdict(int)

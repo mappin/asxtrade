@@ -15,7 +15,7 @@ from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.expected_returns import returns_from_prices
-from app.models import CompanyDetails, company_prices, day_low_high, all_sector_stocks
+from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
@@ -48,7 +48,7 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
             continue
         nrmse = np.sqrt(mse) / series_range
         # ignore stocks which are barely moving either way
-        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): 
+        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01]):
             pass
         else:
             trends[stock] = (coefficients[0],
@@ -77,7 +77,9 @@ def rank_cumulative_change(df, all_dates):
     assert len(average_rank_binned) == len(df)
     df['bin'] = average_rank_binned
     df['asx_code'] = df.index
-    df['sector'] = [CompanyDetails.objects.get(asx_code=code).sector_name for code in df.index]
+    stock_sector_df = stocks_by_sector() # make one DB call (cached) rather than lots of round-trips
+    stock_sector_df.set_index('asx_code')
+    df['sector'] = [stock_sector_df.loc[code].sector_name for code in df.index]
     df = pd.melt(df, id_vars=['asx_code', 'bin', 'sector', 'x', 'y'],
                  var_name='date',
                  value_name='rank',
@@ -339,6 +341,48 @@ def setup_optimisation_matrices(stocks, desired_dates):
 
     return all_returns, stock_prices, latest_prices, first_prices
 
+def assign_strategy(filtered_stocks: pd.DataFrame, algo: str, n_stocks: int) -> tuple:
+    filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
+    returns = returns_from_prices(filtered_stocks, log_returns=False)
+    mu = mean_historical_return(filtered_stocks)
+    assert len(mu) == n_stocks
+    s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
+
+    if algo == "hrp":
+        return (hrp_strategy,
+                "Hierarchical Risk Parity",
+                {'returns': returns}, mu, s)
+    elif algo == "ef-sharpe":
+        return (ef_sharpe_strategy, 
+                "Efficient Frontier - max. sharpe",
+                {'returns': mu, 'cov_matrix': s}, mu, s)
+    elif algo == "ef-risk":
+        return (ef_risk_strategy,
+                "Efficient Frontier - efficient risk",
+                {'returns': mu, 'cov_matrix': s, 'target_volatility': 2.0}, mu, s)
+    elif algo == "ef-minvol":
+        return (ef_minvol_strategy,
+                "Efficient Frontier - minimum volatility",
+                {'returns': mu, 'cov_matrix': s}, mu, s)
+    else:
+        assert False
+
+def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, var_min):
+     # drop columns were there is no activity (ie. same value) in the observation period
+    cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
+
+    print("Dropping due to inactivity: {}".format(cols_to_drop))
+    # drop columns with very low variance
+    v = all_returns.var()
+    low_var = v[v < var_min]
+    print("Dropping due to low variance: {}".format(low_var.index))
+    cols_to_drop.extend(low_var.index)
+    #print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
+    filtered_stocks = stock_prices.drop(columns=cols_to_drop)
+    colnames = filtered_stocks.columns
+    n_stocks = max_stocks if len(colnames) > max_stocks else len(colnames)
+    return filtered_stocks, n_stocks
+
 def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
     assert len(stocks) >= 1
     assert len(desired_dates) >= 10
@@ -347,43 +391,10 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
 
     messages = set()
     all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, desired_dates)
-    for t in (( 10, 0.0001 ), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
-        n_unique_min, var_min = t
-
-        # drop columns were there is no activity (ie. same value) in the observation period
-        cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
-
-        print("Dropping due to inactivity: {}".format(cols_to_drop))
-        # drop columns with very low variance
-        v = all_returns.var()
-        low_var = v[v < var_min]
-        print("Dropping due to low variance: {}".format(low_var.index))
-        cols_to_drop.extend(low_var.index)
-        #print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
-        filtered_stocks = stock_prices.drop(columns=cols_to_drop)
-        n_stocks = max_stocks if len(filtered_stocks.columns) > max_stocks else len(filtered_stocks.columns)
-        filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
-        returns = returns_from_prices(filtered_stocks, log_returns=False)
-        mu = mean_historical_return(filtered_stocks)
-        s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
-
-        if algo == "hrp":
-            strategy, title, kwargs = (hrp_strategy, 
-                                       "HRP optimised", 
-                                       {'returns': returns})
-        elif algo == "ef-sharpe":
-            strategy, title, kwargs = (ef_sharpe_strategy, 
-                                       "Efficient Frontier - max. sharpe", 
-                                       {'returns': mu, 'cov_matrix': s})
-        elif algo == "ef-risk":
-            strategy, title, kwargs = (ef_risk_strategy,
-                                       "Efficient Frontier - efficient risk",
-                                       {'returns': mu, 'cov_matrix': s, 'target_volatility': 2.0})
-        elif algo == "ef-minvol":
-            strategy, title, kwargs = (ef_minvol_strategy,
-                                       "Efficient Frontier - minimum volatility",
-                                       {'returns': mu, 'cov_matrix': s})
-
+    for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
+        filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
+        strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
+       
         try: 
             weights, performance_tuple, ef = strategy(**kwargs)
             allocator = DiscreteAllocation(weights,
@@ -416,7 +427,7 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
         
             # Generate random portfolios
             n_samples = 10000
-            w = np.random.dirichlet(np.ones(len(mu)), n_samples)
+            w = np.random.dirichlet(np.ones(n_stocks), n_samples)
             rets = w.dot(mu)
             stds = np.sqrt(np.diag(w @ s @ w.T))
             sharpes = rets / stds
@@ -430,7 +441,7 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
             efficient_frontier_plot = plot_as_base64(fig)
             plt.close(fig)
         
-            # only plot covariances for significant holdings to ensure readability
+            # only plot covmatrix/corr for significant holdings to ensure readability
             m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())[:30]]).ledoit_wolf()
             #print(m)
             ax = plot_covariance(m, plot_correlation=True)

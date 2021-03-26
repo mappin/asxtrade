@@ -739,9 +739,9 @@ def show_trends(request):
 def sum_portfolio(df, date_str, stock_items):
     assert isinstance(df, pd.DataFrame)
     assert len(date_str) > 8
-    
+
     portfolio_worth = sum(
-            map(lambda t: df.at[t[0], date_str] * t[1], stock_items)
+        map(lambda t: df.at[t[0], date_str] * t[1], stock_items)
     )
     return portfolio_worth
 
