@@ -92,7 +92,7 @@ urlpatterns = [
         name="show-optimised-sector",
     ),
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
-    
+
 ]
 
 

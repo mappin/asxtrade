@@ -56,7 +56,9 @@ def load_prices(db, field_name, month, year):
     return df
 
 def load_all_prices(db, month, year, status='FINAL', market='asx', scope='all-downloaded'):
-    for field_name in ['change_in_percent', 'last_price', 'change_price', 'day_low_price', 'day_high_price', 'volume', 'eps', 'pe', 'annual_dividend_yield']:
+    for field_name in ['change_in_percent', 'last_price', 'change_price', \
+                       'day_low_price', 'day_high_price', 'volume', 'eps', \
+                       'pe', 'annual_dividend_yield', 'market_cap', 'number_of_shares']:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
         df = load_prices(db, field_name, month, year)
         if df.isnull().values.any():

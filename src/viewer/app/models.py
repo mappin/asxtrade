@@ -276,7 +276,8 @@ def stock_info(stock, warning_cb=None):
         warning_cb(f"No details available for {stock}")
     return securities, company_details
 
-def stocks_by_sector():
+@cached
+def stocks_by_sector() -> pd.DataFrame:
     rows = [
         d
         for d in CompanyDetails.objects.values("asx_code", "sector_name").order_by(
@@ -285,7 +286,8 @@ def stocks_by_sector():
     ]
     df = pd.DataFrame.from_records(rows)
     assert len(df) > 0
-    assert "asx_code" in df.columns and "sector_name" in df.columns
+    colnames = df.columns
+    assert "asx_code" in colnames and "sector_name" in colnames
     return df
 
 
