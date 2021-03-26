@@ -47,7 +47,8 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
         if series_range == 0.0:
             continue
         nrmse = np.sqrt(mse) / series_range
-        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): # ignore stocks which are barely moving either way
+        # ignore stocks which are barely moving either way
+        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01 ]): 
             pass
         else:
             trends[stock] = (coefficients[0],
@@ -426,14 +427,14 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
             ax.legend()
             plt.tight_layout()
             fig = plt.gcf()
-            efficient_frontier_plot = plot_as_base64(fig).decode('utf-8')
+            efficient_frontier_plot = plot_as_base64(fig)
             plt.close(fig)
         
             # only plot covariances for significant holdings to ensure readability
             m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())[:30]]).ledoit_wolf()
             #print(m)
             ax = plot_covariance(m, plot_correlation=True)
-            correlation_plot = plot_as_base64(ax.figure).decode('utf-8')
+            correlation_plot = plot_as_base64(ax.figure)
             plt.close(ax.figure)
             return clean_weights, performance_tuple, \
                    efficient_frontier_plot, correlation_plot, messages, \
@@ -466,4 +467,3 @@ def analyse_sector_performance(stock, sector, all_stocks_cip, window_size=10) ->
         return c_vs_s_plot, sector_momentum_plot, sector_companies
     else:
         return (None, None, None)
-

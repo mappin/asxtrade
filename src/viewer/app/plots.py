@@ -43,7 +43,7 @@ def price_change_bins():
     return (bins, labels)
 
 
-def plot_as_base64(fig):
+def plot_as_base64(fig, charset='utf-8'):
     """
     Convert supplied figure into string buffer and then return as base64-encoded data
     for insertion into a page as a context attribute
@@ -53,7 +53,7 @@ def plot_as_base64(fig):
         fig.savefig(buf, format="png")
         buf.seek(0)
         b64data = base64.b64encode(buf.read())
-        return b64data
+        return b64data.decode(charset)
 
 
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
@@ -160,7 +160,7 @@ def plot_as_inline_html_data(plot, charset="utf-8") -> str:
     """
     assert plot is not None
     fig = plot.draw()
-    data = plot_as_base64(fig).decode(charset)
+    data = plot_as_base64(fig, charset=charset)
     plt.close(fig)
     return data
 
@@ -456,7 +456,7 @@ def plot_sector_performance(dataframe, descriptor, window_size=14):
             ax.set_xlabel("")
     plt.plot()
     ret = plt.gcf()
-    data = plot_as_base64(ret).decode("utf-8")
+    data = plot_as_base64(ret)
     plt.close(fig)
     return data
 
@@ -667,7 +667,7 @@ def make_rsi_plot(stock, stock_df):
 
     plt.xticks(fontsize=8)
     fig = plt.gcf()
-    rsi_data = plot_as_base64(fig).decode("utf-8")
+    rsi_data = plot_as_base64(fig)
     plt.close(fig)
     return rsi_data
 
