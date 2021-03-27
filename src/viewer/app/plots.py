@@ -118,22 +118,23 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     return plot_as_inline_html_data(plot)
 
 
-def plot_fundamentals(df, stock):
+def plot_fundamentals(df, stock) -> str:
     assert isinstance(df, pd.DataFrame)
-    assert all(
-        ["eps" in df.columns, 
-         "pe" in df.columns, 
-         "annual_dividend_yield" in df.columns,
-         "volume" in df.columns
-        ]
-    )
-
+    columns_to_report = ["pe", "eps", "annual_dividend_yield", "volume", \
+                    "last_price", "change_in_percent_cumulative", \
+                    "change_price", "market_cap", "number_of_shares"]
+    colnames = df.columns
+    for column in columns_to_report:
+        assert column in colnames
+   
     df["volume"] = df["last_price"] * df["volume"] / 1000000  # again, express as $(M)
+    df["market_cap"] /= 1000 * 1000
+    df["number_of_shares"] /= 1000 * 1000
     df["fetch_date"] = df.index
     plot_df = pd.melt(
         df,
         id_vars="fetch_date",
-        value_vars=["pe", "eps", "annual_dividend_yield", "volume", "last_price", "change_in_percent_cumulative", "change_price"],
+        value_vars=columns_to_report,
         var_name="indicator",
         value_name="value",
     )
@@ -143,8 +144,10 @@ def plot_fundamentals(df, stock):
     plot = (
         p9.ggplot(plot_df, p9.aes("fetch_date", "value", color="indicator"))
         + p9.geom_line(size=1.5, show_legend=False)
-        + p9.facet_wrap("~ indicator", nrow=8, ncol=1, scales="free_y")
-        + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), figure_size=(8, 7))
+        + p9.facet_wrap("~ indicator", nrow=len(columns_to_report), ncol=1, scales="free_y")
+        + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), 
+                   axis_text_y=p9.element_text(size=7),
+                   figure_size=(8, len(columns_to_report)))
         #    + p9.aes(ymin=0)
         + p9.xlab("")
         + p9.ylab("")

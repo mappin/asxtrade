@@ -409,7 +409,9 @@ def show_fundamentals(request, stock=None, n_days=2 * 365):
     df = company_prices(
         [stock],
         all_dates=stock_dates,
-        fields=["eps", "volume", "last_price", "annual_dividend_yield", "pe", "change_in_percent", "change_price"],
+        fields=["eps", "volume", "last_price", "annual_dividend_yield", \
+                "pe", "change_in_percent", "change_price", "market_cap", \
+                "number_of_shares"],
         fail_missing_months=False,
         missing_cb=None
     )
