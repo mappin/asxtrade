@@ -465,7 +465,7 @@ def latest_quote(stocks):
 
 # NB: careful sizing the cache - dont want to use too much memory!
 @func.lru_cache(maxsize=300)
-def get_dataframe(tag):
+def get_dataframe(tag: str) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
     so that repeated requests for a given tag dont hit the database. Hopefully.
