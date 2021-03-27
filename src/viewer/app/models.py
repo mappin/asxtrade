@@ -276,7 +276,7 @@ def stock_info(stock, warning_cb=None):
         warning_cb(f"No details available for {stock}")
     return securities, company_details
 
-@cached
+@func.lru_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
     rows = [
         d
