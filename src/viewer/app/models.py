@@ -644,13 +644,13 @@ def company_prices(
 
     required_tags = get_required_tags(all_dates, fields)
     #print(required_tags)
-    which_cols = set(all_dates)
     # construct a "super" dataframe from the constituent parquet data
     superdf, n_dataframes = make_superdf(required_tags, stock_codes)
     #print(superdf)
 
     # drop columns not present in all_dates to ensure we are giving just the results requested
-    cols_to_drop = [date for date in superdf.columns if date not in which_cols]
+    which_dates = set(all_dates)
+    cols_to_drop = [date for date in superdf.columns if date not in which_dates]
     superdf = superdf.drop(columns=cols_to_drop)
 
     # on the first of the month, we dont have data yet so we permit one missing tag for this reason

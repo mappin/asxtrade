@@ -451,7 +451,7 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
                    efficient_frontier_plot, correlation_plot, messages, \
                    title, total_portfolio_value, leftover_funds, len(latest_prices)
         except ValueError as ve:
-            messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], len(returns.columns), str(ve)))
+            messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], n_stocks, str(ve)))
             pass # try next iteration
 
     print("*** WARNING: unable to optimise portolio!")
