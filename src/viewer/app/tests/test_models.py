@@ -237,7 +237,7 @@ def mock_superdf_all_stocks(*args, **kwargs):
     raw_df = pd.DataFrame.from_records(rows)
     #print(raw_df)
     df = raw_df.pivot(index='asx_code', columns='fetch_date', values='last_price')
-    return df, 1
+    return df
 
 def mock_superdf_many_fields(*args, **kwargs):
     expected_set = set(['last_price-01-2021-asx', 
@@ -254,7 +254,7 @@ def mock_superdf_many_fields(*args, **kwargs):
         rows = [{'fetch_date': q.fetch_date, field: model_to_dict(q).get(field), 'asx_code': q.asx_code } for q in Quotation.objects.filter(asx_code='ABC')]
         df = pd.DataFrame.from_records(rows)
         #print(df)
-        return df, 1
+        return df
 
 @pytest.mark.django_db
 def test_company_prices(quotation_fixture, monkeypatch):
@@ -330,7 +330,7 @@ def test_find_movers(quotation_fixture, monkeypatch):
         raw_df = pd.DataFrame.from_records(rows)
         #print(raw_df)
         df = raw_df.pivot(index='asx_code', columns='fetch_date', values='change_in_percent')
-        return df, 1
+        return df
 
     all_dates = all_available_dates(reference_stock='ABC')
     assert len(all_dates) > 5
