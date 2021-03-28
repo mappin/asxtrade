@@ -384,7 +384,7 @@ def find_movers(threshold, required_dates):
     assert threshold >= 0.0
     assert required_dates is not None
     # NB: missing values will be imputed here, for now.
-    cip = company_prices(all_stocks(), required_dates, fields="change_in_percent")
+    cip = company_prices(all_stocks(), required_dates, fields="change_in_percent", missing_cb=None)
     movements = cip.sum(axis=1)
     return movements[movements.abs() >= threshold]
 
@@ -470,7 +470,7 @@ def get_parquet(tag: str) -> pd.DataFrame:
         return cache_entry.dataframe
     return None
 
-@func.lru_cache(maxsize=2)
+@func.ttl_cache(maxsize=2, ttl=8 * 60 * 60)
 def cached_all_stocks_cip(n_days=2 * 365):
     assert n_days > 0
     stock_dates = desired_dates(start_date=n_days)
