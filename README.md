@@ -10,7 +10,7 @@ Python3 based ASX data download and web application with basic features:
 
  * graphs of datasets over 12 months (or whatever data is available)
 
- * HRP portfolio optimisation using [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html)
+ * portfolio optimisation using [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html)
 
  * Market and per-sector performance incl. top 20/bottom 20
 
@@ -75,7 +75,7 @@ python3 manage.py runserver # run on local dev. host
 
   You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run.
 
-  Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2020, although ETF data covers a smaller period due to missing code.
+  Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2021, although ETF data covers a smaller period due to missing code.
 
 ## Features
 
