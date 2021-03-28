@@ -344,7 +344,6 @@ def cached_rsi_data(stock, stock_dates):
         [stock],
         all_dates=stock_dates,
         fields=["last_price", "volume", "day_low_price", "day_high_price"],
-        fail_missing_months=False,
         missing_cb=None,
     )
     n_dates = len(stock_df)
@@ -362,7 +361,6 @@ def cached_all_stocks_cip(n_days=2 * 365):
     all_stocks_cip = company_prices(
         None, all_dates=stock_dates,
         fields="change_in_percent",
-        fail_missing_months=False,
         missing_cb=None
     )
     return all_stocks_cip
@@ -412,7 +410,6 @@ def show_fundamentals(request, stock=None, n_days=2 * 365):
         fields=["eps", "volume", "last_price", "annual_dividend_yield", \
                 "pe", "change_in_percent", "change_price", "market_cap", \
                 "number_of_shares"],
-        fail_missing_months=False,
         missing_cb=None
     )
     #print(df)
@@ -722,7 +719,6 @@ def show_trends(request):
         watchlist_stocks,
         all_dates=all_dates,
         fields="change_in_percent",
-        fail_missing_months=False,
     )
     trends = calculate_trends(cip, watchlist_stocks, all_dates)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
