@@ -24,6 +24,7 @@ from app.models import (
     Quotation,
     user_watchlist,
     latest_quotation_date,
+    cached_all_stocks_cip,
     find_movers,
     Sector,
     all_available_dates,
@@ -354,17 +355,6 @@ def cached_rsi_data(stock, stock_dates):
     #print(stock_df)
     return stock_df
 
-@func.lru_cache(maxsize=2)
-def cached_all_stocks_cip(n_days=2 * 365):
-    assert n_days > 0
-    stock_dates = desired_dates(start_date=n_days)
-    all_stocks_cip = company_prices(
-        None, all_dates=stock_dates,
-        fields="change_in_percent",
-        missing_cb=None
-    )
-    return all_stocks_cip
-
 @login_required
 def show_stock_sector(request, stock):
     validate_stock(stock)
@@ -407,9 +397,9 @@ def show_fundamentals(request, stock=None, n_days=2 * 365):
     df = company_prices(
         [stock],
         all_dates=stock_dates,
-        fields=["eps", "volume", "last_price", "annual_dividend_yield", \
+        fields=("eps", "volume", "last_price", "annual_dividend_yield", \
                 "pe", "change_in_percent", "change_price", "market_cap", \
-                "number_of_shares"],
+                "number_of_shares"),
         missing_cb=None
     )
     #print(df)
