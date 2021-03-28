@@ -470,18 +470,42 @@ def get_parquet(tag: str) -> pd.DataFrame:
         return cache_entry.dataframe
     return None
 
+@func.lru_cache(maxsize=2)
+def cached_all_stocks_cip(n_days=2 * 365):
+    assert n_days > 0
+    stock_dates = desired_dates(start_date=n_days)
+    all_stocks_cip = company_prices(
+        None, 
+        all_dates=stock_dates,
+        fields="change_in_percent",
+        missing_cb=None
+    )
+    return all_stocks_cip
+
 # NB: careful sizing the cache - dont want to use too much memory!
 dataframe_in_memory_cache = LFUCache(maxsize=200)
 
-def get_dataframe(tag: str, stocks, debug=True) -> pd.DataFrame:
+def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
     so that repeated requests for a given tag dont hit the database. Hopefully.
     """
+    def finalise_dataframe(df):
+        """Ensure every dataframe, whether cached or not, is the same"""
+        if len(df) == 0: # dont return empty dataframes
+            return None
+        #print(df)
+        if tag.startswith('uber') and stocks is not None:
+            is_desired_stock = df['asx_code'].isin(set(stocks))
+            return df[is_desired_stock]
+        else:
+            return df
+
     # 1. already cached the dataframe?
     df = dataframe_in_memory_cache.get(tag, None)
     if df is not None:
-        return df
+        return finalise_dataframe(df)
+
     if debug:
         print(f"{tag} not in memory cache")
     parquet_blob = get_parquet(tag)
@@ -489,23 +513,15 @@ def get_dataframe(tag: str, stocks, debug=True) -> pd.DataFrame:
         return None
     if debug:
         print(f"{tag} loaded from DB/parquet cache")
-    extra_args = {}
-    if stocks is not None:
-        extra_args.update({'columns': list(stocks)})
-    if debug:
         assert isinstance(parquet_blob, bytes)
-        print(f"get_dataframe: {tag} {extra_args}")
+        print(f"get_dataframe: {tag}")
 
     with io.BytesIO(parquet_blob) as fp:
-        # the database is stored in dates(rows) X stocks(columns) which permits us to 
-        # load only the requested stocks and save load time
-        df = pd.read_parquet(fp, **extra_args)
-        if len(df) == 0: # dont return empty dataframes
-            return None
-        dataframe_in_memory_cache[tag] = df
-        return df
+        df = pd.read_parquet(fp)
+        dataframe_in_memory_cache[tag] = df 
+        return finalise_dataframe(df)
 
-def make_superdf(required_tags, stock_codes):
+def make_superdf(required_tags, stock_codes, transpose=True):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
     dataframes = filter(lambda df: df is not None,
@@ -516,7 +532,8 @@ def make_superdf(required_tags, stock_codes):
             superdf = df
         else:
             superdf = superdf.append(df)
-    return superdf.transpose() # return with columns as dates and rows as stock(s)
+    # DataFrame with columns as dates and rows as stock(s) by default
+    return superdf.transpose() if transpose else superdf 
 
 
 def day_low_high(stock, all_dates=None):
@@ -634,22 +651,13 @@ def company_prices(
     """
     if not isinstance(fields, str):  # assume iterable if not str...
         assert len(stock_codes) == 1
-        dataframes = [
-            company_prices(
-                stock_codes,
-                all_dates=all_dates,
-                fields=field,
-                missing_cb=missing_cb
-            )
-            for field in fields
-        ]
-        result_df = pd.concat(dataframes, ignore_index=True)
-        result_df.set_index(pd.Index(fields), inplace=True)
-        # print(result_df)
-        result_df = result_df.transpose()
-        # print(result_df)
-        assert list(result_df.columns) == fields
-        # reject rows which are all NA to avoid downstream problems eg. plotting stocks
+        tags = get_required_tags(all_dates, 'uber')
+        result_df = make_superdf(tags, stock_codes, transpose=False)
+        is_ok_field = result_df['field_name'].isin(set(fields))
+        result_df = result_df[is_ok_field]
+        result_df = result_df.pivot(index='fetch_date', columns='field_name', values='field_value')
+        assert set(result_df.columns) == set(fields)
+        # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
         result_df = result_df.dropna(how='all')
         return result_df
@@ -670,18 +678,13 @@ def company_prices(
     dates_to_drop = [date for date in superdf.columns if date not in which_dates]
     superdf = superdf.drop(columns=dates_to_drop)
 
-    # on the first of the month, we dont have data yet so we permit one missing tag for this reason
-    #if fail_missing_months:
-    #    raise ValueError(
-    #        "Not all required data is available - aborting! Found {} wanted {}".format(
-    #            n_dataframes, required_tags
-    #        )
-    #    )
     # NB: ensure all columns are ALWAYS in ascending date order
     dates = sorted(
         list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d")
     )
     superdf = superdf[dates]
+
+    # impute missing if caller wants it (and missing values present)
     if missing_cb is not None and superdf.isnull().values.any():
         if missing_cb == impute_missing and fields == 'change_in_percent':
             print("WARNING: fields == change_in_percent with impute_missing() is likely nonsensical")
