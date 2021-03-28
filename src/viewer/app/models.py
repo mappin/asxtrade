@@ -13,7 +13,7 @@ from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
-from cachetools import cached, LRUCache, keys, func
+from cachetools import cached, LRUCache, LFUCache, keys, func
 
 watchlist_cache = LRUCache(maxsize=1024)
 
@@ -463,41 +463,60 @@ def latest_quote(stocks):
                 qs = qs.filter(asx_code__in=stocks)
         return (qs, latest_date)
 
+@func.lru_cache(maxsize=100)
+def get_parquet(tag: str) -> pd.DataFrame:
+    cache_entry = MarketDataCache.objects.filter(tag=tag).first()
+    if cache_entry is not None:
+        return cache_entry.dataframe
+    return None
+
 # NB: careful sizing the cache - dont want to use too much memory!
-@func.lru_cache(maxsize=300)
-def get_dataframe(tag: str) -> pd.DataFrame:
+dataframe_in_memory_cache = LFUCache(maxsize=200)
+
+def get_dataframe(tag: str, stocks, debug=True) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
     so that repeated requests for a given tag dont hit the database. Hopefully.
     """
-    cached_frame = MarketDataCache.objects.filter(tag=tag).first()
-    if cached_frame is not None:
-        with io.BytesIO(cached_frame.dataframe) as fp:
-            df = pd.read_parquet(fp)
-            if len(df) == 0: # dont return empty dataframes
-                return None
-            return df
-    return None
+    # 1. already cached the dataframe?
+    df = dataframe_in_memory_cache.get(tag, None)
+    if df is not None:
+        return df
+    if debug:
+        print(f"{tag} not in memory cache")
+    parquet_blob = get_parquet(tag)
+    if parquet_blob is None:
+        return None
+    if debug:
+        print(f"{tag} loaded from DB/parquet cache")
+    extra_args = {}
+    if stocks is not None:
+        extra_args.update({'columns': list(stocks)})
+    if debug:
+        assert isinstance(parquet_blob, bytes)
+        print(f"get_dataframe: {tag} {extra_args}")
+
+    with io.BytesIO(parquet_blob) as fp:
+        # the database is stored in dates(rows) X stocks(columns) which permits us to 
+        # load only the requested stocks and save load time
+        df = pd.read_parquet(fp, **extra_args)
+        if len(df) == 0: # dont return empty dataframes
+            return None
+        dataframe_in_memory_cache[tag] = df
+        return df
 
 def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
-    dataframes = list(filter(lambda df: df is not None, [get_dataframe(tag) for tag in required_tags]))
+    dataframes = filter(lambda df: df is not None,
+                        [get_dataframe(tag, stock_codes) for tag in required_tags])
     superdf = None
     for df in dataframes:
-        # remove rows which are not relevant before merge to speed things...
-        if stock_codes is not None:
-            # print("Before {}".format(len(df)))
-            df = df.reindex(tuple(stock_codes))
-            # print("After {} (had {} stocks)".format(len(df), len(stock_codes)))
-        # print(df)
         if superdf is None:
             superdf = df
         else:
-            superdf = superdf.merge(
-                df, how="outer", left_index=True, right_index=True
-            )
-    return (superdf, len(dataframes))
+            superdf = superdf.append(df)
+    return superdf.transpose() # return with columns as dates and rows as stock(s)
 
 
 def day_low_high(stock, all_dates=None):
@@ -565,7 +584,7 @@ def increasing_eps(stock_codes, past_n_days=300):
         ["eps-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates]
     )
     # NB: we dont care here if some tags cant be found
-    df, n = make_superdf(required_tags, stock_codes)
+    df = make_superdf(required_tags, stock_codes)
     # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
     # at least 2c per share positive max(eps) is required to be considered significant
     increasing_eps_stocks = [
@@ -584,7 +603,7 @@ def increasing_yield(stock_codes, past_n_days=300):
             for date in all_dates
         ]
     )
-    df, n = make_superdf(required_tags, stock_codes)
+    df = make_superdf(required_tags, stock_codes)
     # ignore penny-ante stocks (must be at least 1c per share dividend)
     increasing_yield_stocks = [
         idx
@@ -606,7 +625,6 @@ def company_prices(
         stock_codes,
         all_dates=None,
         fields="last_price",
-        fail_missing_months=True,
         missing_cb=impute_missing, # or None if you want missing values 
 ):
     """
@@ -621,7 +639,6 @@ def company_prices(
                 stock_codes,
                 all_dates=all_dates,
                 fields=field,
-                fail_missing_months=fail_missing_months,
                 missing_cb=missing_cb
             )
             for field in fields
@@ -645,21 +662,21 @@ def company_prices(
     required_tags = get_required_tags(all_dates, fields)
     #print(required_tags)
     # construct a "super" dataframe from the constituent parquet data
-    superdf, n_dataframes = make_superdf(required_tags, stock_codes)
+    superdf = make_superdf(required_tags, stock_codes)
     #print(superdf)
 
     # drop columns not present in all_dates to ensure we are giving just the results requested
     which_dates = set(all_dates)
-    cols_to_drop = [date for date in superdf.columns if date not in which_dates]
-    superdf = superdf.drop(columns=cols_to_drop)
+    dates_to_drop = [date for date in superdf.columns if date not in which_dates]
+    superdf = superdf.drop(columns=dates_to_drop)
 
     # on the first of the month, we dont have data yet so we permit one missing tag for this reason
-    if fail_missing_months and n_dataframes < len(required_tags) - 1:
-        raise ValueError(
-            "Not all required data is available - aborting! Found {} wanted {}".format(
-                n_dataframes, required_tags
-            )
-        )
+    #if fail_missing_months:
+    #    raise ValueError(
+    #        "Not all required data is available - aborting! Found {} wanted {}".format(
+    #            n_dataframes, required_tags
+    #        )
+    #    )
     # NB: ensure all columns are ALWAYS in ascending date order
     dates = sorted(
         list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d")
