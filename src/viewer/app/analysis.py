@@ -457,15 +457,6 @@ def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, t
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
 
-def key_sector_performance(stock, sector, all_stocks_cip, window_size=10):
-    assert stock is not None        # avoid pylint unused warning
-    # NB: sector may be none eg. ETF but we hash on stock in that case
-    key = sector if sector is not None else stock
-    
-    # stock and stock_dates are ignored for the cache key since we need performance here
-    return keys.hashkey(key, window_size)
-
-@cached(LRUCache(maxsize=16), key=key_sector_performance)
 def analyse_sector_performance(stock, sector, all_stocks_cip, window_size=10) -> tuple:
     assert isinstance(stock, str)
     assert isinstance(all_stocks_cip, pd.DataFrame)

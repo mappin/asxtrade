@@ -50,7 +50,7 @@ def clickable_stock(asx_code: str, **kwargs):
     assert isinstance(user, str)
     assert path is not None and len(path) > 0
     found = is_in_watchlist(user, asx_code)
-    print("Checking {} is in watchlist for {}: {}".format(asx_code, user, found))
+    #print("Checking {} is in watchlist for {}: {}".format(asx_code, user, found))
     star_elem = '<a href="/watchlist/{}?next={}">'.format(asx_code, path)
     star_png = '<img src="{}" width="12" />'.format(static("star.png"))
     empty_star_png = '<img src="{}" width="12" />'.format(static("empty-star.png"))
