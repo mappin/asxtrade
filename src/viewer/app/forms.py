@@ -107,3 +107,7 @@ class OptimiseSectorForm(OptimisePortfolioForm):
         super(OptimiseSectorForm, self).__init__(*args, **kwargs)
         if sector:
             self.fields['sector'].initial = sector
+
+class MarketCapSearchForm(forms.Form):
+    min_cap = forms.IntegerField(min_value=0, initial=10, label="Minimum market cap ($AUD millions)")
+    max_cap = forms.IntegerField(min_value=0, initial=100, label="Maximum market cap ($AUD millions)")
