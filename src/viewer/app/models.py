@@ -671,7 +671,8 @@ def company_prices(
         # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
         result_df = result_df.dropna(how='all')
-        # TODO BUG FIXME: support transpose parameter here?
+        if transpose:
+            return result_df.transpose()
         return result_df
 
     # print(stock_codes)

@@ -235,8 +235,11 @@ def mock_superdf_all_stocks(*args, **kwargs):
     rows = [{'asx_code': q.asx_code, 'last_price': q.last_price, 'fetch_date': q.fetch_date} for q in Quotation.objects.all()]
 
     raw_df = pd.DataFrame.from_records(rows)
+    assert len(raw_df) >= 2 # must be some rows...
+
     #print(raw_df)
-    df = raw_df.pivot(index='asx_code', columns='fetch_date', values='last_price')
+    df = raw_df.pivot(index='fetch_date', columns='asx_code', values='last_price')
+    #print(df)
     return df
 
 def mock_superdf_many_fields(*args, **kwargs):
@@ -265,9 +268,9 @@ def test_company_prices(quotation_fixture, monkeypatch):
     df = company_prices(['ABC', 'OTHER'], 
                         fields='last_price', 
                         missing_cb=None, 
-                        all_dates=expected_dates,
-                        transpose=True)
+                        all_dates=expected_dates, transpose=True)
     assert isinstance(df, pd.DataFrame)
+   
     assert len(df) == 2
     assert list(df.index) == ['ABC', 'OTHER']
     assert list(df.columns) == ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
@@ -275,7 +278,7 @@ def test_company_prices(quotation_fixture, monkeypatch):
     assert is_other_nan == [False, True, True, True, True, True]
    
     # check impute missing functionality
-    df2 = company_prices(['ABC', 'OTHER'], fields='last_price', all_dates=expected_dates)
+    df2 = company_prices(['ABC', 'OTHER'], fields='last_price', all_dates=expected_dates, transpose=True)
     assert list(df2.loc['OTHER']) == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     # finally check that a multi-field DataFrame is as requested
@@ -333,7 +336,7 @@ def test_find_movers(quotation_fixture, monkeypatch):
 
         raw_df = pd.DataFrame.from_records(rows)
         #print(raw_df)
-        df = raw_df.pivot(index='asx_code', columns='fetch_date', values='change_in_percent')
+        df = raw_df.pivot(index='fetch_date', columns='asx_code', values='change_in_percent')
         return df
 
     all_dates = all_available_dates(reference_stock='ABC')
