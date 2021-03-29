@@ -314,11 +314,9 @@ def ef_minvol_strategy(returns=None, cov_matrix=None):
 
 def setup_optimisation_matrices(stocks, desired_dates):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
-    df = company_prices(stocks, 
+    stock_prices = company_prices(stocks, 
                         all_dates=desired_dates, 
-                        fail_missing_months=False, 
                         missing_cb=None)
-    stock_prices = df.transpose()
     latest_date = stock_prices.index[-1]
     #print(latest_date)
 

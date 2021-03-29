@@ -22,6 +22,7 @@ from app.views import (
     dividend_search,
     company_search,
     mover_search,
+    market_cap_search,
     show_increasing_eps_stocks,
     show_increasing_yield_stocks,
     show_trends,
@@ -53,6 +54,7 @@ urlpatterns = [
     path("search/by-yield", dividend_search),
     path("search/by-company", company_search),
     path("search/movers", mover_search),
+    path("search/market-cap", market_cap_search),
     path(
         "show/increasing-eps", show_increasing_eps_stocks
     ),  # NB: order important here!

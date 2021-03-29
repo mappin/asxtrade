@@ -52,6 +52,7 @@ from app.forms import (
     CompanySearchForm,
     MoverSearchForm,
     SectorSentimentSearchForm,
+    MarketCapSearchForm,
     OptimisePortfolioForm,
     OptimiseSectorForm
 )
@@ -270,15 +271,22 @@ class MoverSearch(DividendYieldSearch):
     action_url = "/search/movers"
 
     def additional_context(self, context):
-        vec = context["paginator"].object_list.all()
-        asx_codes = [stock.asx_code for stock in vec]
+        print("Found {}".format(len(self.matching_companies)))
         n_top_bottom = 20
-        sentiment_plot, _, top10, bottom10, _ = plot_heatmap(asx_codes, n_top_bottom=n_top_bottom)
+        n_days = self.timeframe_in_days
+        all_dates = desired_dates(start_date=self.timeframe_in_days)
+        if len(self.matching_companies) > 0:
+            sentiment_plot, df, top10, bottom10, _ = plot_heatmap(self.matching_companies, 
+                                                                  all_dates=all_dates, 
+                                                                  n_top_bottom=n_top_bottom)
+        else:
+            sentiment_plot, df, top10, bottom10 = (None, None, None, None)
         return {
             "title": "Find companies exceeding threshold movement (%)",
             "sentiment_heatmap": sentiment_plot,
-            "n_days": 30,
-            "n_stocks_plotted": len(asx_codes),
+            "sentiment_heatmap_title": "Sentiment for movers: past {} days".format(n_days),
+            "n_days": n_days,
+            "n_stocks_plotted": len(self.matching_companies),
             "n_top_bottom": n_top_bottom,
             "best_ten": top10,
             "worst_ten": bottom10,
@@ -291,16 +299,17 @@ class MoverSearch(DividendYieldSearch):
         ):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
-        timeframe_in_days = kwargs.get("timeframe_in_days")
+        self.timeframe_in_days = kwargs.get("timeframe_in_days")
         user_sort = self.request.GET.get("sort_by")
         df = find_movers(
-            threshold_percentage, 
-            desired_dates(start_date=timeframe_in_days),
+            threshold_percentage,
+            desired_dates(start_date=self.timeframe_in_days),
             kwargs.get("show_increasing", False),
             kwargs.get("show_decreasing", False)
         )
-        matching_companies = tuple(df.index)
-        results, _ = latest_quote(matching_companies)
+        self.matching_companies = tuple(df.index)
+        print(self.matching_companies)
+        results, _ = latest_quote(self.matching_companies)
         return self.sort_by(results, user_sort)
 
 
@@ -747,6 +756,27 @@ def sum_portfolio(df, date_str, stock_items):
     )
     return portfolio_worth
 
+class MarketCapSearch(DividendYieldSearch):
+    action_url = "/search/market-cap"
+    form_class = MarketCapSearchForm
+    template_name = 'search_form.html'
+
+    def additional_context(self, context):
+        return {
+            "title": "Find companies by market capitalisation"
+        }
+
+    def get_queryset(self, **kwargs):
+        # identify all stocks which have a market cap which satisfies the required constraints
+        quotes_qs, most_recent_date = latest_quote(None)
+        min_cap = kwargs.get('min_cap')
+        max_cap = kwargs.get('max_cap')
+        quotes_qs = quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000).exclude(market_cap__gt=max_cap * 1000 * 1000)
+        print("Found {} quotes, as at {}, satisfying market cap criteria".format(quotes_qs.count(), most_recent_date))
+        return self.sort_by(quotes_qs, self.request.GET.get('sort_by'))
+
+market_cap_search = MarketCapSearch.as_view()
+
 @login_required
 def show_purchase_performance(request):
     purchase_buy_dates = []
@@ -1018,7 +1048,7 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
         n_days = form.cleaned_data.get('n_days', 30)
         stocks = all_sector_stocks(sector)
         dd = desired_dates(start_date=n_days)
-        cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None)
+        cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None, transpose=True)
         context = self.get_context_data()
         boxplot, winner_results = plot_boxplot_series(cip, normalisation_method=norm_method)
         context.update({
