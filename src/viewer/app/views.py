@@ -270,7 +270,20 @@ class MoverSearch(DividendYieldSearch):
     action_url = "/search/movers"
 
     def additional_context(self, context):
-        return {"title": "Find companies with movement (%) within timeframe"}
+        vec = context["paginator"].object_list.all()
+        asx_codes = [stock.asx_code for stock in vec]
+        n_top_bottom = 20
+        sentiment_plot, _, top10, bottom10, _ = plot_heatmap(asx_codes, n_top_bottom=n_top_bottom)
+        return {
+            "title": "Find companies exceeding threshold movement (%)",
+            "sentiment_heatmap": sentiment_plot,
+            "n_days": 30,
+            "n_stocks_plotted": len(asx_codes),
+            "n_top_bottom": n_top_bottom,
+            "best_ten": top10,
+            "worst_ten": bottom10,
+            "watched": user_watchlist(self.request.user),
+        }
 
     def get_queryset(self, **kwargs):
         if any(
@@ -283,8 +296,8 @@ class MoverSearch(DividendYieldSearch):
         df = find_movers(
             threshold_percentage, 
             desired_dates(start_date=timeframe_in_days),
-            increasing=kwargs.get("show_increasing", False),
-            decreasing=kwargs.get("show_decreasing", False)
+            kwargs.get("show_increasing", False),
+            kwargs.get("show_decreasing", False)
         )
         matching_companies = tuple(df.index)
         results, _ = latest_quote(matching_companies)
@@ -472,7 +485,9 @@ def get_dataset(dataset_wanted):
 
     if dataset_wanted == "market_sentiment":
         _, df, _, _, _ = plot_heatmap(
-            None, all_dates=desired_dates(21), n_top_bottom=20
+            None, 
+            all_dates=desired_dates(21), 
+            n_top_bottom=20
         )
         return df
     else:
