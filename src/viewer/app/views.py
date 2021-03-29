@@ -281,14 +281,13 @@ class MoverSearch(DividendYieldSearch):
         timeframe_in_days = kwargs.get("timeframe_in_days")
         user_sort = self.request.GET.get("sort_by")
         df = find_movers(
-            threshold_percentage, desired_dates(start_date=timeframe_in_days)
+            threshold_percentage, 
+            desired_dates(start_date=timeframe_in_days),
+            increasing=kwargs.get("show_increasing", False),
+            decreasing=kwargs.get("show_decreasing", False)
         )
-        matching_companies = set()
-        if kwargs.get("show_increasing", False):
-            matching_companies.update(df[df > 0.0].index)
-        if kwargs.get("show_decreasing", False):
-            matching_companies.update(df[df < 0.0].index)
-        results, _ = latest_quote(tuple(matching_companies))
+        matching_companies = tuple(df.index)
+        results, _ = latest_quote(matching_companies)
         return self.sort_by(results, user_sort)
 
 
