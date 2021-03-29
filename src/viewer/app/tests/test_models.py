@@ -262,7 +262,11 @@ def test_company_prices(quotation_fixture, monkeypatch):
     monkeypatch.setattr(mdl, 'make_superdf', mock_superdf_all_stocks)
 
     # basic check
-    df = company_prices(['ABC', 'OTHER'], fields='last_price', missing_cb=None, all_dates=expected_dates)
+    df = company_prices(['ABC', 'OTHER'], 
+                        fields='last_price', 
+                        missing_cb=None, 
+                        all_dates=expected_dates,
+                        transpose=True)
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 2
     assert list(df.index) == ['ABC', 'OTHER']
