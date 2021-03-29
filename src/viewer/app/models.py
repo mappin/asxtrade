@@ -375,7 +375,7 @@ def all_stocks():
     all_securities = Security.objects.values_list("asx_code", flat=True)
     return set(all_securities)
 
-def find_movers(threshold, required_dates):
+def find_movers(threshold, required_dates, increasing=True, decreasing=False):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
     the sum over all desired dates for percentage change in the stock price. A negative sum
@@ -386,8 +386,14 @@ def find_movers(threshold, required_dates):
     # NB: missing values will be imputed here, for now.
     cip = company_prices(all_stocks(), required_dates, fields="change_in_percent", missing_cb=None)
     movements = cip.sum(axis=1)
-    return movements[movements.abs() >= threshold]
-
+    results = movements[movements.abs() >= threshold]
+    print("Found {} movers before filtering: {} {}".format(len(results), increasing, decreasing))
+    if not increasing:
+        results = results.drop(results[results > 0.0].index)
+    if not decreasing:
+        results = results.drop(results[results < 0.0].index)
+    print("Reporting {} movers after filtering".format(len(results)))
+    return results
 
 def find_named_companies(wanted_name, wanted_activity):
     ret = set()
