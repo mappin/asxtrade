@@ -301,7 +301,8 @@ def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent
         None, 
         all_dates=all_dates, 
         fields="change_in_percent",
-        impute_missing=None,
+        missing_cb=None,
+        transpose=True,
     )  # None == all stocks
     n_stocks = len(df)
     # merge in sector information for each company
@@ -309,8 +310,9 @@ def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent
     n_unique_sectors = len(code_and_sector["sector_name"].unique())
     print("Found {} unique sectors".format(n_unique_sectors))
 
-    # print(code_and_sector)
-    df = df.merge(code_and_sector, left_on="asx_code", right_on="asx_code")
+    print(df)
+    print(code_and_sector)
+    df = df.merge(code_and_sector, left_index=True, right_on="asx_code")
     print(
         "Found {} stocks, {} sectors and merged total: {}".format(
             n_stocks, len(code_and_sector), len(df)
@@ -405,7 +407,8 @@ def plot_heatmap(
         companies, 
         all_dates=all_dates, 
         fields=field_name,
-        missing_cb=None
+        missing_cb=None, 
+        transpose=True
     )  # by default change_in_percent will be used
     n_stocks = len(df)
     sum_by_company = df.sum(

@@ -385,7 +385,8 @@ def find_movers(threshold, required_dates, increasing=True, decreasing=False):
     assert required_dates is not None
     # NB: missing values will be imputed here, for now.
     cip = company_prices(all_stocks(), required_dates, fields="change_in_percent", missing_cb=None)
-    movements = cip.sum(axis=1)
+
+    movements = cip.sum(axis=0)
     results = movements[movements.abs() >= threshold]
     print("Found {} movers before filtering: {} {}".format(len(results), increasing, decreasing))
     if not increasing:
@@ -484,7 +485,8 @@ def cached_all_stocks_cip(n_days=2 * 365):
         None, 
         all_dates=stock_dates,
         fields="change_in_percent",
-        missing_cb=None
+        missing_cb=None,
+        transpose=True
     )
     return all_stocks_cip
 
@@ -500,10 +502,12 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         """Ensure every dataframe, whether cached or not, is the same"""
         if len(df) == 0: # dont return empty dataframes
             return None
-        #print(df)
+        #print(tag, " ", stocks, " ", df.columns)
         if tag.startswith('uber') and stocks is not None:
             is_desired_stock = df['asx_code'].isin(set(stocks))
             return df[is_desired_stock]
+        elif df.columns.name == 'asx_code' and stocks is not None:
+            return df.filter(items=stocks, axis='columns')
         else:
             return df
 
@@ -527,7 +531,7 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         dataframe_in_memory_cache[tag] = df 
         return finalise_dataframe(df)
 
-def make_superdf(required_tags, stock_codes, transpose=True):
+def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
     dataframes = filter(lambda df: df is not None,
@@ -538,8 +542,7 @@ def make_superdf(required_tags, stock_codes, transpose=True):
             superdf = df
         else:
             superdf = superdf.append(df)
-    # DataFrame with columns as dates and rows as stock(s) by default
-    return superdf.transpose() if transpose else superdf 
+    return superdf
 
 
 def day_low_high(stock, all_dates=None):
@@ -649,6 +652,7 @@ def company_prices(
         all_dates=None,
         fields="last_price",
         missing_cb=impute_missing, # or None if you want missing values 
+        transpose=False  # return with stocks as columns (default) or rows?
 ):
     """
     Return a dataframe with the required companies (iff quoted) over the
@@ -658,14 +662,16 @@ def company_prices(
     if not isinstance(fields, str):  # assume iterable if not str...
         assert len(stock_codes) == 1
         tags = get_required_tags(all_dates, 'uber')
-        result_df = make_superdf(tags, stock_codes, transpose=False)
+        result_df = make_superdf(tags, stock_codes)
         is_ok_field = result_df['field_name'].isin(set(fields))
         result_df = result_df[is_ok_field]
         result_df = result_df.pivot(index='fetch_date', columns='field_name', values='field_value')
-        assert set(result_df.columns) == set(fields)
+
+        assert set(result_df.columns) == set(fields) or len(result_df) == 0
         # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
         result_df = result_df.dropna(how='all')
+        # TODO BUG FIXME: support transpose parameter here?
         return result_df
 
     # print(stock_codes)
@@ -677,18 +683,13 @@ def company_prices(
     #print(required_tags)
     # construct a "super" dataframe from the constituent parquet data
     superdf = make_superdf(required_tags, stock_codes)
-    #print(superdf)
 
-    # drop columns not present in all_dates to ensure we are giving just the results requested
-    which_dates = set(all_dates)
-    dates_to_drop = [date for date in superdf.columns if date not in which_dates]
-    superdf = superdf.drop(columns=dates_to_drop)
+    # drop dates not present in all_dates to ensure we are giving just the results requested
+    superdf = superdf.filter(items=all_dates, axis='index')
 
-    # NB: ensure all columns are ALWAYS in ascending date order
-    dates = sorted(
-        list(superdf.columns), key=lambda k: datetime.strptime(k, "%Y-%m-%d")
-    )
-    superdf = superdf[dates]
+    # dont transpose for performance by default
+    if transpose: 
+        superdf = superdf.transpose()
 
     # impute missing if caller wants it (and missing values present)
     if missing_cb is not None and superdf.isnull().values.any():
