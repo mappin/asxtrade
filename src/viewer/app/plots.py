@@ -174,7 +174,7 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
     performance. Return a tuple of figures representing the performance as inline data.
     """
     assert portfolio_df is not None
-    # print(portfolio_df)
+    #print(portfolio_df)
     portfolio_df["date"] = pd.to_datetime(portfolio_df["date"])
     avg_profit_over_period = (
         portfolio_df.filter(items=["stock", "stock_profit"]).groupby("stock").mean()
@@ -246,12 +246,12 @@ def plot_portfolio(portfolio_df, figure_size=(12, 4), line_size=1.5, date_text_s
     return overall_figure, stock_figure, profit_contributors
 
 
-def plot_company_rank(df):
-    assert isinstance(df, pd.DataFrame)
+def plot_company_rank(df: pd.DataFrame):
     # assert 'sector' in df.columns
     n_bin = len(df["bin"].unique())
+    #print(df)
     plot = (
-        p9.ggplot(df, p9.aes("date", "rank", group="asx_code", color="sector"))
+        p9.ggplot(df, p9.aes("date", "rank", group="asx_code", color="asx_code"))
         + p9.geom_smooth(span=0.3, se=False)
         + p9.geom_text(
             p9.aes(label="asx_code", x="x", y="y"),
@@ -310,8 +310,8 @@ def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent
     n_unique_sectors = len(code_and_sector["sector_name"].unique())
     print("Found {} unique sectors".format(n_unique_sectors))
 
-    print(df)
-    print(code_and_sector)
+    #print(df)
+    #print(code_and_sector)
     df = df.merge(code_and_sector, left_index=True, right_on="asx_code")
     print(
         "Found {} stocks, {} sectors and merged total: {}".format(

@@ -58,8 +58,9 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
     # sort by ascending overall slope (regardless of NRMSE)
     return OrderedDict(sorted(trends.items(), key=lambda t: t[1][0]))
 
-def rank_cumulative_change(df, all_dates):
+def rank_cumulative_change(df: pd.DataFrame, all_dates):
     cum_sum = defaultdict(float)
+    print(df)
     for date in filter(lambda k: k in df.columns, all_dates):
         for code, price_change in df[date].fillna(0.0).iteritems():
             cum_sum[code] += price_change
@@ -78,7 +79,9 @@ def rank_cumulative_change(df, all_dates):
     df['bin'] = average_rank_binned
     df['asx_code'] = df.index
     stock_sector_df = stocks_by_sector() # make one DB call (cached) rather than lots of round-trips
-    stock_sector_df.set_index('asx_code')
+    #print(stock_sector_df)
+    stock_sector_df = stock_sector_df.set_index('asx_code')
+    #print(df.index)
     df['sector'] = [stock_sector_df.loc[code].sector_name for code in df.index]
     df = pd.melt(df, id_vars=['asx_code', 'bin', 'sector', 'x', 'y'],
                  var_name='date',

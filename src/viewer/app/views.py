@@ -587,7 +587,7 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     assert stocks is not None
     assert n_days is not None  # typically integer, but desired_dates() is polymorphic
     all_dates = desired_dates(start_date=n_days)
-    cip = company_prices(stocks, all_dates=all_dates, fields="change_in_percent", missing_cb=None)
+    cip = company_prices(stocks, all_dates=all_dates, fields="change_in_percent", missing_cb=None, transpose=True)
     outliers = detect_outliers(stocks, cip)
     return show_matching_companies(
         outliers,
@@ -732,12 +732,16 @@ def show_trends(request):
         watchlist_stocks,
         all_dates=all_dates,
         fields="change_in_percent",
+        missing_cb=None,
+        transpose=True,
     )
     trends = calculate_trends(cip, watchlist_stocks, all_dates)
+    #print(trends)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(
         cip.filter(trends.keys(), axis="index"), all_dates=all_dates
     )
+    #print(cip)
     trending_companies_plot = plot_company_rank(cip)
     context = {
         "watchlist_trends": trends,
@@ -771,7 +775,9 @@ class MarketCapSearch(DividendYieldSearch):
         quotes_qs, most_recent_date = latest_quote(None)
         min_cap = kwargs.get('min_cap')
         max_cap = kwargs.get('max_cap')
-        quotes_qs = quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000).exclude(market_cap__gt=max_cap * 1000 * 1000)
+        quotes_qs = quotes_qs \
+                    .exclude(market_cap__lt=min_cap * 1000 * 1000) \
+                    .exclude(market_cap__gt=max_cap * 1000 * 1000)
         print("Found {} quotes, as at {}, satisfying market cap criteria".format(quotes_qs.count(), most_recent_date))
         return self.sort_by(quotes_qs, self.request.GET.get('sort_by'))
 
@@ -792,7 +798,7 @@ def show_purchase_performance(request):
     # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
 
     all_dates = desired_dates(start_date=purchase_buy_dates[0])
-    df = company_prices(stocks, all_dates=all_dates)
+    df = company_prices(stocks, all_dates=all_dates, transpose=True)
     rows = []
     stock_count = defaultdict(int)
     stock_cost = defaultdict(float)
@@ -810,7 +816,7 @@ def show_purchase_performance(request):
                 stock_cost[purchase.asx_code] += purchase.amount
 
         portfolio_worth = sum_portfolio(df, d_str, stock_count.items())
-       
+        #print(df)
         # emit rows for each stock and aggregate portfolio
         for asx_code in stocks:
             cur_price = df.at[asx_code, d_str]
