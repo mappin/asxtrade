@@ -659,14 +659,18 @@ def company_prices(
     specified dates. By default last_price is provided. Fields may be a list,
     in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
+    def prepare_dataframe(df, iterable_of_fields):
+        assert isinstance(df, pd.DataFrame)
+        is_ok_field = df['field_name'].isin(iterable_of_fields)
+        df = df[is_ok_field]
+        return df.pivot(index='fetch_date', columns='field_name', values='field_value')
+
     if not isinstance(fields, str):  # assume iterable if not str...
         assert len(stock_codes) == 1
         tags = get_required_tags(all_dates, 'uber')
         result_df = make_superdf(tags, stock_codes)
-        is_ok_field = result_df['field_name'].isin(set(fields))
-        result_df = result_df[is_ok_field]
-        result_df = result_df.pivot(index='fetch_date', columns='field_name', values='field_value')
-
+        result_df = prepare_dataframe(result_df, fields)
+        
         assert set(result_df.columns) == set(fields) or len(result_df) == 0
         # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
@@ -680,16 +684,18 @@ def company_prices(
     if all_dates is None:
         all_dates = [datetime.strftime(datetime.now(), "%Y-%m-%d")]
 
-    required_tags = get_required_tags(all_dates, fields)
+    required_tags = get_required_tags(all_dates, 'uber')
     #print(required_tags)
     # construct a "super" dataframe from the constituent parquet data
     superdf = make_superdf(required_tags, stock_codes)
-
+    superdf = superdf[superdf['field_name'] == fields]
+    superdf = superdf.pivot(index='fetch_date', columns='asx_code', values='field_value')
+    
     # drop dates not present in all_dates to ensure we are giving just the results requested
     superdf = superdf.filter(items=all_dates, axis='index')
 
     # dont transpose for performance by default
-    if transpose: 
+    if transpose:
         superdf = superdf.transpose()
 
     # impute missing if caller wants it (and missing values present)
