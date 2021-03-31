@@ -229,7 +229,7 @@ def quotation_fixture(quotation_factory, company_details_factory):
     quotation_factory.create(asx_code='OTHER', fetch_date='2021-01-01', last_price=0.0, annual_dividend_yield=0.0)
 
 def mock_superdf_all_stocks(*args, **kwargs):
-    assert args[0] == {'last_price-01-2021-asx'}
+    assert args[0] == {'uber-01-2021-asx'}
     assert args[1] == ['ABC', 'OTHER']
     assert kwargs == {}
     rows = [{'asx_code': q.asx_code, 'last_price': q.last_price, 'fetch_date': q.fetch_date} for q in Quotation.objects.all()]
@@ -329,7 +329,7 @@ def test_find_movers(quotation_fixture, monkeypatch):
         return set(['ABC', 'OTHER'])
 
     def mock_superdf(*args, **kwargs): # to correspond to fixture data
-        assert args[0] == {'change_in_percent-01-2021-asx'}
+        assert args[0] == {'uber-01-2021-asx'}
         assert args[1] == {'ABC', 'OTHER'}
         assert kwargs == {}
         rows = [{'asx_code': q.asx_code, 'change_in_percent': q.change_in_percent, 'fetch_date': q.fetch_date} for q in Quotation.objects.all()]
