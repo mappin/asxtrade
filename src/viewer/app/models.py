@@ -604,39 +604,28 @@ def all_etfs():
     return etf_codes
 
 
-def increasing_eps(stock_codes, past_n_days=300):
-    all_dates = desired_dates(start_date=past_n_days)
-    required_tags = set(
-        ["eps-{}-{}-asx".format(date[5:7], date[0:4]) for date in all_dates]
-    )
-    # NB: we dont care here if some tags cant be found
-    df = make_superdf(required_tags, stock_codes)
-    # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
-    # at least 2c per share positive max(eps) is required to be considered significant
-    increasing_eps_stocks = [
-        idx
-        for idx, series in df.iterrows()
-        if series.is_monotonic_increasing and max(series) >= 0.02
-    ]
-    return increasing_eps_stocks
 
+def increasing_eps(stock_codes, past_n_days=300):
+    return increasing_only_filter(stock_codes, past_n_days, "eps")
 
 def increasing_yield(stock_codes, past_n_days=300):
+    return increasing_only_filter(stock_codes, past_n_days, "annual_dividend_yield")
+
+def increasing_only_filter(stock_codes, past_n_days: int, field: str, min_value=0.02):
+    assert min_value >= 0.0
+    assert past_n_days > 0
     all_dates = desired_dates(start_date=past_n_days)
-    required_tags = set(
-        [
-            "annual_dividend_yield-{}-{}-asx".format(date[5:7], date[0:4])
-            for date in all_dates
-        ]
-    )
-    df = make_superdf(required_tags, stock_codes)
-    # ignore penny-ante stocks (must be at least 1c per share dividend)
-    increasing_yield_stocks = [
-        idx
-        for idx, series in df.iterrows()
-        if series.is_monotonic_increasing and max(series) >= 0.01
-    ]
-    return increasing_yield_stocks
+    # NB: we dont care here if some tags cant be found
+    df = company_prices(stock_codes, all_dates, field, transpose=True).fillna(0.0)
+    # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
+    # at least 2c per share positive max(eps) is required to be considered significant
+    ret = []
+    for idx, series in df.iterrows():
+        #print(series)
+        if series.is_monotonic_increasing and max(series) >= min_value:
+            ret.append(idx)
+
+    return ret
 
 def get_required_tags(all_dates, fields):
     required_tags = set()
