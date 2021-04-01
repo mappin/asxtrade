@@ -688,7 +688,7 @@ def company_prices(
     #print(required_tags)
     # construct a "super" dataframe from the constituent parquet data
     superdf = make_superdf(required_tags, stock_codes)
-    if 'field_name' in superdf.columns:
+    if 'field_name' in superdf.columns: # optional to permit easier mocking of make_superdf()
         superdf = superdf[superdf['field_name'] == fields]
         superdf = superdf.pivot(index='fetch_date', columns='asx_code', values='field_value')
     

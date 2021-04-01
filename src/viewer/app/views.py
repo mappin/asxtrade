@@ -269,6 +269,8 @@ sector_search = SectorSearchView.as_view()
 class MoverSearch(DividendYieldSearch):
     form_class = MoverSearchForm
     action_url = "/search/movers"
+    matching_companies = ()
+    timeframe_in_days = 30
 
     def additional_context(self, context):
         print("Found {}".format(len(self.matching_companies)))
@@ -276,11 +278,11 @@ class MoverSearch(DividendYieldSearch):
         n_days = self.timeframe_in_days
         all_dates = desired_dates(start_date=self.timeframe_in_days)
         if len(self.matching_companies) > 0:
-            sentiment_plot, df, top10, bottom10, _ = plot_heatmap(self.matching_companies, 
+            sentiment_plot, _, top10, bottom10, _ = plot_heatmap(self.matching_companies, 
                                                                   all_dates=all_dates, 
                                                                   n_top_bottom=n_top_bottom)
         else:
-            sentiment_plot, df, top10, bottom10 = (None, None, None, None)
+            sentiment_plot, top10, bottom10 = (None, None, None)
         return {
             "title": "Find companies exceeding threshold movement (%)",
             "sentiment_heatmap": sentiment_plot,
@@ -308,7 +310,6 @@ class MoverSearch(DividendYieldSearch):
             kwargs.get("show_decreasing", False)
         )
         self.matching_companies = tuple(df.index)
-        print(self.matching_companies)
         results, _ = latest_quote(self.matching_companies)
         return self.sort_by(results, user_sort)
 
