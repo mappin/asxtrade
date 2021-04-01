@@ -59,7 +59,7 @@ def load_prices(db, field_name, month, year) -> pd.DataFrame:
     #print(df)
     return df, rows
 
-def save_dataframe(db, df, tag, field_name, status, market, scope, compression='snappy'):
+def save_dataframe(db, df, tag, field_name, status, market, scope, compression='snappy', n_days=None, n_stocks=None):
     assert isinstance(df, pd.DataFrame) and len(df) > 0
     assert db is not None
     #print(df.dtypes)
@@ -78,8 +78,8 @@ def save_dataframe(db, df, tag, field_name, status, market, scope, compression='
             'field': field_name,
             'market': market,
             'scope': scope,
-            'n_days': len(df),
-            'n_stocks': len(df.columns),
+            'n_days': n_days,
+            'n_stocks': n_stocks,
             'dataframe_format': 'parquet',
             'size_in_bytes': size,
             'sha256': sha256_hash,
@@ -106,7 +106,7 @@ def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', 
                 print(df.loc[today].isnull().values.any())
                 # FALLTHRU...
         tag = "{}-{:02d}-{}-{}".format(field_name, month, year, market)
-        save_dataframe(db, df, tag, field_name, status, market, scope, compression='gzip')
+        save_dataframe(db, df, tag, field_name, status, market, scope, compression='gzip', n_days=len(df), n_stocks=len(df.columns))
 
     all_stocks = set(uber_df['asx_code'])
     print("Detected {} stocks during month ({} datapoints total)".format(len(all_stocks), len(uber_df)))
@@ -118,7 +118,9 @@ def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', 
     assert all_fields == set(required_fields)
 
     print("% missing values: ", ((uber_df.isnull() | uber_df.isna()).sum() * 100 / uber_df.index.size).round(2))
-    save_dataframe(db, uber_df, uber_tag, '', status, market, scope, compression='gzip')
+    n_stocks = uber_df['asx_code'].nunique()
+    n_days = uber_df['fetch_date'].nunique()
+    save_dataframe(db, uber_df, uber_tag, '', status, market, scope, compression='gzip', n_days=n_days, n_stocks=n_stocks)
 
 if __name__ == "__main__":
     a = argparse.ArgumentParser(description="Construct and ingest db.asx_prices into parquet format month-by-month and persist to mongo")
