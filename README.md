@@ -73,7 +73,14 @@ python3 manage.py runserver # run on local dev. host
 
 ### Installing data
 
-  You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run.
+  You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache entries with something like:
+  
+  ~~~~
+  export PASSWORD=<your db password here>
+  python3 persist_dataframes.py --month 3 --year 2021 --status INCOMPLETE|FINAL --dbpassword '$PASSWORD'
+  ~~~~
+  
+This new data may not appear in the application until the cache entries expire (or alternatively you can restart the server).
 
   Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2021, although ETF data covers a smaller period due to missing code.
 
