@@ -603,13 +603,11 @@ def all_etfs():
     print("Found {} ETF codes".format(len(etf_codes)))
     return etf_codes
 
-
-
 def increasing_eps(stock_codes, past_n_days=300):
     return increasing_only_filter(stock_codes, past_n_days, "eps")
 
 def increasing_yield(stock_codes, past_n_days=300):
-    return increasing_only_filter(stock_codes, past_n_days, "annual_dividend_yield")
+    return increasing_only_filter(stock_codes, past_n_days, "annual_dividend_yield", min_value=0.01)
 
 def increasing_only_filter(stock_codes, past_n_days: int, field: str, min_value=0.02):
     assert min_value >= 0.0
