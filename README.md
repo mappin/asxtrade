@@ -73,10 +73,14 @@ python3 manage.py runserver # run on local dev. host
 
 ### Installing data
 
-  You can run `python3 src/asxtrade.py --want-prices` to fetch daily data. This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache entries with something like:
+  This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache entries with something like:
   
   ~~~~
+  # setup database password to use
   export PASSWORD=<your db password here>
+  # fetch daily data from ASX - configuration in config.json. Run after trading close each trading day
+  python3 src/asxtrade.py --want-prices
+  # update cached daily data for the specified month (1..12) - needed for website to use fetched data
   python3 persist_dataframes.py --month 3 --year 2021 --status INCOMPLETE|FINAL --dbpassword '$PASSWORD'
   ~~~~
   
