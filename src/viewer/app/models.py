@@ -123,6 +123,8 @@ class Security(model.Model):
     class Meta:
         db_table = "asx_isin"
         managed = False  # managed by asxtrade.py
+        verbose_name = 'Security'
+        verbose_name_plural = 'Securities'
 
 
 class CompanyDetails(model.Model):
@@ -192,6 +194,8 @@ class CompanyDetails(model.Model):
     class Meta:
         managed = False
         db_table = "asx_company_details"
+        verbose_name = 'Company Detail'
+        verbose_name_plural = 'Company Details'
 
 
 class Watchlist(model.Model):
