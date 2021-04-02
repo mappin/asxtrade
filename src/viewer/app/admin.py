@@ -8,10 +8,18 @@ from app.models import (
     Sector,
     MarketDataCache
 )
+from app.paginator import NoCountPaginator
 
 @admin.register(Quotation)
 class QuoteAdmin(admin.ModelAdmin):
-    date_hierarchy = 'year_high_date'
+    #date_hierarchy = 'year_high_date'
+    list_display=('_id', 'asx_code', 'last_price', 'last_trade_date', 
+                  'annual_dividend_yield', 'eps', 'change_in_percent',
+                  'volume')
+    list_filter = ('suspended', 'year_high_date', 'year_low_date')
+    paginator = NoCountPaginator
+    show_full_result_count = False
+    
 
 @admin.register(Security)
 class SecurityAdmin(admin.ModelAdmin):
