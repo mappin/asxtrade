@@ -120,7 +120,7 @@ def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', 
     print("% missing values: ", ((uber_df.isnull() | uber_df.isna()).sum() * 100 / uber_df.index.size).round(2))
     n_stocks = uber_df['asx_code'].nunique()
     n_days = uber_df['fetch_date'].nunique()
-    save_dataframe(db, uber_df, uber_tag, '', status, market, scope, compression='gzip', n_days=n_days, n_stocks=n_stocks)
+    save_dataframe(db, uber_df, uber_tag, 'uber', status, market, scope, compression='gzip', n_days=n_days, n_stocks=n_stocks)
 
 if __name__ == "__main__":
     a = argparse.ArgumentParser(description="Construct and ingest db.asx_prices into parquet format month-by-month and persist to mongo")
