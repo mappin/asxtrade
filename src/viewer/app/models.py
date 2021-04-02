@@ -476,6 +476,7 @@ def latest_quote(stocks):
 
 @func.lru_cache(maxsize=100)
 def get_parquet(tag: str) -> pd.DataFrame:
+    assert tag.startswith('uber') # deprecated: only use uber frames now, not single metric dataframe eg. eps to improve caching
     cache_entry = MarketDataCache.objects.filter(tag=tag).first()
     if cache_entry is not None:
         return cache_entry.dataframe
