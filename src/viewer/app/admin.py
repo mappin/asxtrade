@@ -13,9 +13,9 @@ from app.paginator import NoCountPaginator
 @admin.register(Quotation)
 class QuoteAdmin(admin.ModelAdmin):
     #date_hierarchy = 'year_high_date'
-    list_display=('_id', 'asx_code', 'last_price', 'last_trade_date', 
-                  'annual_dividend_yield', 'eps', 'change_in_percent',
-                  'volume')
+    list_display = ('_id', 'asx_code', 'last_price', 'last_trade_date', 
+                    'annual_dividend_yield', 'eps', 'change_in_percent',
+                    'volume')
     list_filter = ('suspended', 'year_high_date', 'year_low_date')
     paginator = NoCountPaginator
     show_full_result_count = False
@@ -33,7 +33,8 @@ class VirtualPurchaseAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyDetails)
 class CompanyDetailsAdmin(admin.ModelAdmin):
-    list_display = ('_id', 'asx_code', 'name_full', 'phone_number', 'principal_activities', 'web_address', )
+    list_display = ('_id', 'asx_code', 'name_full', 'phone_number', 
+                    'principal_activities', 'web_address', )
     exclude = ('indices', 'products', 'latest_annual_reports')
     list_filter = ('recent_announcement', 'suspended', 'sector_name')
     # bid_price = model.FloatField()
