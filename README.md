@@ -73,7 +73,7 @@ python3 manage.py runserver # run on local dev. host
 
 ### Installing data
 
-  This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache entries with something like:
+  This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache. The setup and daily run process is similar to:
   
   ~~~~
   # setup database password to use
