@@ -78,9 +78,16 @@ python3 manage.py runserver # run on local dev. host
   ~~~~
   # setup database password to use
   export PASSWORD=<your db password here>
-  # fetch daily data from ASX - configuration in config.json. Run after trading close each trading day
+
+  # run periodically (eg. quarterly) and at setup to update list of securities/companies/fundamentals
+  python3 src/asxtrade.py --want-companies
+  python3 src/asxtrade.py --want-securities
+  python3 src/asxtrade.py --want-details
+
+  # daily: fetch prices from ASX - configuration in config.json. Run after trading close each trading day
   python3 src/asxtrade.py --want-prices
-  # update cached daily data for the specified month (1..12) - needed for website to use fetched data
+
+  # daily: update cached data for the specified month (1..12) - needed for website operation
   python3 persist_dataframes.py --month 3 --year 2021 --status INCOMPLETE|FINAL --dbpassword '$PASSWORD'
   ~~~~
   
