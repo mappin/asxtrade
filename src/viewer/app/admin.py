@@ -1,6 +1,6 @@
 from django.contrib import admin
 from app.models import (
-    Quotation, 
+    Quotation,
     Security,
     CompanyDetails,
     VirtualPurchase,
@@ -19,7 +19,6 @@ class QuoteAdmin(admin.ModelAdmin):
     list_filter = ('suspended', 'year_high_date', 'year_low_date')
     paginator = NoCountPaginator
     show_full_result_count = False
-    
 
 @admin.register(Security)
 class SecurityAdmin(admin.ModelAdmin):
@@ -29,7 +28,7 @@ class SecurityAdmin(admin.ModelAdmin):
 
 @admin.register(VirtualPurchase)
 class VirtualPurchaseAdmin(admin.ModelAdmin):
-    list_display=('id', 'user', 'asx_code', 'buy_date', 'amount', 'n', 'price_at_buy_date')
+    list_display = ('id', 'user', 'asx_code', 'buy_date', 'amount', 'n', 'price_at_buy_date')
 
 @admin.register(CompanyDetails)
 class CompanyDetailsAdmin(admin.ModelAdmin):
@@ -44,8 +43,6 @@ class CompanyDetailsAdmin(admin.ModelAdmin):
     # number_of_shares = model.IntegerField()
     # primary_share_code = model.TextField()
     # principal_activities = model.TextField()
- 
-
 
 @admin.register(Watchlist)
 class WatchlistAdmin(admin.ModelAdmin):
