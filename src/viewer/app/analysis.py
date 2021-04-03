@@ -15,7 +15,7 @@ from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
-from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector
+from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
@@ -313,10 +313,11 @@ def ef_minvol_strategy(returns=None, cov_matrix=None):
     pt = ef.portfolio_performance()
     return cw, pt, ef
 
-def setup_optimisation_matrices(stocks, desired_dates):
+def setup_optimisation_matrices(stocks, timeframe: Timeframe):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
+    
     stock_prices = company_prices(stocks, 
-                        all_dates=desired_dates, 
+                        all_dates=timeframe.desired_dates(), 
                         missing_cb=None)
     latest_date = stock_prices.index[-1]
     #print(latest_date)
@@ -382,14 +383,14 @@ def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, 
     n_stocks = max_stocks if len(colnames) > max_stocks else len(colnames)
     return filtered_stocks, n_stocks
 
-def optimise_portfolio(stocks, desired_dates, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
+def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
     assert len(stocks) >= 1
-    assert len(desired_dates) >= 10
+    assert timeframe is not None
     assert total_portfolio_value > 0
     assert max_stocks >= 5
 
     messages = set()
-    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, desired_dates)
+    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe)
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
         strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
