@@ -253,7 +253,7 @@ class SectorSearchView(DividendYieldSearch):
         mrd = latest_quotation_date('ANZ') # in case of public holidays, the latest timeframe date is NOT the latest quotation date, so we ensure that we can find data
         if mrd not in timeframe:
             mrd = timeframe.most_recent_date
-            
+
         print("Looking for {} companies as at {}".format(len(wanted_stocks), mrd))
         self.query_state = {
             "most_recent_date":  mrd,
@@ -753,8 +753,8 @@ class MarketCapSearch(DividendYieldSearch):
     def get_queryset(self, **kwargs):
         # identify all stocks which have a market cap which satisfies the required constraints
         quotes_qs, most_recent_date = latest_quote(None)
-        min_cap = kwargs.get('min_cap')
-        max_cap = kwargs.get('max_cap')
+        min_cap = kwargs.get('min_cap', 1)
+        max_cap = kwargs.get('max_cap', 1000)
         quotes_qs = quotes_qs \
                     .exclude(market_cap__lt=min_cap * 1000 * 1000) \
                     .exclude(market_cap__gt=max_cap * 1000 * 1000)
