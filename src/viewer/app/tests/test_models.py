@@ -375,25 +375,30 @@ def test_latest_quote(quotation_fixture, monkeypatch):
     assert isinstance(qs, QuerySet)
     assert qs.count() == 2
 
-def test_timeframe():
-    # past 30 days by default
-    tf = Timeframe()
-    assert len(tf.all_dates()) == 30
-    assert str(tf) == "Timeframe: {}"
-    assert tf.description == "Past 30 days"
-
-    # retrospective timeframe: jan 2020
-    tf = Timeframe(from_date='2020-01-01', to_date='2020-01-07')
-    result = tf.all_dates()
-    assert result == ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04', '2020-01-05', '2020-01-06', '2020-01-07']
-    assert tf.description == "Dates 2020-01-01 thru 2020-01-07 (inclusive)"
-
-    # start date and n days
-    tf = Timeframe(from_date='2020-01-01', n=3)
-    result2 = tf.all_dates()
-    assert result2 == ['2020-01-01', '2020-01-02', '2020-01-03']
-    assert tf.n_days == 3
-    assert tf.description == "Dates 2020-01-01 thru 2020-01-03 (inclusive)"
+@pytest.mark.parametrize("data,expected", [
+    (
+        {}, 
+        (30, "Past 30 days", None)
+    ),
+    (
+        {'from_date':'2020-01-01', 'to_date': '2020-01-07'},
+        (7, "Dates 2020-01-01 thru 2020-01-07 (inclusive)", 
+         ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04', '2020-01-05', '2020-01-06', '2020-01-07'])
+    ),
+    (
+        {'from_date':'2020-01-01', 'n': 3},
+        (3, "Dates 2020-01-01 thru 2020-01-03 (inclusive)",
+         ['2020-01-01', '2020-01-02', '2020-01-03'])
+    )
+])
+def test_timeframe(data, expected):
+    tf = Timeframe(**data)
+    assert len(tf.all_dates()) == expected[0]
+    assert tf.n_days == expected[0]
+    assert str(tf) == f"Timeframe: {data}"
+    assert tf.description == expected[1]
+    if expected[2] is not None:
+        assert tf.all_dates() == expected[2]
 
 @pytest.mark.django_db
 def test_day_low_high(quotation_fixture):
