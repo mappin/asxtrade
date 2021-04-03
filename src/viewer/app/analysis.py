@@ -8,14 +8,13 @@ import numpy as np
 from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
 from pyod.models.iforest import IForest
-from pypfopt.expected_returns import mean_historical_return
+from pypfopt.expected_returns import mean_historical_return, returns_from_prices
 from pypfopt.discrete_allocation import DiscreteAllocation
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
-from pypfopt.expected_returns import returns_from_prices
 from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector
 from app.plots import (
     plot_sector_performance,
