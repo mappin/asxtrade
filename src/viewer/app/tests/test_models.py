@@ -31,7 +31,9 @@ from app.models import (
     company_prices,
     find_movers,
     find_named_companies,
-    latest_quote
+    latest_quote,
+    Timeframe,
+    day_low_high
 )
 
 def test_desired_dates():
@@ -222,6 +224,8 @@ def quotation_fixture(quotation_factory, company_details_factory):
                                  fetch_date=quote[2],
                                  last_price=quote[0], 
                                  annual_dividend_yield=quote[1],
+                                 day_low_price=quote[0] - 0.10,
+                                 day_high_price=quote[0] + 0.20,
                                  eps=0.10,
                                  pe=0.10 / quote[0],
                                  change_price=0.10,
@@ -370,3 +374,32 @@ def test_latest_quote(quotation_fixture, monkeypatch):
     qs, latest_date = latest_quote(['ABC', 'OTHER'])
     assert isinstance(qs, QuerySet)
     assert qs.count() == 2
+
+def test_timeframe():
+    # past 30 days by default
+    tf = Timeframe()
+    assert len(tf.all_dates()) == 30
+    assert str(tf) == "Timeframe: {}"
+    assert tf.description == "Past 30 days"
+
+    # retrospective timeframe: jan 2020
+    tf = Timeframe(from_date='2020-01-01', to_date='2020-01-07')
+    result = tf.all_dates()
+    assert result == ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04', '2020-01-05', '2020-01-06', '2020-01-07']
+    assert tf.description == "Dates 2020-01-01 thru 2020-01-07 (inclusive)"
+
+    # start date and n days
+    tf = Timeframe(from_date='2020-01-01', n=3)
+    result2 = tf.all_dates()
+    assert result2 == ['2020-01-01', '2020-01-02', '2020-01-03']
+    assert tf.n_days == 3
+    assert tf.description == "Dates 2020-01-01 thru 2020-01-03 (inclusive)"
+
+@pytest.mark.django_db
+def test_day_low_high(quotation_fixture):
+    # NB: dates and stock must correspond to quotation_fixture
+    df = day_low_high('ABC', all_dates=['2021-01-01', '2021-01-02', '2021-01-03'])
+    assert set(df.columns) == set(['day_low_price', 'day_high_price', 'last_price', 'volume', 'date'])
+    result = pd.Series(df['day_high_price'] - df['day_low_price'])
+    expected_result = pd.Series({"2021-01-01": 0.3, "2021-01-02": 0.30, "2021-01-03": 0.3})
+    pd.testing.assert_series_equal(result, expected_result, check_names=False)

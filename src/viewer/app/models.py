@@ -13,6 +13,7 @@ from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
+from django.http import Http404
 from cachetools import cached, LRUCache, LFUCache, keys, func
 
 watchlist_cache = LRUCache(maxsize=1024)
@@ -48,44 +49,64 @@ class Timeframe:
     4) Timeframe(from_date='YYYY-mm-dd', n=30) eg. 30 days from specified date (inclusive)
     In any case Timeframe.desired_dates() yields a list of date in ascending order
     """
-    tf = {}
-
     def __init__(self, **kwargs):
+        self.tf = {}
         self.tf.update(**kwargs)
 
-    def desired_dates(self):
+    def all_dates(self):
         # no arguments for timeframe? assume past 30 days as an application-wide default
         if self.tf == {}:
-            return desired_dates(start_date=30)
+            return desired_dates(None, start_date=self.n_days)
 
         # most common use case: past N days only
-        past_n_days = getattr(self, 'past_n_days', None)
+        past_n_days = self.tf.get('past_n_days', None)
         if past_n_days:
-            return desired_dates(start_date=past_n_days)
+            return desired_dates(None, start_date=past_n_days)
 
         # timeframe of interest: from .. to date
-        from_date = getattr(self, 'from_date', None)
-        to_date = gettatr(self, 'to_date', None)
-        if all([from_date, to_date]):
+        from_date = self.tf.get('from_date', None)
+        to_date = self.tf.get('to_date', None)
+        if all([from_date is not None, to_date is not None]):
             validate_date(from_date)
             validate_date(to_date)
-            all_dates = desired_dates(start_date=from_date)
-            for d in all_dates:
-                yield d
+            possible_dates = desired_dates(today=datetime.strptime(to_date, "%Y-%m-%d").date(), start_date=from_date)
+            ret = []
+            for d in possible_dates:
+                ret.append(d)
                 if d == to_date:
                     break
-            return
+            return ret
 
         # N days from a start date
-        n = getattr(self, 'n', None)
-        if all([from_date, n]):
+        n = self.tf.get('n', None)
+        if all([from_date is not None, n is not None]):
             validate_date(from_date)
             assert n > 0
-            all_dates = desired_dates(start_date=from_date)
-            return all_dates[:n]
+            return desired_dates(today=None, start_date=from_date)[:n]
 
         # otherwise unknown input
         assert False
+
+    @property
+    def n_days(self):
+        if 'past_n_days' in self.tf:
+            return self.tf.get('past_n_days')
+        elif 'n' in self.tf:
+            return self.tf.get('n')
+        elif self.tf == {}:
+            return 30
+        else:
+            return len(self.all_dates()) # expensive
+
+    @property
+    def description(self):
+        if 'past_n_days' in self.tf or self.tf == {}:
+            return "Past {} days".format(self.tf.get('past_n_days', self.n_days))
+        elif all(['from_date' in self.tf, 'to_date' in self.tf]):
+            return "Dates {} thru {} (inclusive)".format(self.tf.get('from_date'), self.tf.get('to_date'))
+        else:
+            all_dates = self.all_dates()
+            return "Dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
 
     def __str__(self):
         return f"Timeframe: {self.tf}"
@@ -413,7 +434,7 @@ def desired_dates(
     if isinstance(start_date, (datetime, date)):
         pass  # FALLTHRU
     elif isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
     elif isinstance(start_date, int):
         assert start_date > 0
         start_date = today - timedelta(days=start_date - 1)  # -1 for today inclusive
@@ -591,7 +612,7 @@ def day_low_high(stock, all_dates=None):
     the day low/high price, last price and volume as a pandas dataframe with dates down and
     columns which represent the prices and volume (in $AUD millions).
     """
-    assert stock is not None and len(stock) >= 3
+    assert isinstance(stock, str) and len(stock) >= 3
 
     quotes = (
         Quotation.objects.filter(asx_code=stock)
@@ -644,15 +665,21 @@ def all_etfs():
     return etf_codes
 
 def increasing_eps(stock_codes, past_n_days=300):
-    return increasing_only_filter(stock_codes, past_n_days, "eps")
+    tf = Timeframe(past_n_days=past_n_days)
+    return increasing_only_filter(stock_codes, tf, "eps")
 
 def increasing_yield(stock_codes, past_n_days=300):
-    return increasing_only_filter(stock_codes, past_n_days, "annual_dividend_yield", min_value=0.01)
+    tf = Timeframe(past_n_days=past_n_days)
+    return increasing_only_filter(stock_codes, tf, "annual_dividend_yield", min_value=0.01)
 
-def increasing_only_filter(stock_codes, past_n_days: int, field: str, min_value=0.02):
+def increasing_only_filter(stock_codes, timeframe: Timeframe, field: str, min_value=0.02):
     assert min_value >= 0.0
-    assert past_n_days > 0
-    all_dates = desired_dates(start_date=past_n_days)
+    assert timeframe is not None
+
+    if timeframe.n_days < 14:
+        raise Http404("Not enough days requested to produce meaningful results: {}".format(timeframe.n_days))
+
+    all_dates = timeframe.all_dates()
     # NB: we dont care here if some tags cant be found
     df = company_prices(stock_codes, all_dates, field, transpose=True).fillna(0.0)
     # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
