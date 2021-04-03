@@ -38,6 +38,58 @@ def validate_user(user):
     return user  # fluent style convenience
 
 
+class Timeframe:
+    """
+    Provide a single object which encapsulates timeframes for the app to perform an an analysis: either current or retrospective.
+    In this way, callers can just ask the timeframe for the dates to use, rather than needing to have date code built-in. Four options are available:
+    1) no arguments ie. Timeframe() which is past 30 days from today
+    2) Timeframe(past_n_days=XXX) for past XXX days from today
+    3) Timeframe(from_date='YYYY-mm-dd', to_date='YYYY-mm-dd') - a date range inclusive from from_date to to_date
+    4) Timeframe(from_date='YYYY-mm-dd', n=30) eg. 30 days from specified date (inclusive)
+    In any case Timeframe.desired_dates() yields a list of date in ascending order
+    """
+    tf = {}
+
+    def __init__(self, **kwargs):
+        self.tf.update(**kwargs)
+
+    def desired_dates(self):
+        # no arguments for timeframe? assume past 30 days as an application-wide default
+        if self.tf == {}:
+            return desired_dates(start_date=30)
+
+        # most common use case: past N days only
+        past_n_days = getattr(self, 'past_n_days', None)
+        if past_n_days:
+            return desired_dates(start_date=past_n_days)
+
+        # timeframe of interest: from .. to date
+        from_date = getattr(self, 'from_date', None)
+        to_date = gettatr(self, 'to_date', None)
+        if all([from_date, to_date]):
+            validate_date(from_date)
+            validate_date(to_date)
+            all_dates = desired_dates(start_date=from_date)
+            for d in all_dates:
+                yield d
+                if d == to_date:
+                    break
+            return
+
+        # N days from a start date
+        n = getattr(self, 'n', None)
+        if all([from_date, n]):
+            validate_date(from_date)
+            assert n > 0
+            all_dates = desired_dates(start_date=from_date)
+            return all_dates[:n]
+
+        # otherwise unknown input
+        assert False
+
+    def __str__(self):
+        return f"Timeframe: {self.tf}"
+
 class Quotation(model.Model):
     _id = ObjectIdField()
     error_code = model.TextField(max_length=100)  # ignore record iff set to non-empty
@@ -436,23 +488,6 @@ def find_named_companies(wanted_name, wanted_activity):
 def latest_quotation_date(stock):
     d = all_available_dates(reference_stock=stock)
     return d[-1]
-
-
-def all_quotes(stock, all_dates=None):
-    """
-    company_prices() is better as it is pre-pivoted monthly tables, but this is needed for some use cases
-    """
-    assert len(stock) >= 3
-    if all_dates is None:
-        all_dates = desired_dates(start_date=30)
-    quotes = (
-        Quotation.objects.filter(asx_code=stock)
-        .filter(fetch_date__in=all_dates)
-        .exclude(error_code="id-or-code-invalid")
-    )
-    rows = [model_to_dict(quote) for quote in quotes]
-    df = pd.DataFrame.from_records(rows)
-    return df
 
 def latest_quote(stocks):
     """
