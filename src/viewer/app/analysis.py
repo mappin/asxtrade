@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
+from pyod.models.iforest import IForest
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.discrete_allocation import DiscreteAllocation
 from pypfopt.efficient_frontier import EfficientFrontier
@@ -239,7 +240,6 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     df = pd.DataFrame.from_records(rows)
     df = df.set_index('stock')
     #print(df)
-    from pyod.models.iforest import IForest
     clf = IForest()
     clf.fit(df)
     scores = clf.predict(df)
