@@ -317,7 +317,7 @@ def setup_optimisation_matrices(stocks, timeframe: Timeframe):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     
     stock_prices = company_prices(stocks, 
-                        all_dates=timeframe.desired_dates(), 
+                        all_dates=timeframe.all_dates(), 
                         missing_cb=None)
     latest_date = stock_prices.index[-1]
     #print(latest_date)
