@@ -393,12 +393,13 @@ def test_latest_quote(quotation_fixture, monkeypatch):
 ])
 def test_timeframe(data, expected):
     tf = Timeframe(**data)
-    assert len(tf.all_dates()) == expected[0]
+    all_dates = tf.all_dates()
+    assert len(all_dates) == expected[0]
     assert tf.n_days == expected[0]
     assert str(tf) == f"Timeframe: {data}"
     assert tf.description == expected[1]
-    if expected[2] is not None:
-        assert tf.all_dates() == expected[2]
+    all_dates_expected = expected[2]
+    assert all_dates == all_dates_expected or all_dates_expected is None # if parameter is None we ignore test
 
 @pytest.mark.django_db
 def test_day_low_high(quotation_fixture):
