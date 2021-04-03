@@ -25,11 +25,12 @@ from app.models import (
     user_watchlist,
     latest_quotation_date,
     cached_all_stocks_cip,
+    selected_cached_stocks_cip,
     find_movers,
     Sector,
     all_available_dates,
     all_sector_stocks,
-    desired_dates,
+    Timeframe,
     latest_quote,
     valid_quotes_only,
     find_named_companies,
@@ -38,6 +39,7 @@ from app.models import (
     company_prices,
     stock_info,
     all_etfs,
+    rsi_data,
     increasing_eps,
     increasing_yield,
     user_purchases,
@@ -100,13 +102,14 @@ class DividendYieldSearch(
         vec = context["paginator"].object_list.all()
         # print(vec)
         qs = [stock.asx_code for stock in vec]
+        timeframe = Timeframe()
+
         if len(qs) == 0:
             warning(self.request, "No stocks to report")
-            sentiment_data, df, top10, bottom10, n_stocks = (None, None, None, None, 0)
+            sentiment_data, top10, bottom10 = (None, None, None)
         else:
-            sentiment_data, df, top10, bottom10, n_stocks = plot_heatmap(
-                qs, n_top_bottom=self.n_top_bottom
-            )
+            df = cached_all_stocks_cip(timeframe)
+            sentiment_data, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=self.n_top_bottom)
 
         return {
             "most_recent_date": self.as_at_date,
@@ -118,8 +121,8 @@ class DividendYieldSearch(
             "best_ten": top10,
             "worst_ten": bottom10,
             "title": "Find by dividend yield or P/E",
-            "sentiment_heatmap_title": "Recent sentiment: {} total stocks".format(
-                n_stocks
+            "sentiment_heatmap_title": "Sentiment for {} stocks: {}".format(
+                len(qs), timeframe.description
             ),
         }
 
@@ -238,20 +241,22 @@ class SectorSearchView(DividendYieldSearch):
         print("Found {} stocks matching sector={}".format(len(wanted_stocks), self.sector))
         n_days = self.query_defaults("n_days")
         n_top_bottom = self.query_defaults("n_top_bottom")
-        wanted_dates = desired_dates(start_date=n_days)
-        heatmap, _, top10, bottom10, _ = plot_heatmap(
-            wanted_stocks, all_dates=wanted_dates, n_top_bottom=n_top_bottom
-        )
+        timeframe = Timeframe(past_n_days=n_days)
+        df = selected_cached_stocks_cip(wanted_stocks, timeframe)
+        heatmap, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=n_top_bottom)
 
         wanted_stocks = self.get_desired_stocks(wanted_stocks,
                                                 kwargs.get('best10', False),
                                                 kwargs.get('worst10', False),
                                                 top10, bottom10)
 
-        when_date = wanted_dates[-1]
-        print("Looking for {} companies as at {}".format(len(wanted_stocks), when_date))
+        mrd = latest_quotation_date('ANZ') # in case of public holidays, the latest timeframe date is NOT the latest quotation date, so we ensure that we can find data
+        if mrd not in timeframe:
+            mrd = timeframe.most_recent_date
+            
+        print("Looking for {} companies as at {}".format(len(wanted_stocks), mrd))
         self.query_state = {
-            "most_recent_date":  when_date,
+            "most_recent_date":  mrd,
             "sentiment_heatmap": heatmap,
             "best_ten":          top10,
             "worst_ten":         bottom10,
@@ -259,9 +264,7 @@ class SectorSearchView(DividendYieldSearch):
             "n_top_bottom":      n_top_bottom,
         }
 
-        results = Quotation.objects.filter(
-            asx_code__in=wanted_stocks, fetch_date=when_date
-        ).exclude(error_code="id-or-code-invalid")
+        results = valid_quotes_only(mrd).filter(asx_code__in=wanted_stocks)
         return self.sort_by(results, self.request.GET.get('sort_by'))
 
 sector_search = SectorSearchView.as_view()
@@ -270,19 +273,20 @@ class MoverSearch(DividendYieldSearch):
     form_class = MoverSearchForm
     action_url = "/search/movers"
     matching_companies = ()
-    timeframe_in_days = 30
+    timeframe = Timeframe(past_n_days=30)
 
     def additional_context(self, context):
         print("Found {}".format(len(self.matching_companies)))
         n_top_bottom = 20
-        n_days = self.timeframe_in_days
-        all_dates = desired_dates(start_date=self.timeframe_in_days)
+        
         if len(self.matching_companies) > 0:
-            sentiment_plot, _, top10, bottom10, _ = plot_heatmap(self.matching_companies, 
-                                                                  all_dates=all_dates, 
-                                                                  n_top_bottom=n_top_bottom)
+            sentiment_plot, _, top10, bottom10, _ = plot_heatmap(self.matching_companies,
+                                                                 self.timeframe,
+                                                                 n_top_bottom=n_top_bottom)
         else:
             sentiment_plot, top10, bottom10 = (None, None, None)
+        
+        n_days = self.timeframe.n_days
         return {
             "title": "Find companies exceeding threshold movement (%)",
             "sentiment_heatmap": sentiment_plot,
@@ -301,11 +305,11 @@ class MoverSearch(DividendYieldSearch):
         ):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
-        self.timeframe_in_days = kwargs.get("timeframe_in_days")
+        self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days"))
         user_sort = self.request.GET.get("sort_by")
         df = find_movers(
             threshold_percentage,
-            desired_dates(start_date=self.timeframe_in_days),
+            self.timeframe,
             kwargs.get("show_increasing", False),
             kwargs.get("show_decreasing", False)
         )
@@ -358,25 +362,6 @@ def show_all_stocks(request):
     }
     return render(request, "all_stocks.html", context=context)
 
-def first_arg_only(*args):
-    return keys.hashkey(args[0])
-
-@cached(LRUCache(maxsize=16), key=first_arg_only)
-def cached_rsi_data(stock, stock_dates):
-    stock_df = company_prices(
-        [stock],
-        all_dates=stock_dates,
-        fields=["last_price", "volume", "day_low_price", "day_high_price"],
-        missing_cb=None,
-    )
-    n_dates = len(stock_df)
-    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
-        raise Http404(
-            "Insufficient price quotes for {} - only {}".format(stock, n_dates)
-        )
-    #print(stock_df)
-    return stock_df
-
 @login_required
 def show_stock_sector(request, stock):
     validate_stock(stock)
@@ -384,7 +369,7 @@ def show_stock_sector(request, stock):
 
     _, company_details = stock_info(stock, lambda msg: warning(request, msg))
     sector = company_details.sector_name if company_details else None
-    all_stocks_cip = cached_all_stocks_cip()
+    all_stocks_cip = cached_all_stocks_cip(Timeframe(past_n_days=180))
 
     # invoke separate function to cache the calls when we can
     c_vs_s_plot, sector_momentum_plot, sector_companies = \
@@ -415,10 +400,10 @@ def show_stock_sector(request, stock):
 def show_fundamentals(request, stock=None, n_days=2 * 365):
     validate_user(request.user)
     validate_stock(stock)
-    stock_dates = desired_dates(start_date=n_days)
+    timeframe = Timeframe(past_n_days=n_days)
     df = company_prices(
         [stock],
-        all_dates=stock_dates,
+        timeframe,
         fields=("eps", "volume", "last_price", "annual_dividend_yield", \
                 "pe", "change_in_percent", "change_price", "market_cap", \
                 "number_of_shares"),
@@ -443,8 +428,8 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_stock(stock)
     validate_user(request.user)
 
-    stock_dates = desired_dates(start_date=n_days)
-    stock_df = cached_rsi_data(stock, stock_dates) # may raise 404 if too little data available
+    timeframe = Timeframe(past_n_days=n_days)
+    stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
     securities, company_details = stock_info(stock, lambda msg: warning(request, msg))
 
     momentum_plot = make_rsi_plot(stock, stock_df)
@@ -496,7 +481,7 @@ def get_dataset(dataset_wanted):
     if dataset_wanted == "market_sentiment":
         _, df, _, _, _ = plot_heatmap(
             None, 
-            all_dates=desired_dates(21), 
+            Timeframe(), 
             n_top_bottom=20
         )
         return df
@@ -522,25 +507,24 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     validate_user(request.user)
     assert n_days > 0
     assert n_top_bottom > 0
-    all_dates = desired_dates(start_date=n_days)
-    sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(
-        None, all_dates=all_dates, n_top_bottom=n_top_bottom
-    )
-    sector_performance_plot = plot_market_wide_sector_performance(
-        desired_dates(start_date=sector_n_days)
-    )
+    timeframe = Timeframe(past_n_days=n_days)
+    sector_timeframe = Timeframe(past_n_days=sector_n_days)
+    df = cached_all_stocks_cip(timeframe)
+    sector_df = cached_all_stocks_cip(sector_timeframe)
+    sentiment_plot, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=n_top_bottom)
+    sector_performance_plot = plot_market_wide_sector_performance(sector_df)
 
     context = {
-        "sentiment_data": sentiment_heatmap_data,
-        "n_days": n_days,
-        "n_stocks_plotted": n,
+        "sentiment_data": sentiment_plot,
+        "n_days": timeframe.n_days,
+        "n_stocks_plotted": len(df),
         "n_top_bottom": n_top_bottom,
         "best_ten": top10,
         "worst_ten": bottom10,
         "watched": user_watchlist(request.user),
         "sector_performance": sector_performance_plot,
-        "sector_performance_title": "180 day cumulative sector avg. performance",
-        "title": "Market sentiment over past {} days".format(n_days),
+        "sector_performance_title": "Cumulative sector avg. performance: {}".format(sector_timeframe.description),
+        "title": "Market sentiment: {}".format(timeframe.description),
     }
     return render(request, "market_sentiment_view.html", context=context)
 
@@ -587,12 +571,12 @@ def show_increasing_yield_stocks(request):
 def show_outliers(request, stocks, n_days=30, extra_context=None):
     assert stocks is not None
     assert n_days is not None  # typically integer, but desired_dates() is polymorphic
-    all_dates = desired_dates(start_date=n_days)
-    cip = company_prices(stocks, all_dates=all_dates, fields="change_in_percent", missing_cb=None, transpose=True)
+    timeframe = Timeframe(past_n_days=n_days)
+    cip = selected_cached_stocks_cip(stocks, timeframe)
     outliers = detect_outliers(stocks, cip)
     return show_matching_companies(
         outliers,
-        "Unusual stock behaviours over past {} days".format(n_days),
+        "Unusual stock behaviours: {}".format(timeframe.description),
         "Outlier stocks: sentiment",
         user_purchases(request.user),
         request,
@@ -645,9 +629,9 @@ class OptimisedWatchlistView(
     def stocks(self):
         return list(user_watchlist(self.request.user))
 
-    def optimise(self, stocks, start_date, algo, total_portfolio_value=100*1000):
+    def optimise(self, stocks, tf: Timeframe, algo: str, total_portfolio_value=100*1000):
         return optimise_portfolio(stocks,
-                                  desired_dates(start_date=start_date),
+                                  tf,
                                   algo=algo,
                                   total_portfolio_value=total_portfolio_value)
 
@@ -668,7 +652,8 @@ class OptimisedWatchlistView(
                 exclude = exclude.split(",")
             stocks = set(stocks).difference(exclude)
 
-        self.results = self.optimise(stocks, n_days, algo, total_portfolio_value=portfolio_cost)
+        tf = Timeframe(past_n_days=n_days)
+        self.results = self.optimise(stocks, tf, algo, total_portfolio_value=portfolio_cost)
         return render(self.request, self.template_name, self.get_context_data())
 
 optimised_watchlist_view = OptimisedWatchlistView.as_view()
@@ -728,26 +713,20 @@ def show_watchlist_outliers(request, n_days=30):
 def show_trends(request):
     validate_user(request.user)
     watchlist_stocks = user_watchlist(request.user)
-    all_dates = desired_dates(start_date=300)  # last 300 days
-    cip = company_prices(
-        watchlist_stocks,
-        all_dates=all_dates,
-        fields="change_in_percent",
-        missing_cb=None,
-        transpose=True,
-    )
-    trends = calculate_trends(cip, watchlist_stocks, all_dates)
+    timeframe = Timeframe(past_n_days=300)
+    cip = selected_cached_stocks_cip(watchlist_stocks, timeframe)
+    trends = calculate_trends(cip, watchlist_stocks, timeframe)
     #print(trends)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(
-        cip.filter(trends.keys(), axis="index"), all_dates=all_dates
+        cip.filter(trends.keys(), axis="index"), timeframe
     )
     #print(cip)
     trending_companies_plot = plot_company_rank(cip)
     context = {
         "watchlist_trends": trends,
         "trending_companies_plot": trending_companies_plot,
-        "trending_companies_plot_title": "Trending watchlist companies by rank (past 300 days)",
+        "trending_companies_plot_title": "Trending watchlist companies by rank: {}".format(timeframe.description),
     }
     return render(request, "trends.html", context=context)
 
@@ -798,14 +777,14 @@ def show_purchase_performance(request):
     purchase_buy_dates = sorted(purchase_buy_dates)
     # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
 
-    all_dates = desired_dates(start_date=purchase_buy_dates[0])
-    df = company_prices(stocks, all_dates=all_dates, transpose=True)
+    timeframe = Timeframe(from_date=purchase_buy_dates[0], to_date=purchase_buy_dates[-1])
+    df = company_prices(stocks, timeframe, transpose=True)
     rows = []
     stock_count = defaultdict(int)
     stock_cost = defaultdict(float)
     portfolio_cost = 0.0
 
-    for d in [datetime.strptime(x, "%Y-%m-%d").date() for x in all_dates]:
+    for d in [datetime.strptime(x, "%Y-%m-%d").date() for x in timeframe.all_dates()]:
         d_str = str(d)
         if d_str not in df.columns:  # not a trading day?
             continue
@@ -870,7 +849,9 @@ def show_matching_companies(
     assert isinstance(title, str) and isinstance(heatmap_title, str)
     sort_by = request.GET.get("sort_by", "asx_code")
     info(request, "Sorting by {}".format(sort_by))
-
+    n_days = 30
+    n_top_bottom = 20
+    sentiment_timeframe = Timeframe(past_n_days=n_days)
     if len(matching_companies) > 0:
         stocks_queryset, _ = latest_quote(matching_companies)
         stocks_queryset = stocks_queryset.order_by(sort_by)
@@ -886,16 +867,10 @@ def show_matching_companies(
         page_obj = paginator.page(page_number)
 
         # add sentiment heatmap amongst watched stocks
-        n_days = 30
-        n_top_bottom = 20
-        sentiment_heatmap_data, df, top10, bottom10, n = plot_heatmap(
-            matching_companies,
-            all_dates=desired_dates(start_date=n_days),
-            n_top_bottom=n_top_bottom,
-        )
+        df = selected_cached_stocks_cip(matching_companies, sentiment_timeframe)
+        sentiment_heatmap_data, top10, bottom10 = plot_heatmap(df, sentiment_timeframe, n_top_bottom=n_top_bottom)
     else:
         page_obj = top10 = bottom10 = sentiment_heatmap_data = None
-        n_top_bottom = n_days = 0
         warning(request, "No matching companies found.")
 
     context = {
@@ -908,7 +883,7 @@ def show_matching_companies(
         "worst_ten": bottom10,
         "virtual_purchases": virtual_purchases_by_user,
         "sentiment_heatmap": sentiment_heatmap_data,
-        "sentiment_heatmap_title": "{}: past {} days".format(heatmap_title, n_days),
+        "sentiment_heatmap_title": "{}: {}".format(heatmap_title, sentiment_timeframe.description),
     }
     if extra_context:
         context.update(extra_context)
@@ -1054,8 +1029,8 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
         norm_method = form.cleaned_data.get('normalisation_method', None)
         n_days = form.cleaned_data.get('n_days', 30)
         stocks = all_sector_stocks(sector)
-        dd = desired_dates(start_date=n_days)
-        cip = company_prices(stocks, all_dates=dd, fields="change_in_percent", missing_cb=None, transpose=True)
+        timeframe = Timeframe(past_n_days=n_days)
+        cip = selected_cached_stocks_cip(stocks, timeframe)
         context = self.get_context_data()
         boxplot, winner_results = plot_boxplot_series(cip, normalisation_method=norm_method)
         context.update({

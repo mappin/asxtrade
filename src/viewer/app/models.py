@@ -49,10 +49,21 @@ class Timeframe:
     4) Timeframe(from_date='YYYY-mm-dd', n=30) eg. 30 days from specified date (inclusive)
     In any case Timeframe.desired_dates() yields a list of date in ascending order
     """
+
     def __init__(self, **kwargs):
         self.tf = {}
         self.tf.update(**kwargs)
 
+    def __lt__(self, other):
+        a_from = self.tf.get('from_date', None)
+        b_from = other.tf.get('from_date', None)
+        if a_from is not None and b_from is not None:
+            return datetime.strptime(a_from, "%Y-%m-%d") < datetime.strptime(b_from, "%Y-%m-%d")
+        return 0
+
+    def __hash__(self):
+        return hash(tuple(self.tf)) ^ hash(self.tf.values())
+    
     def all_dates(self):
         # no arguments for timeframe? assume past 30 days as an application-wide default
         if self.tf == {}:
@@ -87,6 +98,12 @@ class Timeframe:
         # otherwise unknown input
         assert False
 
+    def __contains__(self, date_to_find):
+        return date_to_find in self.all_dates()
+        
+    def __len__(self):
+        return self.n_days
+
     @property
     def n_days(self):
         if 'past_n_days' in self.tf:
@@ -107,6 +124,11 @@ class Timeframe:
         else:
             all_dates = self.all_dates()
             return "Dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
+
+    @property
+    def most_recent_date(self):
+        to_date = self.tf.get('to_date', None)
+        return to_date if to_date is not None else self.all_dates()[-1]
 
     def __str__(self):
         return f"Timeframe: {self.tf}"
@@ -452,16 +474,15 @@ def all_stocks():
     all_securities = Security.objects.values_list("asx_code", flat=True)
     return set(all_securities)
 
-def find_movers(threshold, required_dates, increasing=True, decreasing=False):
+def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
     the sum over all desired dates for percentage change in the stock price. A negative sum
     implies a decrease, positive an increase in price over the observation period.
     """
     assert threshold >= 0.0
-    assert required_dates is not None
     # NB: missing values will be imputed here, for now.
-    cip = company_prices(all_stocks(), required_dates, fields="change_in_percent", missing_cb=None)
+    cip = company_prices(all_stocks(), timeframe, fields="change_in_percent", missing_cb=None)
 
     movements = cip.sum(axis=0)
     results = movements[movements.abs() >= threshold]
@@ -538,13 +559,15 @@ def get_parquet(tag: str) -> pd.DataFrame:
         return cache_entry.dataframe
     return None
 
-@func.ttl_cache(maxsize=2, ttl=8 * 60 * 60)
-def cached_all_stocks_cip(n_days=2 * 365):
-    assert n_days > 0
-    stock_dates = desired_dates(start_date=n_days)
+def selected_cached_stocks_cip(stocks, timeframe: Timeframe):
+    all_cip = cached_all_stocks_cip(timeframe)
+    return all_cip.filter(items=stocks, axis=0)
+
+@func.lfu_cache(maxsize=4)
+def cached_all_stocks_cip(timeframe: Timeframe):
     all_stocks_cip = company_prices(
         None, 
-        all_dates=stock_dates,
+        timeframe,
         fields="change_in_percent",
         missing_cb=None,
         transpose=True
@@ -552,7 +575,7 @@ def cached_all_stocks_cip(n_days=2 * 365):
     return all_stocks_cip
 
 # NB: careful sizing the cache - dont want to use too much memory!
-dataframe_in_memory_cache = LFUCache(maxsize=200)
+dataframe_in_memory_cache = LFUCache(maxsize=100)
 
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
@@ -679,9 +702,8 @@ def increasing_only_filter(stock_codes, timeframe: Timeframe, field: str, min_va
     if timeframe.n_days < 14:
         raise Http404("Not enough days requested to produce meaningful results: {}".format(timeframe.n_days))
 
-    all_dates = timeframe.all_dates()
     # NB: we dont care here if some tags cant be found
-    df = company_prices(stock_codes, all_dates, field, transpose=True).fillna(0.0)
+    df = company_prices(stock_codes, timeframe, field, transpose=True).fillna(0.0)
     # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
     # at least 2c per share positive max(eps) is required to be considered significant
     ret = []
@@ -701,9 +723,27 @@ def get_required_tags(all_dates, fields):
         required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
     return required_tags
 
+def first_arg_only(*args):
+    return keys.hashkey(args[0])
+
+def rsi_data(stock, timeframe):
+    stock_df = company_prices(
+        [stock],
+        timeframe,
+        fields=["last_price", "volume", "day_low_price", "day_high_price"],
+        missing_cb=None,
+    )
+    n_dates = len(stock_df)
+    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+        raise Http404(
+            "Insufficient price quotes for {} - only {}".format(stock, n_dates)
+        )
+    #print(stock_df)
+    return stock_df
+
 def company_prices(
         stock_codes,
-        all_dates=None,
+        timeframe: Timeframe,
         fields="last_price",
         missing_cb=impute_missing, # or None if you want missing values 
         transpose=False  # return with stocks as columns (default) or rows?
@@ -713,6 +753,7 @@ def company_prices(
     specified dates. By default last_price is provided. Fields may be a list,
     in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
+    print("company_prices(len(stocks) == {}, {}, {}, {}, {})".format(len(stock_codes) if stock_codes is not None else stock_codes, timeframe.description, fields, missing_cb, transpose))
     def prepare_dataframe(df, iterable_of_fields):
         assert isinstance(df, pd.DataFrame)
         is_ok_field = df['field_name'].isin(iterable_of_fields)
@@ -721,7 +762,7 @@ def company_prices(
 
     if not isinstance(fields, str):  # assume iterable if not str...
         assert len(stock_codes) == 1
-        tags = get_required_tags(all_dates, 'uber')
+        tags = get_required_tags(timeframe.all_dates(), 'uber')
         result_df = make_superdf(tags, stock_codes)
         result_df = prepare_dataframe(result_df, fields)
         
@@ -735,9 +776,7 @@ def company_prices(
 
     # print(stock_codes)
     assert isinstance(fields, str)
-    if all_dates is None:
-        all_dates = [datetime.strftime(datetime.now(), "%Y-%m-%d")]
-
+    all_dates = timeframe.all_dates()
     required_tags = get_required_tags(all_dates, 'uber')
     #print(required_tags)
     # construct a "super" dataframe from the constituent parquet data

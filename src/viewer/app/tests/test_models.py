@@ -265,14 +265,16 @@ def mock_superdf_many_fields(*args, **kwargs):
 
 @pytest.mark.django_db
 def test_company_prices(quotation_fixture, monkeypatch):
-    expected_dates = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
+    #expected_dates = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
     monkeypatch.setattr(mdl, 'make_superdf', mock_superdf_all_stocks)
 
     # basic check
+    required_timeframe = Timeframe(from_date='2021-01-01', n=6)
     df = company_prices(['ABC', 'OTHER'], 
+                        required_timeframe,
                         fields='last_price', 
                         missing_cb=None, 
-                        all_dates=expected_dates, transpose=True)
+                        transpose=True)
     assert isinstance(df, pd.DataFrame)
    
     assert len(df) == 2
@@ -282,7 +284,7 @@ def test_company_prices(quotation_fixture, monkeypatch):
     assert is_other_nan == [False, True, True, True, True, True]
    
     # check impute missing functionality
-    df2 = company_prices(['ABC', 'OTHER'], fields='last_price', all_dates=expected_dates, transpose=True)
+    df2 = company_prices(['ABC', 'OTHER'], required_timeframe, fields='last_price', transpose=True)
     assert list(df2.loc['OTHER']) == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     # finally check that a multi-field DataFrame is as requested
@@ -347,7 +349,7 @@ def test_find_movers(quotation_fixture, monkeypatch):
     assert len(all_dates) > 5
     monkeypatch.setattr(mdl, 'all_stocks', mock_all_stocks)
     monkeypatch.setattr(mdl, 'make_superdf', mock_superdf)
-    results = find_movers(10.0, all_dates)
+    results = find_movers(10.0, Timeframe(from_date=all_dates[0], to_date=all_dates[-1]))
     assert results is not None
     #print(results)
     assert len(results) == 1
@@ -396,10 +398,15 @@ def test_timeframe(data, expected):
     all_dates = tf.all_dates()
     assert len(all_dates) == expected[0]
     assert tf.n_days == expected[0]
+    assert tf.n_days == len(tf)
     assert str(tf) == f"Timeframe: {data}"
     assert tf.description == expected[1]
     all_dates_expected = expected[2]
-    assert all_dates == all_dates_expected or all_dates_expected is None # if parameter is None we ignore test
+    if all_dates_expected is not None:
+        assert all_dates == all_dates_expected
+        assert all_dates_expected[-1] in tf
+        assert not '1999-01-01' in tf
+    validate_date(tf.most_recent_date)
 
 @pytest.mark.django_db
 def test_day_low_high(quotation_fixture):

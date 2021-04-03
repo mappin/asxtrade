@@ -84,8 +84,8 @@
 
 <div class="row mt-2">
     <table style="width: 60%" class="mt-4">
-        <tr><td>Expected annual return</td><td>{{ portfolio_performance.0 |percentage|floatformat }}%</td></tr>
-        <tr><td>Annual volatility</td><td>{{ portfolio_performance.1 |percentage|floatformat }}%</td></tr>
+        <tr><td>Expected annual return</td><td>{{ portfolio_performance.0 |floatformat }}%</td></tr>
+        <tr><td>Annual volatility</td><td>{{ portfolio_performance.1 |floatformat }}%</td></tr>
         <tr><td>Sharpe ratio</td><td>{{ portfolio_performance.2 |floatformat }}</tr>
     </table>
 </div>

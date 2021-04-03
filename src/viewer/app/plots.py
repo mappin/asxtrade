@@ -12,7 +12,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.models import stocks_by_sector, desired_dates, day_low_high, company_prices
+from app.models import stocks_by_sector, day_low_high, company_prices, Timeframe
 
 def price_change_bins():
     """
@@ -292,19 +292,12 @@ def plot_company_versus_sector(df, stock, sector):
     return plot_as_inline_html_data(plot)
 
 
-def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent"):
+def plot_market_wide_sector_performance(all_stocks_cip: pd.DataFrame):
     """
     Display specified dates for average sector performance. Each company is assumed to have at zero
     at the start of the observation period. A plot as base64 data is returned.
     """
-    df = company_prices(
-        None, 
-        all_dates=all_dates, 
-        fields="change_in_percent",
-        missing_cb=None,
-        transpose=True,
-    )  # None == all stocks
-    n_stocks = len(df)
+    n_stocks = len(all_stocks_cip)
     # merge in sector information for each company
     code_and_sector = stocks_by_sector()
     n_unique_sectors = len(code_and_sector["sector_name"].unique())
@@ -312,7 +305,7 @@ def plot_market_wide_sector_performance(all_dates, field_name="change_in_percent
 
     #print(df)
     #print(code_and_sector)
-    df = df.merge(code_and_sector, left_index=True, right_on="asx_code")
+    df = all_stocks_cip.merge(code_and_sector, left_index=True, right_on="asx_code")
     print(
         "Found {} stocks, {} sectors and merged total: {}".format(
             n_stocks, len(code_and_sector), len(df)
@@ -387,30 +380,17 @@ def plot_series(
 
 
 def plot_heatmap(
-    companies,
-    all_dates=None,
-    field_name="change_in_percent",
-    bins=None,
-    n_top_bottom=10,
+        df: pd.DataFrame,
+        timeframe: Timeframe,
+        bin_cb=price_change_bins,
+        n_top_bottom=10,
 ):
     """
-    Using field_name plot a data matrix as a heatmap by change_in_percent using the specified bins. If not
-    using change_in_percent as the field name, you may need to adjust the bins to the values being used.
-    The horizontal axis is the dates specified - past 30 days by default. Also computes top10/worst10 and
-    returns a tuple (plot, dataframe, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom items.
+    Plot the specified data matrix as binned values (heatmap) with X axis being dates over the specified timeframe and Y axis being
+    the percentage change on the specified date (other metrics may also be used, but you will likely need to adjust the bins)
+    Also computes top10/worst10 and returns a tuple (plot, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom stocks.
     """
-    if bins is None:
-        bins, labels = price_change_bins()
-    if all_dates is None:
-        all_dates = desired_dates(start_date=30)
-    df = company_prices(
-        companies, 
-        all_dates=all_dates, 
-        fields=field_name,
-        missing_cb=None, 
-        transpose=True
-    )  # by default change_in_percent will be used
-    n_stocks = len(df)
+    bins, labels = bin_cb()
     sum_by_company = df.sum(
         axis=1
     )  # compute totals across all dates for the specified companies to look at performance across the observation period
@@ -422,12 +402,10 @@ def plot_heatmap(
         # NB: this may fail if no prices are available so we catch that error and handle accordingly...
         for date in df.columns:
             df["bin_{}".format(date)] = pd.cut(df[date], bins, labels=labels)
-        sentiment_plot = make_sentiment_plot(
-            df, plot_text_labels=len(all_dates) <= 21
-        )  # show counts per bin iff not too many bins
-        return (sentiment_plot, df, top10, bottom10, n_stocks)
+        sentiment_plot = make_sentiment_plot(df, plot_text_labels=timeframe.n_days <= 21)  # show counts per bin iff not too many bins
+        return (sentiment_plot, top10, bottom10)
     except KeyError:
-        return (None, None, None, None, None)
+        return (None, None, None)
 
 
 def plot_sector_performance(dataframe, descriptor, window_size=14):
