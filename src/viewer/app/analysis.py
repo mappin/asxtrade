@@ -20,8 +20,7 @@ from app.models import company_prices, day_low_high, all_sector_stocks, stocks_b
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
-    plot_as_base64,
-    stocks_by_sector
+    plot_as_base64
 )
 from app.messages import warning
 
