@@ -359,7 +359,7 @@ def assign_strategy(filtered_stocks: pd.DataFrame, algo: str, n_stocks: int) -> 
     elif algo == "ef-risk":
         return (ef_risk_strategy,
                 "Efficient Frontier - efficient risk",
-                {'returns': mu, 'cov_matrix': s, 'target_volatility': 2.0}, mu, s)
+                {'returns': mu, 'cov_matrix': s, 'target_volatility': 5.0}, mu, s)
     elif algo == "ef-minvol":
         return (ef_minvol_strategy,
                 "Efficient Frontier - minimum volatility",
