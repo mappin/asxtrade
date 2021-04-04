@@ -163,7 +163,14 @@
     </div>
 {% endif %}
 
-{% if momentum is None %}
+{% if sector_breakdown_plot is None %}
+{% else %}
+    <div class="row mt-4">
+        <h3>Breakdown by sector</h3>
+    </div>
+    <div class="row mt-4">
+        <img src="data:image/png;base64, {{ sector_breakdown_plot }}" />
+    </div>
 {% endif %}
 
 {% endblock %}
