@@ -132,7 +132,9 @@ def test_all_sectors(all_sector_fixture):
 def test_all_stocks(security):
     assert security is not None
     assert len(security.asx_code) >= 3
-    assert all_stocks() == set([security.asx_code])
+    assert all_stocks(strict=False) == set([security.asx_code])
+    # the following is only true since we dont specify the proper security name in the fixture
+    assert all_stocks(strict=True) == set()
 
 @pytest.fixture
 def uw_fixture(django_user_model):
