@@ -379,6 +379,32 @@ def plot_series(
     return plot_as_inline_html_data(plot)
 
 
+def plot_breakdown(cip_df: pd.DataFrame):
+    """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""
+    cols_to_drop = [colname for colname in cip_df.columns if colname.startswith('bin_')]
+    df = cip_df.drop(columns=cols_to_drop)
+    df = pd.DataFrame(df.sum(axis='columns'), columns=['sum'])
+    df = df.merge(stocks_by_sector(), left_index=True, right_on='asx_code')
+
+    assert set(df.columns) == set(['sum', 'asx_code', 'sector_name'])
+    df['increasing'] = df.apply(lambda row: 'up' if row['sum'] >= 0.0 else 'down', axis=1)
+    sector_names = df['sector_name'].value_counts().index.tolist() # sort bars by value count (ascending)
+    sector_names_cat = pd.Categorical(df['sector_name'], categories=sector_names)
+    df = df.assign(sector_name_cat=sector_names_cat)
+
+    #print(df)
+    plot = (
+        p9.ggplot(df, p9.aes(x='factor(sector_name_cat)', fill='factor(increasing)'))
+        + p9.geom_bar()
+        + p9.labs(x="Sector", y="Number of stocks")
+        + p9.theme(axis_text_y=p9.element_text(size=7), 
+                   subplots_adjust={"left": 0.2, 'right': 0.85},
+                   legend_title=p9.element_blank()
+                  )
+        + p9.coord_flip()
+    )
+    return plot_as_inline_html_data(plot)
+
 def plot_heatmap(
         df: pd.DataFrame,
         timeframe: Timeframe,
