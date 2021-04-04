@@ -78,6 +78,7 @@ from app.plots import (
     plot_boxplot_series,
     plot_trend,
     plot_breakdown,
+    plot_market_cap_distribution,
 )
 
 class DividendYieldSearch(
@@ -534,6 +535,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         "sector_performance": sector_performance_plot,
         "sector_performance_title": "Cumulative sector avg. performance: {}".format(sector_timeframe.description),
         "title": "Market sentiment: {}".format(timeframe.description),
+        "market_cap_distribution_plot": plot_market_cap_distribution(tuple(df.index), latest_quotation_date('ANZ'), sector_df.columns[0])
     }
     return render(request, "market_sentiment_view.html", context=context)
 
