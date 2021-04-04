@@ -12,7 +12,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.models import stocks_by_sector, day_low_high, company_prices, Timeframe
+from app.models import stocks_by_sector, day_low_high, company_prices, Timeframe, valid_quotes_only
 
 def price_change_bins():
     """
@@ -378,6 +378,45 @@ def plot_series(
     )
     return plot_as_inline_html_data(plot)
 
+def bin_market_cap(row):
+    mc = row[0] # NB: expressed in millions $AUD already (see plot_market_cap_distribution() below)
+    if mc < 2000:
+        return "small"
+    elif mc > 10000:
+        return "large"
+    elif mc is not None:
+        return "med"
+    else:
+        return "NA"
+
+def make_quote_df(quotes, asx_codes, prefix):
+    df = pd.DataFrame.from_dict({q.asx_code: (q.market_cap / (1000 * 1000), q.last_price, q.number_of_shares) 
+                                for q in quotes if q.market_cap is not None and q.asx_code in asx_codes}, 
+                                orient="index", columns=["market_cap", "last_price", "shares"])
+    df['bin'] = df.apply(bin_market_cap, axis=1)
+    df['market'] = prefix
+    return df
+
+def plot_market_cap_distribution(stocks, ymd: str, ymd_start_of_timeframe: str):
+    #print(ymd)
+    latest_quotes = valid_quotes_only(ymd)
+    earliest_quotes = valid_quotes_only(ymd_start_of_timeframe)
+    asx_codes = set(stocks)
+   
+    latest_df = make_quote_df(latest_quotes, asx_codes, ymd)
+    earliest_df = make_quote_df(earliest_quotes, asx_codes, ymd_start_of_timeframe)
+    df = latest_df.append(earliest_df)
+
+    #print(df)
+    small_text = p9.element_text(size=7)
+    plot = p9.ggplot(df) + \
+           p9.geom_boxplot(p9.aes(x='market', y='market_cap')) + \
+           p9.facet_wrap("bin", scales="free_y") + \
+           p9.labs(x='', y='Market cap. ($AUD Millions)') + \
+           p9.theme(subplots_adjust={'wspace': 0.30}, 
+                    axis_text_x=small_text, 
+                    axis_text_y=small_text)
+    return plot_as_inline_html_data(plot)
 
 def plot_breakdown(cip_df: pd.DataFrame):
     """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""

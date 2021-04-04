@@ -39,12 +39,18 @@
         <div class="menubar">
             <h3>Find</h3>
             <ul class="nav flex-column">{% menu search %}
-                {% for item in menuitems %}<li class="nav-item"><a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
+                {% for item in menuitems %}
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                  </li>
                 {% endfor %}
             </ul>
             <h3>Show</h3>
             <ul class="nav flex-column">{%menu stats %}
-                {% for item in menuitems %}<li class="nav-item"><a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a></li>
+                {% for item in menuitems %}
+                  <li class="nav-item">
+                    <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                  </li>
                 {% endfor %}
             </ul>
         </div>
@@ -77,5 +83,6 @@
         </div>
 
       </td></tr>
+      </table>
     </body>
 </html>
