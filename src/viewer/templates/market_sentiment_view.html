@@ -1,42 +1,41 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row mt-4">
-<p>
-This visualisation shows the number of stocks undergoing a daily price change (in percentage terms)
-amongst fixed price change bins across the past {{ n_days }} trading days. Stocks moving <1e-6%
-are not shown ie. barely moving stocks. Bins with few stocks are shown in blue, bins with lots
-of stocks are shown in yellow and the number present are displayed in the centre of each bin.
-The data may be downloaded in Excel-format using the button below the plot.
-</p>
+<div class="row">
+    <p class="mt-4">
+    This visualisation shows the number of stocks undergoing a daily price change (in percentage terms)
+    amongst fixed price change bins across the past {{ n_days }} trading days. Stocks moving &lt;1e-6%
+    are not shown ie. barely moving stocks. Bins with few stocks are shown in blue, bins with lots
+    of stocks are shown in yellow and the number present are displayed in the centre of each bin.
+    The data may be downloaded in Excel-format using the button below the plot.
+    </p>
 
-<img class="market-sentiment" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
+    <img class="market-sentiment mt-4" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
 
-<span class="row">
-    <a href="/data/market_sentiment/csv" class="btn btn-primary">Download CSV</a>&nbsp;&nbsp;
-    <a href="/data/market_sentiment/excel" class="btn btn-primary">Download Excel</a>
-</span>
+    <span class="row">
+        <a href="/data/market_sentiment/csv" class="btn btn-primary">Download CSV</a>&nbsp;&nbsp;
+        <a href="/data/market_sentiment/excel" class="btn btn-primary">Download Excel</a>
+    </span>
 </div>
 
 {% if best_ten is None %}
 {% else %}
-    <h3 class="row mt-4">Top {{ n_top_bottom }}</h3>
+    <h3 class="mt-4">Top {{ n_top_bottom }}</h3>
 
     <p>
     Best performing stocks across the entire observation period (in percentage terms).
     May be used to identify stocks increasing in price more than any other shown.
     </p>
 
-    <div class="row col-md-auto">
-
-    <table>
-       {% include "stock_series.html" with series=best_ten %}
-    </table>
+    <div class="col-md-auto">
+        <table>
+        {% include "stock_series.html" with series=best_ten %}
+        </table>
     </div>
 
-    <h3 class="row mt-4">Bottom {{ n_top_bottom }}</h3>
+    <h3 class="mt-4">Bottom {{ n_top_bottom }}</h3>
 
-    <div class="row col-md-auto">
+    <div class="col-md-auto">
     <table>
         {% include "stock_series.html" with series=worst_ten %}
     </table>
@@ -45,18 +44,33 @@ The data may be downloaded in Excel-format using the button below the plot.
 
 {% if sector_performance is None %}
 {% else %}
-<div class="row col-md-auto">
+<div class="row">
     <h3 class="mt-4">{{ sector_performance_title }}</h3>
-    <p>
-    This figure shows all ASX sectors with the average cumulative change (in percentage terms) over the last 180 trading days.
-    It can be used to identify sector-wide trends over time.
-    </p>
 
-    <img class="sector-performance-plot" src="data:image/png;base64, {{ sector_performance }}" alt="ASX sector performance plot">
+    <ul>
+        <li>This figure shows all ASX sectors with the average cumulative change (in percentage terms) over the timeframe</li>
+        <li>Shows sector-wide average stock performance over time</li>
+    </ul>
+
+    <img class="sector-performance-plot mt-4" src="data:image/png;base64, {{ sector_performance }}" alt="ASX sector performance plot" />
 </div>
 
-<div class="mt-4 row">
+<div class="row">
     <a href="/show/recent_sector_performance" class="btn btn-primary">Recent sector performance</a>
+</div>
+{% endif %}
+
+{% if market_cap_distribution_plot is None %}
+{% else %}
+<div class="row">
+    <h3 class="mt-4">Distribution of ASX market cap</h3>
+    <ul>
+        <li>Small cap are those ASX listed stocks with a market cap (shares * last_price) of less than $AUD 2 billion</li>
+        <li>Medium cap companies have a market cap between 2 and 10 billion $AUD</li>
+        <li>Large cap have a market cap in excess of 10 billion $AUD</li>
+        <li>This figure shows two dates: most recent and six months ago to show trends in market cap between now and then for all company sizes</li>
+    </ul>
+    <img src="data:image/png;base64, {{ market_cap_distribution_plot }}" alt="ASX market cap distribution" />
 </div>
 {% endif %}
 
