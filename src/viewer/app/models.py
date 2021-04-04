@@ -100,7 +100,7 @@ class Timeframe:
 
     def __contains__(self, date_to_find):
         return date_to_find in self.all_dates()
-        
+
     def __len__(self):
         return self.n_days
 
@@ -469,9 +469,19 @@ def desired_dates(
     assert len(all_dates) > 0
     return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
-@func.lru_cache(maxsize=1)
-def all_stocks():
-    all_securities = Security.objects.values_list("asx_code", flat=True)
+@func.lru_cache(maxsize=2)
+def all_stocks(strict=True):
+    """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
+    if strict:
+       all_securities = []
+       for security in Security.objects.all():
+           name = security.security_name.lower()
+           if 'etf' in name or 'ordinary' in name:
+               #print(name)
+               all_securities.append(security.asx_code)
+    else:
+        all_securities = Security.objects.values_list("asx_code", flat=True)
+   
     return set(all_securities)
 
 def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False):
@@ -560,8 +570,13 @@ def get_parquet(tag: str) -> pd.DataFrame:
     return None
 
 def selected_cached_stocks_cip(stocks, timeframe: Timeframe):
+    n = len(stocks)
+    assert n > 0
     all_cip = cached_all_stocks_cip(timeframe)
-    return all_cip.filter(items=stocks, axis=0)
+    result_df = all_cip.filter(items=stocks, axis=0)
+    print("Selected stocks cip: found {} stocks (ie. rows)".format(len(result_df)))
+    assert len(result_df) <= n
+    return result_df
 
 @func.lfu_cache(maxsize=4)
 def cached_all_stocks_cip(timeframe: Timeframe):
@@ -754,6 +769,7 @@ def company_prices(
     in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
     print("company_prices(len(stocks) == {}, {}, {}, {}, {})".format(len(stock_codes) if stock_codes is not None else stock_codes, timeframe.description, fields, missing_cb, transpose))
+   
     def prepare_dataframe(df, iterable_of_fields):
         assert isinstance(df, pd.DataFrame)
         is_ok_field = df['field_name'].isin(iterable_of_fields)
