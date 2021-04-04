@@ -30,6 +30,7 @@ from app.models import (
     Sector,
     all_available_dates,
     all_sector_stocks,
+    stocks_by_sector,
     Timeframe,
     latest_quote,
     valid_quotes_only,
@@ -75,7 +76,8 @@ from app.plots import (
     plot_company_rank,
     plot_portfolio,
     plot_boxplot_series,
-    plot_trend
+    plot_trend,
+    plot_breakdown,
 )
 
 class DividendYieldSearch(
@@ -274,30 +276,37 @@ class MoverSearch(DividendYieldSearch):
     action_url = "/search/movers"
     matching_companies = ()
     timeframe = Timeframe(past_n_days=30)
+    title = "Find companies exceeding threshold movement (%)"
+    n_top_bottom = 20
+
+    def add_sentiment(self, df: pd.DataFrame, d):
+        """Heatmap of change-in-percent performance over the timeframe in the df"""
+        sentiment_plot, top10, bottom10 = None, None, None
+        if len(self.matching_companies) > 0:
+            print("Plotting sentiment for {} stocks".format(len(df)))        
+            sentiment_plot, top10, bottom10 = plot_heatmap(df, self.timeframe, n_top_bottom=self.n_top_bottom)
+
+        if sentiment_plot is not None:
+            d.update({ 
+                "sentiment_heatmap": sentiment_plot, 
+                "sentiment_heatmap_title": "Sentiment over: {}".format(self.timeframe.description), 
+                "best_ten": top10,
+                "worst_ten": bottom10
+            })
 
     def additional_context(self, context):
-        print("Found {}".format(len(self.matching_companies)))
-        n_top_bottom = 20
-        
-        if len(self.matching_companies) > 0:
-            sentiment_plot, _, top10, bottom10, _ = plot_heatmap(self.matching_companies,
-                                                                 self.timeframe,
-                                                                 n_top_bottom=n_top_bottom)
-        else:
-            sentiment_plot, top10, bottom10 = (None, None, None)
-        
-        n_days = self.timeframe.n_days
-        return {
-            "title": "Find companies exceeding threshold movement (%)",
-            "sentiment_heatmap": sentiment_plot,
-            "sentiment_heatmap_title": "Sentiment for movers: past {} days".format(n_days),
-            "n_days": n_days,
+        d = {
+            "title": self.title,
+            "n_days": self.timeframe.n_days,
             "n_stocks_plotted": len(self.matching_companies),
-            "n_top_bottom": n_top_bottom,
-            "best_ten": top10,
-            "worst_ten": bottom10,
+            "n_top_bottom": self.n_top_bottom,
             "watched": user_watchlist(self.request.user),
         }
+
+        df = selected_cached_stocks_cip(self.matching_companies, self.timeframe)
+        self.add_sentiment(df, d)
+        d.update({"sector_breakdown_plot": plot_breakdown(df)})
+        return d
 
     def get_queryset(self, **kwargs):
         if any(
@@ -305,7 +314,7 @@ class MoverSearch(DividendYieldSearch):
         ):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
-        self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days"))
+        self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days", 30))
         user_sort = self.request.GET.get("sort_by")
         df = find_movers(
             threshold_percentage,
@@ -740,15 +749,10 @@ def sum_portfolio(df, date_str, stock_items):
     )
     return portfolio_worth
 
-class MarketCapSearch(DividendYieldSearch):
+class MarketCapSearch(MoverSearch):
     action_url = "/search/market-cap"
     form_class = MarketCapSearchForm
-    template_name = 'search_form.html'
-
-    def additional_context(self, context):
-        return {
-            "title": "Find companies by market capitalisation"
-        }
+    title = "Find companies by market capitalisation"
 
     def get_queryset(self, **kwargs):
         # identify all stocks which have a market cap which satisfies the required constraints
@@ -759,6 +763,7 @@ class MarketCapSearch(DividendYieldSearch):
                     .exclude(market_cap__lt=min_cap * 1000 * 1000) \
                     .exclude(market_cap__gt=max_cap * 1000 * 1000)
         print("Found {} quotes, as at {}, satisfying market cap criteria".format(quotes_qs.count(), most_recent_date))
+        self.matching_companies = tuple([quote.asx_code for quote in quotes_qs])
         return self.sort_by(quotes_qs, self.request.GET.get('sort_by'))
 
 market_cap_search = MarketCapSearch.as_view()
@@ -869,8 +874,9 @@ def show_matching_companies(
         # add sentiment heatmap amongst watched stocks
         df = selected_cached_stocks_cip(matching_companies, sentiment_timeframe)
         sentiment_heatmap_data, top10, bottom10 = plot_heatmap(df, sentiment_timeframe, n_top_bottom=n_top_bottom)
+        sector_breakdown_plot = plot_breakdown(selected_cached_stocks_cip(matching_companies, sentiment_timeframe))
     else:
-        page_obj = top10 = bottom10 = sentiment_heatmap_data = None
+        page_obj = top10 = bottom10 = sentiment_heatmap_data = sector_breakdown_plot = None
         warning(request, "No matching companies found.")
 
     context = {
@@ -884,6 +890,7 @@ def show_matching_companies(
         "virtual_purchases": virtual_purchases_by_user,
         "sentiment_heatmap": sentiment_heatmap_data,
         "sentiment_heatmap_title": "{}: {}".format(heatmap_title, sentiment_timeframe.description),
+        "sector_breakdown_plot": sector_breakdown_plot,
     }
     if extra_context:
         context.update(extra_context)
