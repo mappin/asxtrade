@@ -33,9 +33,9 @@
         <li>A total of {{ n_stocks_considered }} stocks were considered during portfolio optimisation</li>
         <li>A total of {{ n_stocks_in_portfolio }} stocks are reported in the weights/share allocation below</li>
         <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
-        <li>The most weights stocks reported must explain at least 80% of the portfolio: remainder may not be reported as too small a part of the portfolio</li>
-        <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random</li>
-        <li>Only stock prices are considered: dividends, stock splits, capital raisings and any other events are ignored</li>
+        <li>The most weighted stocks reported must explain at least 80% of the portfolio: small weighted stocks may not be reported</li>
+        <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random. You may increase this at own risk.</li>
+        <li>Only stock prices are considered: dividends, stock splits, capital raisings and many other events are ignored</li>
         <li>Timeframe: {{ timeframe.date_range }}</li>
     </ol>
 </div>
