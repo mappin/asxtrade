@@ -115,6 +115,9 @@ class Timeframe:
         else:
             return len(self.all_dates()) # expensive
 
+    def date_range(self):
+        return "{} - {}".format(self.earliest_date, self.most_recent_date)
+
     @property
     def description(self):
         if 'past_n_days' in self.tf or self.tf == {}:
@@ -125,6 +128,11 @@ class Timeframe:
             all_dates = self.all_dates()
             return "Dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
 
+    @property
+    def earliest_date(self):
+        from_date = self.tf.get('from_date', None)
+        return from_date if from_date is not None else self.all_dates()[0]
+        
     @property
     def most_recent_date(self):
         to_date = self.tf.get('to_date', None)
@@ -474,10 +482,10 @@ def desired_dates(
 def all_stocks(strict=True):
     """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
     if strict:
-       all_securities = []
-       for security in Security.objects.all():
-           name = security.security_name.lower()
-           if 'etf' in name or 'ordinary' in name:
+        all_securities = []
+        for security in Security.objects.all():
+            name = security.security_name.lower()
+            if 'etf' in name or 'ordinary' in name:
                #print(name)
                all_securities.append(security.asx_code)
     else:

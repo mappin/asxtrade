@@ -36,6 +36,7 @@
         <li>The most weights stocks reported must explain at least 80% of the portfolio: remainder may not be reported as too small a part of the portfolio</li>
         <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random</li>
         <li>Only stock prices are considered: dividends, stock splits, capital raisings and any other events are ignored</li>
+        <li>Timeframe: {{ timeframe.date_range }}</li>
     </ol>
 </div>
     
@@ -75,6 +76,7 @@
         {% if leftover_funds > 0.0 %}
         <li>Due to whole share purchases, some funds could not be allocated: ${{ leftover_funds|floatformat }}</li>
         {% endif %}
+        <li>Total profit ($AUD) over timeframe: {{ total_profit_aud |floatformat }}</li>
     </ul>
 </div>
 

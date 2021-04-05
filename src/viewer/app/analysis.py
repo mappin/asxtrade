@@ -15,7 +15,7 @@ from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance, plot_efficient_frontier
 from pypfopt.hierarchical_portfolio import HRPOpt
-from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe
+from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe, validate_date
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
@@ -313,19 +313,30 @@ def ef_minvol_strategy(returns=None, cov_matrix=None):
     pt = ef.portfolio_performance()
     return cw, pt, ef
 
-def setup_optimisation_matrices(stocks, timeframe: Timeframe):
+def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, messages):
+    """
+    Remove stocks which have no data at start/end of the timeframe despite imputation that has been performed. 
+    This ensures that profit/loss can be calculated without missing data and that optimisation is not biased towards ridiculous outcomes.
+    """
+    validate_date(date_to_check)
+    missing_prices = list(df.columns[df.loc[date_to_check].isna()])
+    if len(missing_prices) > 0:
+        df = df.drop(columns=missing_prices)
+        messages.add("Ignoring stocks with no data at {}: {}".format(date_to_check, missing_prices))
+    return df
+ 
+def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     
-    stock_prices = company_prices(stocks, 
-                        timeframe, 
-                        missing_cb=None)
+    stock_prices = company_prices(stocks, timeframe, fields='last_price', missing_cb=None)
+    stock_prices = stock_prices.fillna(method='bfill', limit=10, axis=0)
     latest_date = stock_prices.index[-1]
-    #print(latest_date)
+    earliest_date = stock_prices.index[0]
+    #print(stock_prices)
 
-    missing_latest_prices = list(stock_prices.columns[stock_prices.loc[latest_date].isna()])
-    if len(missing_latest_prices) > 0:
-        stock_prices = stock_prices.drop(columns=missing_latest_prices)
-    
+    stock_prices = remove_bad_stocks(stock_prices, earliest_date, messages)
+    stock_prices = remove_bad_stocks(stock_prices, latest_date, messages)
+
     latest_prices = stock_prices.loc[latest_date]
     first_prices = stock_prices.loc[stock_prices.index[0]]
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
@@ -390,7 +401,7 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
     assert max_stocks >= 5
 
     messages = set()
-    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe)
+    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, messages)
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
         strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
