@@ -101,7 +101,7 @@ def show_companies(
         stocks_queryset, _ = latest_quote(matching_companies)
         # FALLTHRU
 
-    # sort queryset
+    # sort queryset as this will often be requested by the USER
     sort_by = tuple(request.GET.get("sort_by", "asx_code").split(","))
     info(request, "Sorting by {}".format(sort_by))
     stocks_queryset = stocks_queryset.order_by(*sort_by)
@@ -430,11 +430,7 @@ def get_dataset(dataset_wanted):
     assert dataset_wanted in ("market_sentiment")
 
     if dataset_wanted == "market_sentiment":
-        _, df, _, _, _ = plot_heatmap(
-            None, 
-            Timeframe(), 
-            n_top_bottom=20
-        )
+        df = cached_all_stocks_cip(Timeframe())
         return df
     else:
         raise ValueError("Unsupported dataset {}".format(dataset_wanted))
