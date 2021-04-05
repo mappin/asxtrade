@@ -57,10 +57,10 @@ def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
     # sort by ascending overall slope (regardless of NRMSE)
     return OrderedDict(sorted(trends.items(), key=lambda t: t[1][0]))
 
-def rank_cumulative_change(df: pd.DataFrame, all_dates):
+def rank_cumulative_change(df: pd.DataFrame, timeframe: Timeframe):
     cum_sum = defaultdict(float)
-    print(df)
-    for date in filter(lambda k: k in df.columns, all_dates):
+    #print(df)
+    for date in filter(lambda k: k in df.columns, timeframe.all_dates()):
         for code, price_change in df[date].fillna(0.0).iteritems():
             cum_sum[code] += price_change
         rank = pd.Series(cum_sum).rank(method='first', ascending=False)
