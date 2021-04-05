@@ -64,15 +64,20 @@ class Timeframe:
     def __hash__(self):
         return hash(tuple(self.tf)) ^ hash(self.tf.values())
     
+    def _is_empty_state(self):
+        k = set(self.tf.keys())
+        return k == set() or k == set(['today'])
+
     def all_dates(self):
         # no arguments for timeframe? assume past 30 days as an application-wide default
-        if self.tf == {}:
-            return desired_dates(None, start_date=self.n_days)
+        today = self.tf.get('today', None)  # allow specification of what today is to permit easier unit tests
+        if self._is_empty_state():
+            return desired_dates(today=today, start_date=30)
 
         # most common use case: past N days only
         past_n_days = self.tf.get('past_n_days', None)
         if past_n_days:
-            return desired_dates(None, start_date=past_n_days)
+            return desired_dates(today=today, start_date=past_n_days)
 
         # timeframe of interest: from .. to date
         from_date = self.tf.get('from_date', None)
@@ -93,7 +98,7 @@ class Timeframe:
         if all([from_date is not None, n is not None]):
             validate_date(from_date)
             assert n > 0
-            return desired_dates(today=None, start_date=from_date)[:n]
+            return desired_dates(today=today, start_date=from_date)[:n]
 
         # otherwise unknown input
         assert False
@@ -120,26 +125,28 @@ class Timeframe:
 
     @property
     def description(self):
-        if 'past_n_days' in self.tf or self.tf == {}:
-            return "Past {} days".format(self.tf.get('past_n_days', self.n_days))
+        if 'past_n_days' in self.tf or self._is_empty_state():
+            return "past {} days since {}".format(self.tf.get('past_n_days', self.n_days), self.earliest_date)
         elif all(['from_date' in self.tf, 'to_date' in self.tf]):
-            return "Dates {} thru {} (inclusive)".format(self.tf.get('from_date'), self.tf.get('to_date'))
+            return "dates {} thru {} (inclusive)".format(self.tf.get('from_date'), self.tf.get('to_date'))
         else:
             all_dates = self.all_dates()
-            return "Dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
+            return "dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
 
     @property
     def earliest_date(self):
         from_date = self.tf.get('from_date', None)
         return from_date if from_date is not None else self.all_dates()[0]
-        
+
     @property
     def most_recent_date(self):
         to_date = self.tf.get('to_date', None)
         return to_date if to_date is not None else self.all_dates()[-1]
 
     def __str__(self):
-        return f"Timeframe: {self.tf}"
+        d = dict(**self.tf)  # remove some state which interferes with unit tests 
+        d.pop('today', None)
+        return f"Timeframe: {d}"
 
 class Quotation(model.Model):
     _id = ObjectIdField()

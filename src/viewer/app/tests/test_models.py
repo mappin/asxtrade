@@ -382,21 +382,22 @@ def test_latest_quote(quotation_fixture, monkeypatch):
 @pytest.mark.parametrize("data,expected", [
     (
         {}, 
-        (30, "Past 30 days", None)
+        (30, "past 30 days since 2021-03-02", None)
     ),
     (
         {'from_date':'2020-01-01', 'to_date': '2020-01-07'},
-        (7, "Dates 2020-01-01 thru 2020-01-07 (inclusive)", 
+        (7, "dates 2020-01-01 thru 2020-01-07 (inclusive)", 
          ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04', '2020-01-05', '2020-01-06', '2020-01-07'])
     ),
     (
         {'from_date':'2020-01-01', 'n': 3},
-        (3, "Dates 2020-01-01 thru 2020-01-03 (inclusive)",
+        (3, "dates 2020-01-01 thru 2020-01-03 (inclusive)",
          ['2020-01-01', '2020-01-02', '2020-01-03'])
     )
 ])
 def test_timeframe(data, expected):
-    tf = Timeframe(**data)
+    print(data)
+    tf = Timeframe(**data, today=datetime(year=2021, month=3, day=31).date()) # note today is fixed date for easier testing
     all_dates = tf.all_dates()
     assert len(all_dates) == expected[0]
     assert tf.n_days == expected[0]
