@@ -11,6 +11,7 @@ from bson.objectid import ObjectId
 from django import forms
 from django.shortcuts import render
 from django.core.paginator import Paginator
+from django.db.models.query import QuerySet
 from django.views.generic import FormView, UpdateView, DeleteView, CreateView
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -81,85 +82,118 @@ from app.plots import (
     plot_market_cap_distribution,
 )
 
+
+def show_companies(
+        matching_companies, # may be QuerySet or iterable of stock codes (str)
+        request,
+        sentiment_timeframe: Timeframe,
+        extra_context=None,
+        template_name="all_stocks.html",
+):
+    """
+    Support function to public-facing views to eliminate code redundancy
+    """
+    virtual_purchases_by_user = user_purchases(request.user)
+
+    if isinstance(matching_companies, QuerySet):
+        stocks_queryset = matching_companies  # we assume QuerySet is already sorted by desired criteria
+    elif len(matching_companies) > 0:
+        stocks_queryset, _ = latest_quote(matching_companies)
+        # FALLTHRU
+
+    # sort queryset
+    sort_by = tuple(request.GET.get("sort_by", "asx_code").split(","))
+    info(request, "Sorting by {}".format(sort_by))
+    stocks_queryset = stocks_queryset.order_by(*sort_by)
+
+    # keep track of stock codes for template convenience
+    asx_codes = [quote.asx_code for quote in stocks_queryset.all()]
+    n_top_bottom = extra_context['n_top_bottom'] if 'n_top_bottom' in extra_context else 20
+    print("show_companies: found {} stocks".format(len(asx_codes)))
+    
+    # setup context dict for the render
+    context = {
+        # NB: title and heatmap_title are expected to be supplied by caller via extra_context
+        "timeframe": sentiment_timeframe,
+        "title": "Caller must override",
+        "watched": user_watchlist(request.user),
+        "n_stocks": len(asx_codes),
+        "n_top_bottom": n_top_bottom,
+        "virtual_purchases": virtual_purchases_by_user,
+    }
+
+    # since we sort above, we must setup the pagination also...
+    assert isinstance(stocks_queryset, QuerySet)
+    paginator = Paginator(stocks_queryset, 50)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.page(page_number)
+    context['page_obj'] = page_obj
+    context['object_list'] = paginator
+
+    if len(asx_codes) <= 0:
+        warning(request, "No matching companies found.")
+    else:
+        df = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
+        sentiment_heatmap_data, top10, bottom10 = plot_heatmap(df, sentiment_timeframe, n_top_bottom=n_top_bottom)
+        sector_breakdown_plot = plot_breakdown(df)
+        context.update({
+            "best_ten": top10,
+            "worst_ten": bottom10,
+            "sentiment_heatmap": sentiment_heatmap_data,
+            "sentiment_heatmap_title": "{}: {}".format(context['title'], sentiment_timeframe.description),
+            "sector_breakdown_plot": sector_breakdown_plot,
+        })
+
+    if extra_context:
+        context.update(extra_context)
+    add_messages(request, context)
+    #print(context)
+    return render(request, template_name, context=context)
+
 class DividendYieldSearch(
         SearchMixin,
         LoginRequiredMixin,
-        MultipleObjectMixin,
         MultipleObjectTemplateResponseMixin,
         FormView,
 ):
     form_class = DividendSearchForm
     template_name = "search_form.html"  # generic template, not specific to this view
     action_url = "/search/by-yield"
-    paginate_by = 50
     ordering = ("-annual_dividend_yield",)
-    as_at_date = None
-    n_top_bottom = 20
+    timeframe = Timeframe(past_n_days=30)
 
     def additional_context(self, context):
         """
             Return the additional fields to be added to the context by render_to_response(). Subclasses
             should override this rather than the template design pattern implementation of render_to_response()
         """
-        # all() to get a fresh queryset instance
-        vec = context["paginator"].object_list.all()
-        # print(vec)
-        qs = [stock.asx_code for stock in vec]
-        timeframe = Timeframe()
-
-        if len(qs) == 0:
-            warning(self.request, "No stocks to report")
-            sentiment_data, top10, bottom10 = (None, None, None)
-        else:
-            df = cached_all_stocks_cip(timeframe)
-            sentiment_data, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=self.n_top_bottom)
-
         return {
-            "most_recent_date": self.as_at_date,
-            "sentiment_heatmap": sentiment_data,
-            "watched": user_watchlist(
-                self.request.user
-            ),  # to ensure bookmarks are correct
-            "n_top_bottom": self.n_top_bottom,
-            "best_ten": top10,
-            "worst_ten": bottom10,
             "title": "Find by dividend yield or P/E",
-            "sentiment_heatmap_title": "Sentiment for {} stocks: {}".format(
-                len(qs), timeframe.description
-            ),
+            "n_top_bottom": 20
         }
-
-    def sort_by(self, qs, sort_by):
-        assert qs is not None
-        if sort_by is None:
-            print("Sorting by {}".format(self.ordering))
-            qs = qs.order_by(*self.ordering)
-        else:
-            sort_tuple = tuple(sort_by.split(","))
-            print("Sorting by {}".format(sort_tuple))
-            qs = qs.order_by(*sort_tuple)
-        return qs
 
     def render_to_response(self, context):
         """
-        A template design pattern to organise the response. Provides an additional_context()
-        method for subclasses to use. Response is guaranteed to include:
-        1) messages informing the user of issues
-        2) additional context for the django template
-        or an exception raised
+        Invoke show_companies()
         """
         context.update(self.additional_context(context))
-        add_messages(self.request, context)
-        return super().render_to_response(context)
+        
+        return show_companies( # will typically invoke show_companies() to share code across all views
+            self.qs,
+            self.request,
+            self.timeframe,
+            context,
+            template_name=self.template_name
+        )
 
     def get_queryset(self, **kwargs):
         if kwargs == {}:
             return Quotation.objects.none()
 
-        self.as_at_date = latest_quotation_date("ANZ")
+        as_at = latest_quotation_date('ANZ')
         min_yield = kwargs.get("min_yield") if "min_yield" in kwargs else 0.0
         max_yield = kwargs.get("max_yield") if "max_yield" in kwargs else 10000.0
-        results = Quotation.objects.filter(fetch_date=self.as_at_date).\
+        results = Quotation.objects.filter(fetch_date=as_at).\
                                     filter(annual_dividend_yield__gte=min_yield).\
                                     filter(annual_dividend_yield__lte=max_yield)
 
@@ -169,7 +203,8 @@ class DividendYieldSearch(
             results = results.filter(pe__lt=kwargs.get("max_pe"))
         if "min_eps_aud" in kwargs:
             results = results.filter(eps__gte=kwargs.get("min_eps_aud"))
-        return self.sort_by(results, self.request.GET.get("sort_by"))
+        self.qs = results
+        return self.qs
 
 
 dividend_search = DividendYieldSearch.as_view()
@@ -179,58 +214,17 @@ class SectorSearchView(DividendYieldSearch):
     action_url = "/search/by-sector"
     sector = "Communication Services"   # default to Comms. Services if not specified
     sector_id = None
-    query_state = None
 
     def additional_context(self, context):
-        #assert isinstance(self.sector, str)
-        #assert isinstance(self.sector_id, int)
-
         ret = {
             # to highlight top10/bottom10 bookmarks correctly
-            "watched": user_watchlist(self.request.user),
             "title": "Find by company sector",
             "sector_name": self.sector,
             "sector_id": self.sector_id,
         }
-        if self.query_state is not None:
-            ret.update(self.query_state)
-
-        ret["sentiment_heatmap_title"] = "{}: past {} days".format(
-            self.sector, self.query_defaults("n_days")
-        )
-        if 'top10' not in context:
-            ret['top10'] = None
-        if 'bottom10' not in context:
-            ret['bottom10'] = None
-
-        add_messages(self.request, ret)
+  
+        ret["sentiment_heatmap_title"] = "{}".format(self.sector)
         return ret
-
-    def get_desired_stocks(self, wanted_stocks, want_best10, want_worst10, top10, bottom10):
-        assert wanted_stocks is not None
-
-        if want_best10 or want_worst10:
-            wanted = set()
-            restricted = False
-            if want_best10:
-                wanted = wanted.union(top10.index)
-                restricted = True
-            if want_worst10:
-                wanted = wanted.union(bottom10.index)
-                restricted = True
-            if restricted:
-                return set(wanted_stocks.intersection(wanted))
-
-        return set(wanted_stocks)
-
-    def query_defaults(self, field_name):
-        if field_name == "n_days":
-            return 30
-        elif field_name == "n_top_bottom":
-            return self.n_top_bottom
-
-        assert False # field_name not known
-        return None
 
     def get_queryset(self, **kwargs):
         # user never run this view before?
@@ -242,72 +236,21 @@ class SectorSearchView(DividendYieldSearch):
         self.sector_id = int(Sector.objects.get(sector_name=self.sector).sector_id)
         wanted_stocks = all_sector_stocks(self.sector)
         print("Found {} stocks matching sector={}".format(len(wanted_stocks), self.sector))
-        n_days = self.query_defaults("n_days")
-        n_top_bottom = self.query_defaults("n_top_bottom")
-        timeframe = Timeframe(past_n_days=n_days)
-        df = selected_cached_stocks_cip(wanted_stocks, timeframe)
-        heatmap, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=n_top_bottom)
-
-        wanted_stocks = self.get_desired_stocks(wanted_stocks,
-                                                kwargs.get('best10', False),
-                                                kwargs.get('worst10', False),
-                                                top10, bottom10)
-
-        mrd = latest_quotation_date('ANZ') # in case of public holidays, the latest timeframe date is NOT the latest quotation date, so we ensure that we can find data
-        if mrd not in timeframe:
-            mrd = timeframe.most_recent_date
-
-        print("Looking for {} companies as at {}".format(len(wanted_stocks), mrd))
-        self.query_state = {
-            "most_recent_date":  mrd,
-            "sentiment_heatmap": heatmap,
-            "best_ten":          top10,
-            "worst_ten":         bottom10,
-            "wanted_stocks":     wanted_stocks,
-            "n_top_bottom":      n_top_bottom,
-        }
-
-        results = valid_quotes_only(mrd).filter(asx_code__in=wanted_stocks)
-        return self.sort_by(results, self.request.GET.get('sort_by'))
+        mrd = latest_quotation_date('ANZ')
+        self.qs = valid_quotes_only(mrd).filter(asx_code__in=wanted_stocks)
+        return self.qs
 
 sector_search = SectorSearchView.as_view()
 
 class MoverSearch(DividendYieldSearch):
     form_class = MoverSearchForm
     action_url = "/search/movers"
-    matching_companies = ()
-    timeframe = Timeframe(past_n_days=30)
-    title = "Find companies exceeding threshold movement (%)"
-    n_top_bottom = 20
-
-    def add_sentiment(self, df: pd.DataFrame, d):
-        """Heatmap of change-in-percent performance over the timeframe in the df"""
-        sentiment_plot, top10, bottom10 = None, None, None
-        if len(self.matching_companies) > 0:
-            print("Plotting sentiment for {} stocks".format(len(df)))        
-            sentiment_plot, top10, bottom10 = plot_heatmap(df, self.timeframe, n_top_bottom=self.n_top_bottom)
-
-        if sentiment_plot is not None:
-            d.update({ 
-                "sentiment_heatmap": sentiment_plot, 
-                "sentiment_heatmap_title": "Sentiment over: {}".format(self.timeframe.description), 
-                "best_ten": top10,
-                "worst_ten": bottom10
-            })
-
+  
     def additional_context(self, context):
-        d = {
-            "title": self.title,
-            "n_days": self.timeframe.n_days,
-            "n_stocks_plotted": len(self.matching_companies),
-            "n_top_bottom": self.n_top_bottom,
-            "watched": user_watchlist(self.request.user),
+        return {
+            "title": "Find companies exceeding threshold movement (%)",
+            "sentiment_heatmap_title": "Heatmap for moving stocks"
         }
-
-        df = selected_cached_stocks_cip(self.matching_companies, self.timeframe)
-        self.add_sentiment(df, d)
-        d.update({"sector_breakdown_plot": plot_breakdown(df)})
-        return d
 
     def get_queryset(self, **kwargs):
         if any(
@@ -316,17 +259,14 @@ class MoverSearch(DividendYieldSearch):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
         self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days", 30))
-        user_sort = self.request.GET.get("sort_by")
         df = find_movers(
             threshold_percentage,
             self.timeframe,
             kwargs.get("show_increasing", False),
             kwargs.get("show_decreasing", False)
         )
-        self.matching_companies = tuple(df.index)
-        results, _ = latest_quote(self.matching_companies)
-        return self.sort_by(results, user_sort)
-
+        self.qs, _ = latest_quote(tuple(df.index))
+        return self.qs
 
 mover_search = MoverSearch.as_view()
 
@@ -336,7 +276,10 @@ class CompanySearch(DividendYieldSearch):
     action_url = "/search/by-company"
 
     def additional_context(self, context):
-        return {"title": "Find by company name or activity"}
+        return {
+            "title": "Find by company name or activity",
+            "sentiment_heatmap_title": "Heatmap for named companies"
+        }
 
     def get_queryset(self, **kwargs):
         if kwargs == {} or not any(["name" in kwargs, "activity" in kwargs]):
@@ -345,9 +288,8 @@ class CompanySearch(DividendYieldSearch):
         wanted_activity = kwargs.get("activity", "")
         matching_companies = find_named_companies(wanted_name, wanted_activity)
         print("Showing results for {} companies".format(len(matching_companies)))
-        self.as_at_date = latest_quotation_date("ANZ")
-        results, _ = latest_quote(tuple(matching_companies))
-        return self.sort_by(results, self.request.GET.get("sort_by"))
+        self.qs, _ = latest_quote(tuple(matching_companies))
+        return self.qs
 
 
 company_search = CompanySearch.as_view()
@@ -382,8 +324,7 @@ def show_stock_sector(request, stock):
     all_stocks_cip = cached_all_stocks_cip(Timeframe(past_n_days=180))
 
     # invoke separate function to cache the calls when we can
-    c_vs_s_plot, sector_momentum_plot, sector_companies = \
-            analyse_sector_performance(stock, sector, all_stocks_cip)
+    c_vs_s_plot, sector_momentum_plot, sector_companies = analyse_sector_performance(stock, sector, all_stocks_cip)
     point_score_plot = net_rule_contributors_plot = None
     if sector_companies is not None:
         point_score_plot, net_rule_contributors_plot = \
@@ -544,25 +485,30 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
 def show_etfs(request):
     validate_user(request.user)
     matching_codes = all_etfs()
-    return show_matching_companies(
+    extra_context = {
+        "title": "Exchange Traded funds over past 300 days",
+        "sentiment_heatmap_title": "Sentiment for ETFs",
+    }
+    return show_companies(
         matching_codes,
-        "Exchange Traded funds over past 300 days",
-        "Sentiment for ETFs",
-        None,
         request,
+        Timeframe(),
+        extra_context,
     )
-
 
 @login_required
 def show_increasing_eps_stocks(request):
     validate_user(request.user)
     matching_companies = increasing_eps(None)
-    return show_matching_companies(
+    extra_context = {
+        "title": "Stocks with increasing EPS over past 300 days",
+        "sentiment_heatmap_title": "Sentiment for selected stocks",
+    }
+    return show_companies(
         matching_companies,
-        "Stocks with increasing EPS over past 300 days",
-        "Sentiment for selected stocks",
-        None,  # dont show purchases on this view
         request,
+        Timeframe(),
+        extra_context,
     )
 
 
@@ -570,12 +516,15 @@ def show_increasing_eps_stocks(request):
 def show_increasing_yield_stocks(request):
     validate_user(request.user)
     matching_companies = increasing_yield(None)
-    return show_matching_companies(
+    extra_context = {
+        "title": "Stocks with increasing yield over past 300 days",
+        "sentiment_heatmap_title": "Sentiment for selected stocks",
+    }
+    return show_companies(
         matching_companies,
-        "Stocks with increasing yield over past 300 days",
-        "Sentiment for selected stocks",
-        None,
         request,
+        Timeframe(),
+        extra_context,
     )
 
 
@@ -585,13 +534,15 @@ def show_outliers(request, stocks, n_days=30, extra_context=None):
     timeframe = Timeframe(past_n_days=n_days)
     cip = selected_cached_stocks_cip(stocks, timeframe)
     outliers = detect_outliers(stocks, cip)
-    return show_matching_companies(
+    extra_context = {
+        "title": "Unusual stock behaviours: {}".format(timeframe.description),
+        "sentiment_heatmap_title": "Outlier stocks: sentiment",
+    }
+    return show_companies(
         outliers,
-        "Unusual stock behaviours: {}".format(timeframe.description),
-        "Outlier stocks: sentiment",
-        user_purchases(request.user),
         request,
-        extra_context=extra_context,
+        timeframe,
+        extra_context,
     )
 
 
@@ -754,7 +705,12 @@ def sum_portfolio(df, date_str, stock_items):
 class MarketCapSearch(MoverSearch):
     action_url = "/search/market-cap"
     form_class = MarketCapSearchForm
-    title = "Find companies by market capitalisation"
+
+    def additional_context(self, context):
+        return {
+            "title": "Find companies by market capitalisation",
+            "sentiment_heatmap_title": "Heatmap for matching market cap stocks"
+        }
 
     def get_queryset(self, **kwargs):
         # identify all stocks which have a market cap which satisfies the required constraints
@@ -765,8 +721,8 @@ class MarketCapSearch(MoverSearch):
                     .exclude(market_cap__lt=min_cap * 1000 * 1000) \
                     .exclude(market_cap__gt=max_cap * 1000 * 1000)
         print("Found {} quotes, as at {}, satisfying market cap criteria".format(quotes_qs.count(), most_recent_date))
-        self.matching_companies = tuple([quote.asx_code for quote in quotes_qs])
-        return self.sort_by(quotes_qs, self.request.GET.get('sort_by'))
+        self.qs = quotes_qs
+        return self.qs
 
 market_cap_search = MarketCapSearch.as_view()
 
@@ -841,77 +797,19 @@ def show_purchase_performance(request):
     }
     return render(request, "portfolio_trends.html", context=context)
 
-
-def show_matching_companies(
-        matching_companies,
-        title,
-        heatmap_title,
-        virtual_purchases_by_user,
-        request,
-        extra_context=None,
-):
-    """
-    Support function to public-facing views to eliminate code redundancy
-    """
-    assert isinstance(title, str) and isinstance(heatmap_title, str)
-    sort_by = request.GET.get("sort_by", "asx_code")
-    info(request, "Sorting by {}".format(sort_by))
-    n_days = 30
-    n_top_bottom = 20
-    sentiment_timeframe = Timeframe(past_n_days=n_days)
-    if len(matching_companies) > 0:
-        stocks_queryset, _ = latest_quote(matching_companies)
-        stocks_queryset = stocks_queryset.order_by(sort_by)
-        print(
-            "Found {} quotes for {} stocks".format(
-                stocks_queryset.count(), len(matching_companies)
-            )
-        )
-
-        # paginate results for 50 stocks per page
-        paginator = Paginator(stocks_queryset, 50)
-        page_number = request.GET.get("page", 1)
-        page_obj = paginator.page(page_number)
-
-        # add sentiment heatmap amongst watched stocks
-        df = selected_cached_stocks_cip(matching_companies, sentiment_timeframe)
-        sentiment_heatmap_data, top10, bottom10 = plot_heatmap(df, sentiment_timeframe, n_top_bottom=n_top_bottom)
-        sector_breakdown_plot = plot_breakdown(selected_cached_stocks_cip(matching_companies, sentiment_timeframe))
-    else:
-        page_obj = top10 = bottom10 = sentiment_heatmap_data = sector_breakdown_plot = None
-        warning(request, "No matching companies found.")
-
-    context = {
-        "most_recent_date": latest_quotation_date("ANZ"),
-        "page_obj": page_obj,
-        "title": title,
-        "watched": user_watchlist(request.user),
-        "n_top_bottom": n_top_bottom,
-        "best_ten": top10,
-        "worst_ten": bottom10,
-        "virtual_purchases": virtual_purchases_by_user,
-        "sentiment_heatmap": sentiment_heatmap_data,
-        "sentiment_heatmap_title": "{}: {}".format(heatmap_title, sentiment_timeframe.description),
-        "sector_breakdown_plot": sector_breakdown_plot,
-    }
-    if extra_context:
-        context.update(extra_context)
-    add_messages(request, context)
-    return render(request, "all_stocks.html", context=context)
-
-
 @login_required
 def show_watched(request):
     validate_user(request.user)
     matching_companies = user_watchlist(request.user)
-    purchases = user_purchases(request.user)
 
-    return show_matching_companies(
+    return show_companies(
         matching_companies,
-        "Stocks you are watching",
-        "Watched stock recent sentiment",
-        purchases,
         request,
+        Timeframe(),
+        {
+         "title": "Stocks you are watching",
+         "heatmap_title": "Watched stock recent sentiment",
+        }
     )
 
 

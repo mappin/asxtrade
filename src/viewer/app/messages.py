@@ -31,9 +31,9 @@ def add_messages(request, context):
         alert the user to key information found.
     """
     assert context is not None
-    as_at = context.get('most_recent_date', None)
+    timeframe = context.get('timeframe', None)
     sector = context.get('sector', None)
-    if as_at:
-        info(request, 'Prices current as at {}'.format(as_at))
+    if timeframe:
+        info(request, 'Prices current as at {}'.format(timeframe.most_recent_date))
     if sector:
         info(request, "Only stocks from {} are shown".format(sector))
