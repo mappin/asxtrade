@@ -38,6 +38,7 @@ from app.models import (
     find_named_companies,
     validate_user,
     validate_stock,
+    validate_date,
     company_prices,
     stock_info,
     all_etfs,
@@ -169,6 +170,7 @@ class DividendYieldSearch(
         """
         return {
             "title": "Find by dividend yield or P/E",
+            "sentiment_heatmap_title": "Matching stock heatmap: {}".format(self.timeframe.description),
             "n_top_bottom": 20
         }
 
@@ -216,15 +218,13 @@ class SectorSearchView(DividendYieldSearch):
     sector_id = None
 
     def additional_context(self, context):
-        ret = {
+        return {
             # to highlight top10/bottom10 bookmarks correctly
             "title": "Find by company sector",
             "sector_name": self.sector,
             "sector_id": self.sector_id,
+            "sentiment_heatmap_title": "{} sector sentiment".format(self.sector)
         }
-  
-        ret["sentiment_heatmap_title"] = "{}".format(self.sector)
-        return ret
 
     def get_queryset(self, **kwargs):
         # user never run this view before?
@@ -301,18 +301,13 @@ def show_all_stocks(request):
     if len(all_dates) < 1:
         raise Http404("No ASX price data available!")
     ymd = all_dates[-1]
-    assert isinstance(ymd, str) and len(ymd) > 8
-    qs = valid_quotes_only(ymd, sort_by=request.GET.get("sort_by", None))
-    paginator = Paginator(qs, 50)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
-    context = {
-        "title": "ASX stocks by dividend yield",
-        "page_obj": page_obj,
-        "most_recent_date": ymd,
-        "watched": user_watchlist(request.user),
-    }
-    return render(request, "all_stocks.html", context=context)
+    validate_date(ymd)
+    qs = valid_quotes_only(ymd)
+    timeframe = Timeframe()
+    return show_companies(qs, request, timeframe, extra_context={
+        "title": "All stocks",
+        "sentiment_heatmap_title": "All stock sentiment: {}".format(timeframe.description)
+    })
 
 @login_required
 def show_stock_sector(request, stock):
@@ -740,7 +735,7 @@ def show_purchase_performance(request):
     purchase_buy_dates = sorted(purchase_buy_dates)
     # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
 
-    timeframe = Timeframe(from_date=purchase_buy_dates[0], to_date=purchase_buy_dates[-1])
+    timeframe = Timeframe(from_date=str(purchase_buy_dates[0]), to_date=str(purchase_buy_dates[-1]))
     df = company_prices(stocks, timeframe, transpose=True)
     rows = []
     stock_count = defaultdict(int)
