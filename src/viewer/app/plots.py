@@ -456,9 +456,8 @@ def plot_heatmap(
     Also computes top10/worst10 and returns a tuple (plot, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom stocks.
     """
     bins, labels = bin_cb()
-    sum_by_company = df.sum(
-        axis=1
-    )  # compute totals across all dates for the specified companies to look at performance across the observation period
+    # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
+    sum_by_company = df.sum(axis=1) 
     top10 = sum_by_company.nlargest(n_top_bottom)
     bottom10 = sum_by_company.nsmallest(n_top_bottom)
     # print(df.columns)
@@ -467,7 +466,7 @@ def plot_heatmap(
         # NB: this may fail if no prices are available so we catch that error and handle accordingly...
         for date in df.columns:
             df["bin_{}".format(date)] = pd.cut(df[date], bins, labels=labels)
-        sentiment_plot = make_sentiment_plot(df, plot_text_labels=timeframe.n_days <= 21)  # show counts per bin iff not too many bins
+        sentiment_plot = make_sentiment_plot(df, plot_text_labels=timeframe.n_days <= 30)  # show counts per bin iff not too many bins
         return (sentiment_plot, top10, bottom10)
     except KeyError:
         return (None, None, None)
@@ -821,9 +820,8 @@ def plot_boxplot_series(df, normalisation_method=None):
     winner_results = []
     for asx_code, n_wins in count.items():
         x = df.loc[asx_code].sum()
-        if (
-            x > 0.0
-        ):  # avoid "dead cat bounce" stocks which fall spectacularly and then post major increases in percentage terms
+        # avoid "dead cat bounce" stocks which fall spectacularly and then post major increases in percentage terms
+        if x > 0.0:  
             winner_results.append((asx_code, n_wins, x))
 
     # and plot the normalised data
@@ -854,4 +852,3 @@ def plot_boxplot_series(df, normalisation_method=None):
         plot_as_inline_html_data(plot),
         list(reversed(sorted(winner_results, key=lambda t: t[2]))),
     )
-
