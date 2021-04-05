@@ -47,4 +47,6 @@ def read_config(filename, verbose=True):
         password = m.get('password')
         if password.startswith('$'):
             password = os.getenv(password[1:])
+        else:
+            password = m.get('password')
         return config, password
