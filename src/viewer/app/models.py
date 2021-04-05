@@ -49,10 +49,12 @@ class Timeframe:
     4) Timeframe(from_date='YYYY-mm-dd', n=30) eg. 30 days from specified date (inclusive)
     In any case Timeframe.desired_dates() yields a list of date in ascending order
     """
+    today = None # useful for unit testing: must be datetime.date if specified
 
     def __init__(self, **kwargs):
-        self.tf = {}
-        self.tf.update(**kwargs)
+        d = dict(**kwargs)
+        self.today = d.pop('today', None) # remove today from being placed into self.tf
+        self.tf = d
 
     def __lt__(self, other):
         a_from = self.tf.get('from_date', None)
@@ -65,19 +67,17 @@ class Timeframe:
         return hash(tuple(self.tf)) ^ hash(self.tf.values())
     
     def _is_empty_state(self):
-        k = set(self.tf.keys())
-        return k == set() or k == set(['today'])
+        return self.tf == {}
 
     def all_dates(self):
         # no arguments for timeframe? assume past 30 days as an application-wide default
-        today = self.tf.get('today', None)  # allow specification of what today is to permit easier unit tests
         if self._is_empty_state():
-            return desired_dates(today=today, start_date=30)
+            return desired_dates(today=self.today, start_date=30)
 
         # most common use case: past N days only
         past_n_days = self.tf.get('past_n_days', None)
         if past_n_days:
-            return desired_dates(today=today, start_date=past_n_days)
+            return desired_dates(today=self.today, start_date=past_n_days)
 
         # timeframe of interest: from .. to date
         from_date = self.tf.get('from_date', None)
@@ -98,7 +98,7 @@ class Timeframe:
         if all([from_date is not None, n is not None]):
             validate_date(from_date)
             assert n > 0
-            return desired_dates(today=today, start_date=from_date)[:n]
+            return desired_dates(today=self.today, start_date=from_date)[:n]
 
         # otherwise unknown input
         assert False
@@ -144,9 +144,7 @@ class Timeframe:
         return to_date if to_date is not None else self.all_dates()[-1]
 
     def __str__(self):
-        d = dict(**self.tf)  # remove some state which interferes with unit tests 
-        d.pop('today', None)
-        return f"Timeframe: {d}"
+        return f"Timeframe: {self.tf}"
 
 class Quotation(model.Model):
     _id = ObjectIdField()
