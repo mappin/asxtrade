@@ -569,7 +569,10 @@ class OptimisedWatchlistView(
             for msg in messages:
                 info(self.request, msg)
             total_pct_cw = sum(map(lambda t: t[1], cleaned_weights.values())) * 100.0
+            #print(cleaned_weights)
+            total_profit = sum(map(lambda t: t[5], cleaned_weights.values()))
             ret.update({
+                "timeframe": self.timeframe,
                 "cleaned_weights": cleaned_weights,
                 "algo": title,
                 "portfolio_performance": performance,
@@ -577,6 +580,7 @@ class OptimisedWatchlistView(
                 "correlation_plot": correlation_plot,
                 "portfolio_cost": portfolio_cost,
                 "total_cleaned_weight_pct": total_pct_cw,
+                "total_profit_aud": total_profit,
                 "leftover_funds": leftover_funds,
                 "stock_selector": self.stock_title,
                 "n_stocks_considered": n_stocks,
@@ -610,8 +614,8 @@ class OptimisedWatchlistView(
                 exclude = exclude.split(",")
             stocks = set(stocks).difference(exclude)
 
-        tf = Timeframe(past_n_days=n_days)
-        self.results = self.optimise(stocks, tf, algo, total_portfolio_value=portfolio_cost)
+        self.timeframe = Timeframe(past_n_days=n_days)
+        self.results = self.optimise(stocks, self.timeframe, algo, total_portfolio_value=portfolio_cost)
         return render(self.request, self.template_name, self.get_context_data())
 
 optimised_watchlist_view = OptimisedWatchlistView.as_view()
