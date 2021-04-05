@@ -53,6 +53,9 @@ class Timeframe:
 
     def __init__(self, **kwargs):
         d = dict(**kwargs)
+        for k in ['from_date', 'to_date']: # validate all dates to detect problems early
+            if k in d:
+                validate_date(d.get(k))
         self.today = d.pop('today', None) # remove today from being placed into self.tf
         self.tf = d
 
@@ -83,6 +86,8 @@ class Timeframe:
         from_date = self.tf.get('from_date', None)
         to_date = self.tf.get('to_date', None)
         if all([from_date is not None, to_date is not None]):
+            print(from_date)
+            print(to_date)
             validate_date(from_date)
             validate_date(to_date)
             possible_dates = desired_dates(today=datetime.strptime(to_date, "%Y-%m-%d").date(), start_date=from_date)
