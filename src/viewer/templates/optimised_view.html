@@ -59,8 +59,8 @@
                 <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
                 <td>{{ tuple.1|percentage|floatformat }}</td>
                 <td>{{ tuple.2 }}</td>
-                <td>{{ tuple.3 |floatformat }}</td>
-                <td>{{ tuple.4 |floatformat }}</td>
+                <td>{{ tuple.3 |floatformat:3 }}</td>
+                <td>{{ tuple.4 |floatformat:3 }}</td>
                 <td>{{ tuple.5 |floatformat }}</td>
                 <td>{{ stock |stock_sector }}</td>
             </tr>
