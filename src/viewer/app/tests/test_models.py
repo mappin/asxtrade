@@ -396,7 +396,7 @@ def test_latest_quote(quotation_fixture, monkeypatch):
     )
 ])
 def test_timeframe(data, expected):
-    print(data)
+    #print(data)
     tf = Timeframe(**data, today=datetime(year=2021, month=3, day=31).date()) # note today is fixed date for easier testing
     all_dates = tf.all_dates()
     assert len(all_dates) == expected[0]
