@@ -409,7 +409,7 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
         try: 
             weights, performance_tuple, ef = strategy(**kwargs)
             allocator = DiscreteAllocation(weights,
-                                           latest_prices,
+                                           first_prices,
                                            total_portfolio_value=total_portfolio_value)
             fig, ax = plt.subplots()
             portfolio, leftover_funds = allocator.greedy_portfolio()
