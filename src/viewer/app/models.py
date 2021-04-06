@@ -760,7 +760,7 @@ def get_required_tags(all_dates, fields):
 def first_arg_only(*args):
     return keys.hashkey(args[0])
 
-def rsi_data(stock, timeframe):
+def rsi_data(stock: str, timeframe: Timeframe):
     stock_df = company_prices(
         [stock],
         timeframe,
