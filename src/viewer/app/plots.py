@@ -572,7 +572,7 @@ def relative_strength(prices, n=14):
     return rsi
 
 
-def make_rsi_plot(stock, stock_df):
+def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
     assert len(stock) > 0
 
     # print(last_price)
@@ -714,6 +714,7 @@ def make_rsi_plot(stock, stock_df):
         ax.xaxis.set_major_formatter(formatter)
 
     plt.xticks(fontsize=8)
+    plt.xlim(left=timeline[200])
     fig = plt.gcf()
     rsi_data = plot_as_base64(fig)
     plt.close(fig)
