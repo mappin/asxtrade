@@ -374,7 +374,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_stock(stock)
     validate_user(request.user)
 
-    timeframe = Timeframe(past_n_days=n_days)
+    timeframe = Timeframe(past_n_days=n_days+200) # add 200 days so MA 200 can initialise itself before the plotting starts...
     stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
     securities, company_details = stock_info(stock, lambda msg: warning(request, msg))
 
@@ -688,13 +688,10 @@ def show_trends(request):
     return render(request, "trends.html", context=context)
 
 
-def sum_portfolio(df, date_str, stock_items):
-    assert isinstance(df, pd.DataFrame)
-    assert len(date_str) > 8
+def sum_portfolio(df : pd.DataFrame, date_str: str, stock_items):
+    validate_date(date_str)
 
-    portfolio_worth = sum(
-        map(lambda t: df.at[t[0], date_str] * t[1], stock_items)
-    )
+    portfolio_worth = sum(map(lambda t: df.at[t[0], date_str] * t[1], stock_items))
     return portfolio_worth
 
 class MarketCapSearch(MoverSearch):
@@ -777,11 +774,7 @@ def show_purchase_performance(request):
             )
 
     t = plot_portfolio(pd.DataFrame.from_records(rows))
-    (
-        portfolio_performance_figure,
-        stock_performance_figure,
-        profit_contributors_figure,
-    ) = t
+    portfolio_performance_figure, stock_performance_figure, profit_contributors_figure = t
     context = {
         "title": "Portfolio performance",
         "portfolio_title": "Overall",
@@ -797,13 +790,14 @@ def show_watched(request):
     validate_user(request.user)
     matching_companies = user_watchlist(request.user)
 
+    timeframe = Timeframe()
     return show_companies(
         matching_companies,
         request,
-        Timeframe(),
+        timeframe,
         {
-         "title": "Stocks you are watching",
-         "heatmap_title": "Watched stock recent sentiment",
+            "title": "Stocks you are watching",
+            "sentiment_heatmap_title": "Watchlist stocks sentiment: {}".format(timeframe.description),
         }
     )
 
