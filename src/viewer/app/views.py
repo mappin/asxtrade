@@ -732,7 +732,7 @@ def show_purchase_performance(request):
     purchase_buy_dates = sorted(purchase_buy_dates)
     # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
 
-    timeframe = Timeframe(from_date=str(purchase_buy_dates[0]), to_date=str(purchase_buy_dates[-1]))
+    timeframe = Timeframe(from_date=str(purchase_buy_dates[0]), to_date=all_available_dates()[-1])
     df = company_prices(stocks, timeframe, transpose=True)
     rows = []
     stock_count = defaultdict(int)
