@@ -106,7 +106,7 @@ def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', 
                 print(df.loc[today].isnull().values.any())
                 # FALLTHRU...
         tag = "{}-{:02d}-{}-{}".format(field_name, month, year, market)
-        save_dataframe(db, df, tag, field_name, status, market, scope, compression='gzip', n_days=len(df), n_stocks=len(df.columns))
+        #save_dataframe(db, df, tag, field_name, status, market, scope, compression='gzip', n_days=len(df), n_stocks=len(df.columns))
 
     all_stocks = set(uber_df['asx_code'])
     print("Detected {} stocks during month ({} datapoints total)".format(len(all_stocks), len(uber_df)))
