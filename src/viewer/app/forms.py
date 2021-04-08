@@ -52,6 +52,7 @@ class MoverSearchForm(forms.Form):
                                            label="Timeframe (days)")
     show_increasing = forms.BooleanField(required=False, initial=True, label="Increasing")
     show_decreasing = forms.BooleanField(required=False, initial=True, label="Decreasing")
+    max_price = forms.FloatField(required=False, max_value=10000.0)
 
 class SectorSentimentSearchForm(forms.Form):
     normalisation_choices = (

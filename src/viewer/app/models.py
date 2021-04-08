@@ -503,7 +503,7 @@ def all_stocks(strict=True):
    
     return set(all_securities)
 
-def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False):
+def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False, max_price=None):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
     the sum over all desired dates for percentage change in the stock price. A negative sum
@@ -520,6 +520,11 @@ def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=Fal
         results = results.drop(results[results > 0.0].index)
     if not decreasing:
         results = results.drop(results[results < 0.0].index)
+    print(results)
+    if max_price is not None:
+        ymd = latest_quotation_date('ANZ')
+        stocks_lte_max_price = [q.asx_code for q in valid_quotes_only(ymd) if q.last_price <= max_price]
+        results = results.filter(stocks_lte_max_price)
     print("Reporting {} movers after filtering".format(len(results)))
     return results
 

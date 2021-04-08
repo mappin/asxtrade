@@ -263,7 +263,8 @@ class MoverSearch(DividendYieldSearch):
             threshold_percentage,
             self.timeframe,
             kwargs.get("show_increasing", False),
-            kwargs.get("show_decreasing", False)
+            kwargs.get("show_decreasing", False),
+            kwargs.get("max_price", None)
         )
         self.qs, _ = latest_quote(tuple(df.index))
         return self.qs
@@ -688,7 +689,7 @@ def show_trends(request):
     return render(request, "trends.html", context=context)
 
 
-def sum_portfolio(df : pd.DataFrame, date_str: str, stock_items):
+def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):
     validate_date(date_str)
 
     portfolio_worth = sum(map(lambda t: df.at[t[0], date_str] * t[1], stock_items))
