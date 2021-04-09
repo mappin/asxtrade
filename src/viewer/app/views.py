@@ -7,7 +7,6 @@ import tempfile
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from bson.objectid import ObjectId
 from django import forms
 from django.shortcuts import render
 from django.core.paginator import Paginator
