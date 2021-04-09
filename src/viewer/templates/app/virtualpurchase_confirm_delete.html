@@ -2,7 +2,7 @@
 
 {% block content %}
     <div class="row mt-4">
-         <h3>Are you sure you want to delete?</h3>
+         <h3>Deleting a purchase cannot be undone!</h3>
     </div>
     <div class="row mt-4">{{ object }}</div>
          <p class="alert alert-warning mt-4">Please confirm.</p>
@@ -14,7 +14,7 @@
                 <input class="btn btn-link" 
                        type="button" value="Cancel" 
                        onclick="window.history.go(-1);"/>
-                <input class="btn btn-danger" type="submit" value="Confirm"/>
+                <input class="btn btn-danger" type="submit" value="Yes, delete it!"/>
                 </p>
             </form>
     </div>
