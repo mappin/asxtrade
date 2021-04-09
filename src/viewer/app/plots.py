@@ -717,7 +717,10 @@ def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
         ax.xaxis.set_major_formatter(formatter)
 
     plt.xticks(fontsize=8)
-    plt.xlim(left=timeline[200])
+    try:
+        plt.xlim(left=timeline[200])
+    except IndexError:
+        print("WARNING: 200 datapoints not available - some momentum data not available")
     fig = plt.gcf()
     rsi_data = plot_as_base64(fig)
     plt.close(fig)

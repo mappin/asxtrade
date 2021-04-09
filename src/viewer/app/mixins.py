@@ -1,6 +1,20 @@
 from app.models import Quotation
 
 
+
+class VirtualPurchaseMixin:
+    """
+    Retrieve the object by mongo _id for use by CRUD CBV views for VirtualPurchase's
+    """
+
+    def get_object(self, queryset=None):
+        slug = self.kwargs.get("slug")
+        purchase = VirtualPurchase.objects.mongo_find_one({"_id": ObjectId(slug)})
+        # print(purchase)
+        purchase["id"] = purchase["_id"]
+        purchase.pop("_id", None)
+        return VirtualPurchase(**purchase)
+
 class SearchMixin:
     model = Quotation
     object_list = Quotation.objects.none()
