@@ -1,4 +1,4 @@
-from app.models import Quotation
+from app.models import Quotation, VirtualPurchase
 
 
 
