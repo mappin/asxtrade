@@ -906,9 +906,13 @@ def user_purchases(user):
     Returns a dict: asx_code -> VirtualPurchase of the specified user's watchlist
     """
     validate_user(user)
+    watchlist = user_watchlist(user)
     purchases = defaultdict(list)
     for purchase in VirtualPurchase.objects.filter(user=user):
+        # "ghost" purchases are ignored: they are those purchases for stocks that are no longer part of the user's watchlist. And no longer part of purchase performance until placed (again) into the watchlist.
         code = purchase.asx_code
+        if not code in watchlist:
+            continue
         purchases[code].append(purchase)
     #print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
