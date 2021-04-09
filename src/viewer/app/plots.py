@@ -425,6 +425,9 @@ def plot_breakdown(cip_df: pd.DataFrame):
     df = pd.DataFrame(df.sum(axis='columns'), columns=['sum'])
     df = df.merge(stocks_by_sector(), left_index=True, right_on='asx_code')
 
+    if len(df) == 0: # no stock in cip_df have a sector? ie. ETF?
+        return None
+
     assert set(df.columns) == set(['sum', 'asx_code', 'sector_name'])
     df['increasing'] = df.apply(lambda row: 'up' if row['sum'] >= 0.0 else 'down', axis=1)
     sector_names = df['sector_name'].value_counts().index.tolist() # sort bars by value count (ascending)
