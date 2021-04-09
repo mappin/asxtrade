@@ -49,7 +49,7 @@ from app.models import (
     toggle_watchlist_entry,
     VirtualPurchase
 )
-from app.mixins import SearchMixin
+from app.mixins import SearchMixin, VirtualPurchaseMixin
 from app.messages import info, warning, add_messages
 from app.forms import (
     SectorSearchForm,
@@ -879,21 +879,8 @@ class BuyVirtualStock(LoginRequiredMixin, CreateView):
 buy_virtual_stock = BuyVirtualStock.as_view()
 
 
-class MyObjectMixin:
-    """
-    Retrieve the object by mongo _id for use by CRUD CBV views for VirtualPurchase's
-    """
 
-    def get_object(self, queryset=None):
-        slug = self.kwargs.get("slug")
-        purchase = VirtualPurchase.objects.mongo_find_one({"_id": ObjectId(slug)})
-        # print(purchase)
-        purchase["id"] = purchase["_id"]
-        purchase.pop("_id", None)
-        return VirtualPurchase(**purchase)
-
-
-class EditVirtualStock(LoginRequiredMixin, MyObjectMixin, UpdateView):
+class EditVirtualStock(LoginRequiredMixin, VirtualPurchaseMixin, UpdateView):
     model = VirtualPurchase
     success_url = "/show/watched"
     form_class = forms.models.modelform_factory(
@@ -909,10 +896,9 @@ class EditVirtualStock(LoginRequiredMixin, MyObjectMixin, UpdateView):
 edit_virtual_stock = EditVirtualStock.as_view()
 
 
-class DeleteVirtualPurchaseView(LoginRequiredMixin, MyObjectMixin, DeleteView):
+class DeleteVirtualPurchaseView(LoginRequiredMixin, VirtualPurchaseMixin, DeleteView):
     model = VirtualPurchase
     success_url = "/show/watched"
-
 
 delete_virtual_stock = DeleteVirtualPurchaseView.as_view()
 
