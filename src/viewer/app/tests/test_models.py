@@ -319,6 +319,7 @@ def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeyp
     assert u is not None
     monkeypatch.setattr(mdl, 'latest_quote', mock_latest_quote)
     purchases = user_purchases(u)
+    Watchlist.objects.create(user=u, asx_code='ASX1') # ASX1 must be in the watchlist for it to be reported as a purchase: no "ghost" purchases. And no we are not cascading deletes ;-)
     assert dict(purchases) == {}
     purchase_factory.create(asx_code='ASX1',
                             user=u,
