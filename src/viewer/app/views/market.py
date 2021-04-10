@@ -74,7 +74,10 @@ def show_pe_trends(request):
    
     sector_counts_all_stocks = ss['sector_name'].value_counts()
     all_sectors = set(ss['sector_name'].unique())
-    breakdown_by_sector_pe_pos_stocks_only = pe_df.filter(items=positive_pe_stocks).merge(ss, left_index=True, right_on='asx_code')['sector_name'].value_counts()
+    pe_pos_df = pe_df.filter(items=positive_pe_stocks, axis=0).merge(ss, left_index=True, right_on='asx_code')
+    assert len(pe_pos_df) <= len(positive_pe_stocks) and len(pe_pos_df) > 0
+    breakdown_by_sector_pe_pos_stocks_only = pe_pos_df['sector_name'].value_counts()
+    #print(breakdown_by_sector_pe_pos_stocks_only)
     sector_counts_pe_pos_stocks_only = {s[0]: s[1] for s in breakdown_by_sector_pe_pos_stocks_only.items()}
     #print(sector_counts_pe_pos_stocks_only)
     #print(sector_counts_all_stocks)

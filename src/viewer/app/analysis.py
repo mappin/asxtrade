@@ -5,7 +5,6 @@ from collections import defaultdict, OrderedDict
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from cachetools import keys, cached, LRUCache
 import matplotlib.pyplot as plt
 from pyod.models.iforest import IForest
 from pypfopt.expected_returns import mean_historical_return, returns_from_prices
@@ -13,7 +12,7 @@ from pypfopt.discrete_allocation import DiscreteAllocation
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
-from pypfopt.plotting import plot_covariance, plot_efficient_frontier
+from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
 from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe, validate_date
 from app.plots import (
@@ -32,6 +31,7 @@ def as_css_class(thirty_day_slope, three_hundred_day_slope):
         return "none"
 
 def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
+    assert all_dates is not None
     trends = {}  # stock -> (slope, nrmse) pairs
     for stock in watchlist_stocks:
         series = cumulative_change_df.loc[stock]
@@ -283,7 +283,7 @@ def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
     """Remove low weights as not significant contributors to portfolio performance"""
     sum_of_weights = sum(map(lambda t: t[1], weights.items()))
     assert sum_of_weights - 1.0 < 1e-6
-    clean_weights = OrderedDict()
+    cw = OrderedDict()
     total_weight = 0.0
     # some algo's can have lots of little stock weights, so we dont stop until we explain >80%
     for stock, weight in sorted(weights.items(), key=lambda t: t[1], reverse=True):
@@ -293,11 +293,11 @@ def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
         n = portfolio[stock]
         after = latest_prices[stock]
         before = first_prices[stock]
-        clean_weights[stock] = (stock, weight, n, after, before, n * (after - before))
-        if total_weight >= 80.5 and len(clean_weights.keys()) > 30:
+        cw[stock] = (stock, weight, n, after, before, n * (after - before))
+        if total_weight >= 80.5 and len(cw.keys()) > 30:
             break
     #print(clean_weights)
-    return clean_weights
+    return cw
 
 def portfolio_performance(optimizer):
     assert optimizer is not None
@@ -434,7 +434,7 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
         strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
        
         try: 
-            weights, performance_dict, ef = strategy(**kwargs)
+            weights, performance_dict, _ = strategy(**kwargs)
             allocator = DiscreteAllocation(weights,
                                            first_prices,
                                            total_portfolio_value=total_portfolio_value)
@@ -480,7 +480,7 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
                    title, total_portfolio_value, leftover_funds, len(latest_prices)
         except ValueError as ve:
             messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], n_stocks, str(ve)))
-            pass # try next iteration
+            # try next iteration
 
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
