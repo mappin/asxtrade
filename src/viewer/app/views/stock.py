@@ -1,3 +1,6 @@
+"""
+Responsible for providing detiled views about a single stock and closely related views
+"""
 from collections import defaultdict
 from datetime import datetime
 import pandas as pd
