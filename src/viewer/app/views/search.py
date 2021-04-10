@@ -6,7 +6,8 @@ from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
 from django.shortcuts import render
 from app.mixins import SearchMixin
-from app.forms import DividendSearchForm, SectorSearchForm, MoverSearchForm, CompanySearchForm, MarketCapSearchForm, SectorSentimentSearchForm
+from app.forms import (DividendSearchForm, SectorSearchForm, MoverSearchForm, 
+                       CompanySearchForm, MarketCapSearchForm, SectorSentimentSearchForm)
 from app.models import (Timeframe, Quotation, latest_quotation_date, valid_quotes_only, 
                         latest_quote, Sector, all_sector_stocks, find_movers, find_named_companies, 
                         selected_cached_stocks_cip)
@@ -24,22 +25,25 @@ class DividendYieldSearch(
     action_url = "/search/by-yield"
     ordering = ("-annual_dividend_yield",)
     timeframe = Timeframe(past_n_days=30)
+    qs = None
 
     def additional_context(self, context):
         """
             Return the additional fields to be added to the context by render_to_response(). Subclasses
             should override this rather than the template design pattern implementation of render_to_response()
         """
+        assert context is not None
         return {
             "title": "Find by dividend yield or P/E",
             "sentiment_heatmap_title": "Matching stock heatmap: {}".format(self.timeframe.description),
             "n_top_bottom": 20
         }
 
-    def render_to_response(self, context):
+    def render_to_response(self, context, **kwargs):
         """
         Invoke show_companies()
         """
+        assert kwargs is not None
         context.update(self.additional_context(context))
         
         return show_companies( # will typically invoke show_companies() to share code across all views
@@ -115,9 +119,7 @@ class MoverSearch(DividendYieldSearch):
         }
 
     def get_queryset(self, **kwargs):
-        if any(
-            [kwargs == {}, "threshold" not in kwargs, "timeframe_in_days" not in kwargs]
-        ):
+        if any([kwargs == {}, "threshold" not in kwargs, "timeframe_in_days" not in kwargs]):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
         self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days", 30))
