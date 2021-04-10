@@ -17,72 +17,56 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
     <body>
-          <nav class="navbar navbar-expand-sm bg-light">
-              <ul class="navbar-nav">
-                <li class="nav-item">
-                   <a class="nav-link" href="/">ASX Viewer</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="#">Help</a>
-                </li>
-                <li class="nav-item">
-                  {%if user.is_authenticated %}
-                       <a class="nav-link" href="/accounts/logout">Logout</a>
-                  {% else %}
-                       <a class="nav-link" href="/accounts/login">Login</a>
-                  {% endif %}
-                </li>
-              </ul>
-          </nav>
+        <nav class="navbar navbar-expand-sm bg-light">
+            <ul class="navbar-nav">
+              <li class="nav-item">
+                  <a class="nav-link" href="/">ASX Viewer</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#">Help</a>
+              </li>
+              <li class="nav-item">
+                {%if user.is_authenticated %}
+                      <a class="nav-link" href="/accounts/logout">Logout</a>
+                {% else %}
+                      <a class="nav-link" href="/accounts/login">Login</a>
+                {% endif %}
+              </li>
+            </ul>
+        </nav>
 
         <table><tr valign="top"><td>
-        <div class="menubar">
-            <h3>Find</h3>
-            <ul class="nav flex-column">{% menu search %}
-                {% for item in menuitems %}
-                  <li class="nav-item">
-                    <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
-                  </li>
-                {% endfor %}
-            </ul>
-            <h3>Show</h3>
-            <ul class="nav flex-column">{%menu stats %}
-                {% for item in menuitems %}
-                  <li class="nav-item">
-                    <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
-                  </li>
-                {% endfor %}
-            </ul>
-        </div>
-      </td><td>
-        <div class="content container">
-            <div class="row">
-                {%if title %}<h3>{{ title }}</h3>{% endif %}
+            <div class="menubar">
+                <h3>Find</h3>
+                <ul class="nav flex-column">{% menu search %}
+                    {% for item in menuitems %}
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                      </li>
+                    {% endfor %}
+                </ul>
+                <h3>Show</h3>
+                <ul class="nav flex-column">{%menu stats %}
+                    {% for item in menuitems %}
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                      </li>
+                    {% endfor %}
+                </ul>
             </div>
+        </td><td>
+            <div class="content container">
+                <div class="row">
+                    {%if title %}<h3>{{ title }}</h3>{% endif %}
+                </div>
 
-            {% block searchform %}
-            {% endblock %}
+                {% block searchform %}
+                {% endblock %}
 
-            <div class="row mt-2">
-                {% block notices %}
-                    {% if messages %}
-                        <ul class="messages">
-                        {% for message in messages %}
-                              <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>
-                                 {% if message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}Important: {% endif %}
-                                 {{ message }}
-                              </li>
-                        {% endfor %}
-                        </ul>
-                    {% endif %}
+                {% block content %}
                 {% endblock %}
             </div>
-
-            {% block content %}
-            {% endblock %}
-        </div>
-
-      </td></tr>
+        </td></tr>
       </table>
     </body>
 </html>

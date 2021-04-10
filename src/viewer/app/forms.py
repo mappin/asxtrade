@@ -73,7 +73,7 @@ class OptimisePortfolioForm(forms.Form):
     )
     n_days = forms.IntegerField(required=True, 
                                 max_value=1000, 
-                                min_value=10, 
+                                min_value=7, 
                                 initial=180,
                                 label="Timeframe for data to use (days relative to now)")
     method = forms.ChoiceField(required=True, 
@@ -84,6 +84,10 @@ class OptimisePortfolioForm(forms.Form):
                                                 required=False, 
                                                 widget=forms.SelectMultiple(attrs={'size': 10}),
                                                 label="Stocks to exclude from optimisation")
+    exclude_price = forms.FloatField(required=False, 
+                                     min_value=0.001, 
+                                     max_value=100000.0,
+                                     label="Minimum stock price required at start/end (may be blank)")
     portfolio_cost = forms.IntegerField(initial=100*1000, 
                                         required=True, 
                                         min_value=1000,
