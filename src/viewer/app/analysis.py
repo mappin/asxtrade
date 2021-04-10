@@ -30,8 +30,7 @@ def as_css_class(thirty_day_slope, three_hundred_day_slope):
     else:
         return "none"
 
-def calculate_trends(cumulative_change_df, watchlist_stocks, all_dates):
-    assert all_dates is not None
+def calculate_trends(cumulative_change_df, watchlist_stocks):
     trends = {}  # stock -> (slope, nrmse) pairs
     for stock in watchlist_stocks:
         series = cumulative_change_df.loc[stock]

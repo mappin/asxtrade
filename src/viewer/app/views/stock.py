@@ -108,7 +108,7 @@ def show_trends(request):
     watchlist_stocks = user_watchlist(request.user)
     timeframe = Timeframe(past_n_days=300)
     cip = selected_cached_stocks_cip(watchlist_stocks, timeframe)
-    trends = calculate_trends(cip, watchlist_stocks, timeframe)
+    trends = calculate_trends(cip, watchlist_stocks)
     #print(trends)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(
