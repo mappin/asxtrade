@@ -16,7 +16,7 @@ def test_calculate_trends():
         {'asx_code': 'ANZ', '2021-01-02': 1.0, '2021-01-03': 2.0, '2021-01-04': 3.0, '2021-01-05': 4.0},
         {'asx_code': 'BHP', '2021-01-02': 1.0, '2021-01-03': 1.0, '2021-01-04': 1.0, '2021-01-05': 1.0},
     ], index='asx_code')
-    result = calculate_trends(df, set(['ANZ', 'BHP']), None)
+    result = calculate_trends(df, set(['ANZ', 'BHP']))
     assert result is not None
     assert isinstance(result, OrderedDict)
     assert len(result) == 1
