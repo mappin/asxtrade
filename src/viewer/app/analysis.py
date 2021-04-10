@@ -279,53 +279,78 @@ def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_
     c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
     return c_vs_s_plot, sector_momentum_plot
 
+def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
+    """Remove low weights as not significant contributors to portfolio performance"""
+    sum_of_weights = sum(map(lambda t: t[1], weights.items()))
+    assert sum_of_weights - 1.0 < 1e-6
+    clean_weights = OrderedDict()
+    total_weight = 0.0
+    # some algo's can have lots of little stock weights, so we dont stop until we explain >80%
+    for stock, weight in sorted(weights.items(), key=lambda t: t[1], reverse=True):
+        total_weight += weight * 100.0
+        if not stock in portfolio:
+            continue
+        n = portfolio[stock]
+        after = latest_prices[stock]
+        before = first_prices[stock]
+        clean_weights[stock] = (stock, weight, n, after, before, n * (after - before))
+        if total_weight >= 80.5 and len(clean_weights.keys()) > 30:
+            break
+    #print(clean_weights)
+    return clean_weights
+
+def portfolio_performance(optimizer):
+    assert optimizer is not None
+    pt = optimizer.portfolio_performance()
+    assert len(pt) == 3
+    performance_dict = {'expected return': pt[0] * 100.0, 'volatility': pt[1] * 100.0, 'sharpe ratio': pt[2]}
+    return performance_dict
+
 def hrp_strategy(returns):
     assert returns is not None
     ef = HRPOpt(returns=returns)
-    ef.optimize()
-    cw = ef.clean_weights()
-    pt = ef.portfolio_performance()
-    return cw, pt, ef
+    weights = ef.optimize()
+    return weights, portfolio_performance(ef), ef
 
 def ef_sharpe_strategy(returns=None, cov_matrix=None):
     assert returns is not None
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1) # eliminate minor weights
-    ef.max_sharpe()
-    cw = ef.clean_weights()
-    pt = ef.portfolio_performance()
-    return cw, pt, ef
+    weights = ef.max_sharpe()
+    return weights, portfolio_performance(ef), ef
 
-def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=0.01):
+def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=5.0):
     assert returns is not None
+    assert cov_matrix is not None
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
-    ef.efficient_risk(target_volatility=target_volatility)
-    cw = ef.clean_weights()
-    pt = ef.portfolio_performance()
-    return cw, pt, ef
+    weights = ef.efficient_risk(target_volatility=target_volatility)
+    return weights, portfolio_performance(ef), ef
 
 def ef_minvol_strategy(returns=None, cov_matrix=None):
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
-    ef.min_volatility()
-    cw = ef.clean_weights()
-    pt = ef.portfolio_performance()
-    return cw, pt, ef
+    weights = ef.min_volatility()
+    return weights, portfolio_performance(ef), ef
 
-def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, messages):
+def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, messages, min_price):
     """
     Remove stocks which have no data at start/end of the timeframe despite imputation that has been performed. 
     This ensures that profit/loss can be calculated without missing data and that optimisation is not biased towards ridiculous outcomes.
+    If min_price is not None, exclude all stocks with a start/end price less than min_price
     """
     validate_date(date_to_check)
     missing_prices = list(df.columns[df.loc[date_to_check].isna()])
     if len(missing_prices) > 0:
         df = df.drop(columns=missing_prices)
         messages.add("Ignoring stocks with no data at {}: {}".format(date_to_check, missing_prices))
+    if min_price is not None:
+        bad_prices = list(df.columns[df.loc[date_to_check] <= min_price])
+        messages.add(f"Ignoring stocks with price < {min_price} at {date_to_check}: {bad_prices}")
+        df = df.drop(columns=bad_prices)
     return df
  
-def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages):
+def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages, exclude_price):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     
     stock_prices = company_prices(stocks, timeframe, fields='last_price', missing_cb=None)
@@ -334,17 +359,19 @@ def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages):
     earliest_date = stock_prices.index[0]
     #print(stock_prices)
 
-    stock_prices = remove_bad_stocks(stock_prices, earliest_date, messages)
-    stock_prices = remove_bad_stocks(stock_prices, latest_date, messages)
+    stock_prices = remove_bad_stocks(stock_prices, earliest_date, messages, exclude_price)
+    stock_prices = remove_bad_stocks(stock_prices, latest_date, messages, exclude_price)
 
     latest_prices = stock_prices.loc[latest_date]
-    first_prices = stock_prices.loc[stock_prices.index[0]]
+    first_prices = stock_prices.loc[earliest_date]
     all_returns = returns_from_prices(stock_prices, log_returns=False).fillna(value=0.0)
 
     # check that the matrices are consistent to each other
     assert stock_prices.shape[1] == latest_prices.shape[0]
     assert stock_prices.shape[1] == all_returns.shape[1]
     assert all_returns.shape[0] == stock_prices.shape[0] - 1
+    assert len(stock_prices.columns) > 0 # must have at least 1 stock
+    assert len(stock_prices) > 7 # and at least one trading week of data
 
     #print(stock_prices.shape)
     #print(latest_prices)
@@ -394,45 +421,34 @@ def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, 
     n_stocks = max_stocks if len(colnames) > max_stocks else len(colnames)
     return filtered_stocks, n_stocks
 
-def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000):
+def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000, exclude_price=None):
     assert len(stocks) >= 1
     assert timeframe is not None
     assert total_portfolio_value > 0
     assert max_stocks >= 5
 
     messages = set()
-    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, messages)
+    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, messages, exclude_price)
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
         strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
        
         try: 
-            weights, performance_tuple, ef = strategy(**kwargs)
+            weights, performance_dict, ef = strategy(**kwargs)
             allocator = DiscreteAllocation(weights,
                                            first_prices,
                                            total_portfolio_value=total_portfolio_value)
             fig, ax = plt.subplots()
             portfolio, leftover_funds = allocator.greedy_portfolio()
             #print(portfolio)
-            clean_weights = OrderedDict()
-            total_weight = 0.0
-            # minimum volality can have lots of little stock weights, so we dont stop until we explain >80%
-            for stock, weight in sorted(weights.items(), key=lambda t: t[1], reverse=True):
-                total_weight += weight * 100.0
-                if not stock in portfolio:
-                    continue
-                n = portfolio[stock]
-                after = latest_prices[stock]
-                before = first_prices[stock]
-                clean_weights[stock] = (stock, weight, n, after, before, n * (after - before))
-                if total_weight >= 80.5 and len(clean_weights.keys()) > 30:
-                    break
-            #print(clean_weights)
+            cleaned_weights = clean_weights(weights, portfolio, first_prices, latest_prices)
+          
             # disabled due to TypeError during deepcopy of OSQP results object
             #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
             #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
-            ax.scatter(performance_tuple[1], performance_tuple[0], 
-                       marker="*", s=100, c="r", label="Max Sharpe")
+            volatility = performance_dict.get('volatility')
+            expected_return = performance_dict.get('expected return')
+            ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
             ax.set_xlabel("Volatility")
             ax.set_ylabel("Returns (%)")
         
@@ -453,12 +469,13 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
             plt.close(fig)
         
             # only plot covmatrix/corr for significant holdings to ensure readability
-            m = CovarianceShrinkage(filtered_stocks[list(clean_weights.keys())[:30]]).ledoit_wolf()
+            m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())[:30]]).ledoit_wolf()
             #print(m)
             ax = plot_covariance(m, plot_correlation=True)
             correlation_plot = plot_as_base64(ax.figure)
             plt.close(ax.figure)
-            return clean_weights, performance_tuple, \
+            assert isinstance(cleaned_weights, OrderedDict)
+            return cleaned_weights, performance_dict, \
                    efficient_frontier_plot, correlation_plot, messages, \
                    title, total_portfolio_value, leftover_funds, len(latest_prices)
         except ValueError as ve:

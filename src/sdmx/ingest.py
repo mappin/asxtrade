@@ -43,9 +43,7 @@ def ecb():
         print(results)
 
     # external trade for australia since 2000
-    trd_msg = ecb.dataflow('TRD')
-    trd = trd_msg.dataflow.TRD
-    dsd = trd.structure
+    dsd = dump_structure(ecb, 'TRD')
     print("*** External Trade")
     dump_dimension(dsd, 'REF_AREA', all=True)
     dump_dimension(dsd, 'TRD_PRODUCT')
