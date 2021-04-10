@@ -30,7 +30,7 @@ def show_companies(
 
     if isinstance(matching_companies, QuerySet):
         stocks_queryset = matching_companies  # we assume QuerySet is already sorted by desired criteria
-    elif len(matching_companies) > 0:
+    elif matching_companies is None or len(matching_companies) > 0:
         stocks_queryset, _ = latest_quote(matching_companies)
         # FALLTHRU
 
