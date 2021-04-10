@@ -12,7 +12,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.models import stocks_by_sector, day_low_high, company_prices, Timeframe, valid_quotes_only
+from app.models import stocks_by_sector, day_low_high, Timeframe, valid_quotes_only
 
 def price_change_bins():
     """
@@ -859,3 +859,26 @@ def plot_boxplot_series(df, normalisation_method=None):
         plot_as_inline_html_data(plot),
         list(reversed(sorted(winner_results, key=lambda t: t[2]))),
     )
+
+def plot_sector_field(df: pd.DataFrame, field, n_col=3):
+    print(df.columns)
+    #assert set(df.columns) == set(['sector', 'date', 'mean_pe', 'sum_pe', 'sum_eps', 'mean_eps', 'n_stocks'])
+    n_unique_sectors = df['sector'].nunique()
+    df['date'] = pd.to_datetime(df['date'])
+    plot = (
+        p9.ggplot(df, p9.aes("date", field, group="sector", color="sector"))
+        + p9.geom_line(size=1.0)
+        + p9.facet_wrap("~sector", nrow=n_unique_sectors // n_col + 1, ncol=n_col, scales="free_y")
+        + p9.xlab("")
+        + p9.ylab(f"Sector-wide {field}")
+        + p9.theme(
+            axis_text_x=p9.element_text(angle=30, size=6),
+            axis_text_y=p9.element_text(size=6),
+            figure_size=(12, 6),
+            panel_spacing=0.3,
+            legend_position="none",
+        )
+    )
+    
+    return plot_as_inline_html_data(plot)
+
