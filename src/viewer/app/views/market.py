@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.plots import (
     plot_heatmap,
+    plot_series,
     plot_market_wide_sector_performance,
     plot_market_cap_distribution,
     plot_sector_field,
@@ -55,11 +56,12 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
 def show_pe_trends(request):
     """
     Display a plot of per-sector PE trends across stocks in each sector
+    ref: https://www.commsec.com.au/education/learn/choosing-investments/what-is-price-to-earnings-pe-ratio.html
     """
     validate_user(request.user)
     timeframe = Timeframe(past_n_days=180)
-    pe_df = company_prices(None, timeframe, fields="pe", transpose=True)
-    eps_df = company_prices(None, timeframe, fields="eps", transpose=True)
+    pe_df = company_prices(None, timeframe, fields="pe", missing_cb=None, transpose=True)
+    eps_df = company_prices(None, timeframe, fields="eps", missing_cb=None, transpose=True)
     ss = stocks_by_sector() 
     ss_dict = {row.asx_code: row.sector_name for row in ss.itertuples()}
     #print(ss_dict)
@@ -76,6 +78,9 @@ def show_pe_trends(request):
     all_sectors = set(ss['sector_name'].unique())
     pe_pos_df = pe_df.filter(items=positive_pe_stocks, axis=0).merge(ss, left_index=True, right_on='asx_code')
     assert len(pe_pos_df) <= len(positive_pe_stocks) and len(pe_pos_df) > 0
+    market_avg_pe_df = pe_pos_df.mean(axis=0).to_frame(name='market_pe') # avg P/E by date series
+    market_avg_pe_df['date'] = pd.to_datetime(market_avg_pe_df.index)
+    #print(market_avg_pe_df)
     breakdown_by_sector_pe_pos_stocks_only = pe_pos_df['sector_name'].value_counts()
     #print(breakdown_by_sector_pe_pos_stocks_only)
     sector_counts_pe_pos_stocks_only = {s[0]: s[1] for s in breakdown_by_sector_pe_pos_stocks_only.items()}
@@ -124,6 +129,7 @@ def show_pe_trends(request):
         "timeframe": timeframe,
         "n_stocks_with_pe": n_non_zero_sum,
         "sector_pe_plot": plot_sector_field(df, field="mean_pe"),
-        "sector_eps_plot": plot_sector_field(df, field="sum_eps")
+        "sector_eps_plot": plot_sector_field(df, field="sum_eps"),
+        "market_pe_plot": plot_series(market_avg_pe_df, x='date', y='market_pe', y_axis_label="Market-wide mean P/E", color=None)
     }
     return render(request, "pe_trends.html", context)
