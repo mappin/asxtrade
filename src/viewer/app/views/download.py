@@ -1,3 +1,7 @@
+"""
+Responsible for implementing download of datasets (CSV/Excel/TSV/Parquet)
+on various pages for the user
+"""
 import tempfile
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
@@ -26,7 +30,7 @@ def save_dataframe_to_file(df, filename, output_format):
 
 
 def get_dataset(dataset_wanted):
-    assert dataset_wanted in ("market_sentiment")
+    assert dataset_wanted in set(["market_sentiment"])
 
     if dataset_wanted == "market_sentiment":
         df = cached_all_stocks_cip(Timeframe())

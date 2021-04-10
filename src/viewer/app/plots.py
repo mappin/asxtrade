@@ -352,13 +352,14 @@ def plot_market_wide_sector_performance(all_stocks_cip: pd.DataFrame):
 
 
 def plot_series(
-    df,
-    x=None,
-    y=None,
-    tick_text_size=6,
-    line_size=1.5,
-    y_axis_label="Point score",
-    x_axis_label="",
+        df,
+        x=None,
+        y=None,
+        tick_text_size=6,
+        line_size=1.5,
+        y_axis_label="Point score",
+        x_axis_label="",
+        color="stock",
 ):
     assert len(df) > 0
     assert len(x) > 0 and len(y) > 0
@@ -366,8 +367,11 @@ def plot_series(
     assert isinstance(tick_text_size, int) and tick_text_size > 0
     assert y_axis_label is not None
     assert x_axis_label is not None
+    args = {'x': x, 'y': y}
+    if color:
+        args['color'] = color
     plot = (
-        p9.ggplot(df, p9.aes(x=x, y=y, color="stock"))
+        p9.ggplot(df, p9.aes(**args))
         + p9.geom_line(size=line_size)
         + p9.labs(x=x_axis_label, y=y_axis_label)
         + p9.theme(
