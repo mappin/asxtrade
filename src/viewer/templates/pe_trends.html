@@ -36,10 +36,15 @@
 </div>
 
 <div class="row">
-    <h3 class="mt-4">Market wide P/E mean</h3>
+    <h3 class="mt-4">Market wide P/E mean (smoothed)</h3>
 </div>
 
 <div class="row">
+    <ul>
+        <li>Plot a smoothed line representing the average daily P/E of all positive P/E companies over the timeframe</li>
+        <li>Provided for comparison with a given company or sector for comparison</li>
+        <li>This plot is the daily average of {{ n_stocks_with_pe }} stocks</li>
+    </ul>
     <img class="mt-4" src="data:image/png;base64, {{ market_pe_plot }}" alt="ASX market-wide P/E plot">
 </div>
 {% endblock %}

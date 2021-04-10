@@ -360,6 +360,7 @@ def plot_series(
         y_axis_label="Point score",
         x_axis_label="",
         color="stock",
+        use_smooth_line=False
 ):
     assert len(df) > 0
     assert len(x) > 0 and len(y) > 0
@@ -370,16 +371,17 @@ def plot_series(
     args = {'x': x, 'y': y}
     if color:
         args['color'] = color
-    plot = (
-        p9.ggplot(df, p9.aes(**args))
-        + p9.geom_line(size=line_size)
-        + p9.labs(x=x_axis_label, y=y_axis_label)
+    plot = p9.ggplot(df, p9.aes(**args)) \
+        + p9.labs(x=x_axis_label, y=y_axis_label) \
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=tick_text_size),
             axis_text_y=p9.element_text(size=tick_text_size),
             legend_position="none",
         )
-    )
+    if use_smooth_line:
+        plot += p9.geom_smooth(size=line_size)
+    else:
+        plot += p9.geom_line(size=line_size)
     return plot_as_inline_html_data(plot)
 
 def bin_market_cap(row):
