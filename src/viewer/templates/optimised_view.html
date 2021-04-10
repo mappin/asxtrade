@@ -38,6 +38,8 @@
         <li>Only stock prices are considered: dividends, stock splits, capital raisings and many other events are ignored</li>
         <li>Timeframe: {{ timeframe.date_range }}</li>
     </ol>
+
+    {% include "user-messages.html" %}
 </div>
     
 <div class="row mt-2">
@@ -86,9 +88,9 @@
 
 <div class="row mt-2">
     <table style="width: 60%" class="mt-4">
-        <tr><td>Expected annual return</td><td>{{ portfolio_performance.0 |floatformat }}%</td></tr>
-        <tr><td>Annual volatility</td><td>{{ portfolio_performance.1 |floatformat }}%</td></tr>
-        <tr><td>Sharpe ratio</td><td>{{ portfolio_performance.2 |floatformat }}</tr>
+        {% for key, val in portfolio_performance_dict.items %}
+            <tr><td>{{ key |title }}</td><td>{{ val |floatformat }}</td></tr>
+        {% endfor %}
     </table>
 </div>
 
