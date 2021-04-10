@@ -8,4 +8,4 @@ from app.views.optimise import show_watchlist_outliers, show_sector_outliers, op
 from app.views.watchlist import show_watched, toggle_watched
 from app.views.stock import show_fundamentals, show_stock, show_stock_sector, show_trends, show_purchase_performance
 from app.views.virtual_purchases import buy_virtual_stock, edit_virtual_stock, delete_virtual_stock
-from app.views.market import market_sentiment
+from app.views.market import market_sentiment, show_pe_trends

@@ -35,6 +35,7 @@ urlpatterns = [
     path("show/purchase-performance", show_purchase_performance),
     path("show/watched", show_watched, name="show-watched"),
     path("show/etfs", show_etfs, name="show-etfs"),
+    path("show/pe-trends", show_pe_trends, name="show-pe-trends"),
     path("show/fundamentals/<str:stock>", show_fundamentals),
     path("show/recent_sector_performance", show_recent_sector, name="recent-sector-performance"),
     path("show/stock_sector/<str:stock>", show_stock_sector),
