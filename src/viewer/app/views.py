@@ -570,7 +570,7 @@ class OptimisedWatchlistView(
                 "timeframe": self.timeframe,
                 "cleaned_weights": cleaned_weights,
                 "algo": title,
-                "portfolio_performance": performance,
+                "portfolio_performance_dict": performance,
                 "efficient_frontier_plot": efficient_frontier_plot,
                 "correlation_plot": correlation_plot,
                 "portfolio_cost": portfolio_cost,
@@ -587,10 +587,7 @@ class OptimisedWatchlistView(
         return list(user_watchlist(self.request.user))
 
     def optimise(self, stocks, tf: Timeframe, algo: str, total_portfolio_value=100*1000):
-        return optimise_portfolio(stocks,
-                                  tf,
-                                  algo=algo,
-                                  total_portfolio_value=total_portfolio_value)
+        return 
 
     def get_form(self, form_class=None):
         if form_class is None:
@@ -602,15 +599,20 @@ class OptimisedWatchlistView(
         n_days = form.cleaned_data['n_days']
         algo = form.cleaned_data['method']
         portfolio_cost = form.cleaned_data['portfolio_cost']
+        exclude_price = form.cleaned_data.get('exclude_price', None)
         stocks = self.stocks()
 
         if exclude is not None:
             if isinstance(exclude, str):
                 exclude = exclude.split(",")
             stocks = set(stocks).difference(exclude)
-
+        
         self.timeframe = Timeframe(past_n_days=n_days)
-        self.results = self.optimise(stocks, self.timeframe, algo, total_portfolio_value=portfolio_cost)
+        self.results = optimise_portfolio(stocks,
+                                  self.timeframe,
+                                  algo=algo,
+                                  total_portfolio_value=portfolio_cost, 
+                                  exclude_price=exclude_price)
         return render(self.request, self.template_name, self.get_context_data())
 
 optimised_watchlist_view = OptimisedWatchlistView.as_view()
