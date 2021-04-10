@@ -130,6 +130,6 @@ def show_pe_trends(request):
         "n_stocks_with_pe": n_non_zero_sum,
         "sector_pe_plot": plot_sector_field(df, field="mean_pe"),
         "sector_eps_plot": plot_sector_field(df, field="sum_eps"),
-        "market_pe_plot": plot_series(market_avg_pe_df, x='date', y='market_pe', y_axis_label="Market-wide mean P/E", color=None)
+        "market_pe_plot": plot_series(market_avg_pe_df, x='date', y='market_pe', y_axis_label="Market-wide mean P/E", color=None, use_smooth_line=True)
     }
     return render(request, "pe_trends.html", context)
