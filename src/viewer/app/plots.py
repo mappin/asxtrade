@@ -746,9 +746,7 @@ def plot_trend(dataframe, sample_period="M"):
     return plot_as_inline_html_data(plot)
 
 
-def plot_point_scores(
-    stock: str, sector_companies, all_stocks_cip: pd.DataFrame, rules
-):
+def plot_point_scores(stock: str, sector_companies, all_stocks_cip: pd.DataFrame, rules):
     """
     Visualise the stock in terms of point scores as described on the stock view page. Rules to apply
     can be specified by rules (default rules are provided by rule_*())
@@ -879,6 +877,6 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
             legend_position="none",
         )
     )
-    
+
     return plot_as_inline_html_data(plot)
 
