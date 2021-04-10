@@ -58,45 +58,62 @@ def show_pe_trends(request):
     """
     validate_user(request.user)
     timeframe = Timeframe(past_n_days=180)
-    pe = company_prices(None, timeframe, fields="pe", transpose=True)
+    pe_df = company_prices(None, timeframe, fields="pe", transpose=True)
     eps_df = company_prices(None, timeframe, fields="eps", transpose=True)
-    ss = stocks_by_sector()
-    df = pe.merge(ss, left_index=True, right_on='asx_code')
-    df = df.set_index('asx_code')
-    n_stocks = len(df)
-    exclude_zero_sum = df[df.sum(axis=1) > 0.0]
-    n_non_zero_sum = len(exclude_zero_sum)
+    ss = stocks_by_sector() 
+    ss_dict = {row.asx_code: row.sector_name for row in ss.itertuples()}
+    #print(ss_dict)
+    eps_stocks = set(eps_df.index)
+    n_stocks = len(pe_df)
+    positive_pe_stocks = set(pe_df[pe_df.sum(axis=1) > 0.0].index)
+    all_stocks = set(pe_df.index)
+    n_non_zero_sum = len(positive_pe_stocks)
     #print(exclude_zero_sum)
     records = []
-    trading_dates = set(exclude_zero_sum.columns)
+    trading_dates = set(pe_df.columns)
+   
+    sector_counts_all_stocks = ss['sector_name'].value_counts()
+    all_sectors = set(ss['sector_name'].unique())
+    breakdown_by_sector_pe_pos_stocks_only = pe_df.filter(items=positive_pe_stocks).merge(ss, left_index=True, right_on='asx_code')['sector_name'].value_counts()
+    sector_counts_pe_pos_stocks_only = {s[0]: s[1] for s in breakdown_by_sector_pe_pos_stocks_only.items()}
+    #print(sector_counts_pe_pos_stocks_only)
+    #print(sector_counts_all_stocks)
+    #print(sector_counts_pe_pos_stocks_only)
     for ymd in filter(lambda d: d in trading_dates, timeframe.all_dates()):  # needed to avoid KeyError raised during DataFrame.at[] calls below
-        n_companies_per_sector = defaultdict(int)
         sum_pe_per_sector = defaultdict(float)
         sum_eps_per_sector = defaultdict(float)
-        for stock in exclude_zero_sum.index:
-            pe = exclude_zero_sum.at[stock, ymd]
-            eps = eps_df.at[stock, ymd]
-            sector = exclude_zero_sum.at[stock, 'sector_name']
-            if isnan(pe):
-                continue
-            #print(pe)
-            assert pe >= 0.0
+
+        for stock in filter(lambda code: code in ss_dict, all_stocks):
+            sector = ss_dict[stock]
             assert isinstance(sector, str)
-            sum_pe_per_sector[sector] += pe
-            n_companies_per_sector[sector] += 1
-            sum_eps_per_sector[sector] += eps
 
-        for sum_tuple, n_tuple, eps_tuple in zip(sum_pe_per_sector.items(), n_companies_per_sector.items(), sum_eps_per_sector.items()):
-            sum_sector, sum_pe = sum_tuple
-            n_sector, n = n_tuple
-            eps_sector, sum_eps = eps_tuple
-            assert n_sector == sum_sector
-            assert eps_sector == sum_sector
-            assert n > 0
-            assert sum_pe >= 0.0
-            records.append({'sector': n_sector, 'date': ymd, 'mean_pe': sum_pe / n, 'n_stocks': n, 'sum_eps': sum_eps, 'mean_eps': sum_eps / n})
+            if stock in eps_stocks:
+                eps = eps_df.at[stock, ymd]
+                if isnan(eps):
+                    continue
+                sum_eps_per_sector[sector] += eps
+
+            if stock in positive_pe_stocks:
+                pe = pe_df.at[stock, ymd]
+                if isnan(pe):
+                    continue
+                assert pe >= 0.0
+                sum_pe_per_sector[sector] += pe
+
+        #print(sum_pe_per_sector)
+        assert len(sector_counts_pe_pos_stocks_only) == len(sum_pe_per_sector)
+        assert len(sector_counts_all_stocks) == len(sum_eps_per_sector)
+        for sector in all_sectors:
+            pe_sum = sum_pe_per_sector.get(sector, None)
+            n_pe = sector_counts_pe_pos_stocks_only.get(sector, None)
+            pe_mean = pe_sum / n_pe if pe_sum is not None else None
+            eps_sum = sum_eps_per_sector.get(sector, None)
+
+            records.append({'date': ymd, 'sector': sector, 'mean_pe': pe_mean, 'sum_pe': pe_sum, 
+                            'sum_eps': eps_sum, 'n_stocks': n_stocks, 'n_sector_stocks_pe_only': n_pe })
+        
     df = pd.DataFrame.from_records(records)
-
+    #print(df[df["sector"] == 'Utilities'])
     #print(df)
     context = {
         "title": "PE Trends: {}".format(timeframe.description),

@@ -42,4 +42,3 @@ def toggle_watched(request, stock=None):
     validate_user(request.user)
     toggle_watchlist_entry(request.user, stock)
     return redirect_to_next(request)
-
