@@ -460,9 +460,7 @@ def valid_quotes_only(ymd: str, sort_by=None):
     assert results is not None # POST-CONDITION: must be valid queryset
     return results
 
-def desired_dates(
-    today=None, start_date=None
-):  # today is provided as keyword arg for testing
+def desired_dates(today=None, start_date=None):  # today is provided as keyword arg for testing
     """
     Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings, Ordered
     from start_date thru today inclusive. Start_date may be:
