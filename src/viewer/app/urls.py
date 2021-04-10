@@ -16,35 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.conf import settings
 from django.urls import path, include
-from app.views import (
-    show_all_stocks,
-    sector_search,
-    dividend_search,
-    company_search,
-    mover_search,
-    market_cap_search,
-    show_increasing_eps_stocks,
-    show_increasing_yield_stocks,
-    show_trends,
-    show_purchase_performance,
-    show_recent_sector,
-    show_watched,
-    show_etfs,
-    show_stock,
-    show_fundamentals,
-    show_stock_sector,
-    show_sector_outliers,
-    show_watchlist_outliers,
-    toggle_watched,
-    buy_virtual_stock,
-    edit_virtual_stock,
-    delete_virtual_stock,
-    market_sentiment,
-    download_data,
-    optimised_watchlist_view,
-    optimised_etf_view,
-    optimised_sector_view
-)
+from app.views import *
 
 urlpatterns = [
     path("accounts/", include("django.contrib.auth.urls")),
