@@ -22,7 +22,7 @@ urlpatterns = [
     path("accounts/", include("django.contrib.auth.urls")),
     path("admin/", admin.site.urls),
     path("", show_all_stocks),
-    path("search/by-sector", sector_search),
+    path("search/by-sector", sector_search, name='sector-search'),
     path("search/by-yield", dividend_search),
     path("search/by-company", company_search),
     path("search/movers", mover_search),
