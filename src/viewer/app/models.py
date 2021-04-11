@@ -452,7 +452,6 @@ def valid_quotes_only(ymd: str, sort_by=None):
         .exclude(asx_code__isnull=True)
         .exclude(error_code="id-or-code-invalid")
         .exclude(last_price__isnull=True)
-        .exclude(volume=0)
         .order_by("-annual_dividend_yield", "-last_price", "-volume") # default order_by, see below
     )
     if sort_by is not None:
@@ -518,7 +517,7 @@ def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=Fal
         results = results.drop(results[results > 0.0].index)
     if not decreasing:
         results = results.drop(results[results < 0.0].index)
-    print(results)
+    #print(results)
     if max_price is not None:
         ymd = latest_quotation_date('ANZ')
         stocks_lte_max_price = [q.asx_code for q in valid_quotes_only(ymd) if q.last_price <= max_price]
