@@ -1,7 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from app.models import all_sector_stocks
-from django.db import models
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
@@ -28,9 +27,11 @@ class SectorSearchForm(forms.Form):
         ("Real Estate", "Real Estate"),
         ("Utilities", "Utilities"),
     )
-    sector = forms.ChoiceField(choices=SECTOR_CHOICES, required=True, validators=[is_not_blank, is_valid_sector])
-    best10 = forms.BooleanField(required=False, label="Best 10 performers (past 3 months)")
-    worst10 = forms.BooleanField(required=False, label="Worst 10 performers (past 3 months)")
+    sector = forms.ChoiceField(choices=SECTOR_CHOICES, 
+                               required=True, 
+                               validators=[is_not_blank, is_valid_sector])
+    report_top_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
+    report_bottom_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
 
 class DividendSearchForm(forms.Form):
     min_yield = forms.FloatField(required=False, min_value=0.0, initial=4.0)

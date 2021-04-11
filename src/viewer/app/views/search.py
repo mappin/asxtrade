@@ -1,6 +1,7 @@
 """
 Responsible for implementing user search for finding companies of interest
 """
+import pandas as pd
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
@@ -13,6 +14,7 @@ from app.models import (Timeframe, Quotation, latest_quotation_date, valid_quote
                         selected_cached_stocks_cip)
 from app.views.core import show_companies
 from app.plots import plot_boxplot_series
+from app.messages import warning
 
 class DividendYieldSearch(
         SearchMixin,
@@ -103,7 +105,20 @@ class SectorSearchView(DividendYieldSearch):
         wanted_stocks = all_sector_stocks(self.sector)
         print("Found {} stocks matching sector={}".format(len(wanted_stocks), self.sector))
         mrd = latest_quotation_date('ANZ')
+        report_top_n = kwargs.get('report_top_n', None)
+        report_bottom_n = kwargs.get('report_bottom_n', None)
+        if report_top_n is not None or report_bottom_n is not None:
+            cip_sum = selected_cached_stocks_cip(wanted_stocks, Timeframe(past_n_days=90)).transpose().sum().to_frame(name="percent_cip")
+            #print(cip_sum)
+            top_N = set(cip_sum.nlargest(report_top_n, "percent_cip").index) if report_top_n is not None else set()
+            bottom_N = set(cip_sum.nsmallest(report_bottom_n, "percent_cip").index) if report_bottom_n is not None else set()
+            wanted_stocks = top_N.union(bottom_N)
+        print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
         self.qs = valid_quotes_only(mrd).filter(asx_code__in=wanted_stocks)
+        if len(self.qs) < len(wanted_stocks):
+            got = set([q.asx_code for q in self.qs.all()])
+            missing_stocks = wanted_stocks.difference(got)
+            warning(self.request, f"could not obtain quotes for all stocks as at {mrd}: {missing_stocks}")
         return self.qs
 
 sector_search = SectorSearchView.as_view()
