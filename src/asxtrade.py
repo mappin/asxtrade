@@ -82,7 +82,7 @@ def update_isin(db, config, ensure_indexes=True):
         )
 
     df = None
-    with tempfile.NamedTemporaryFile() as content:
+    with tempfile.NamedTemporaryFile(delete=False) as content:
         content.write(resp.content)
         content.seek(0)
         df = pd.read_csv(content.name, sep="\t")
