@@ -82,7 +82,6 @@ python3 manage.py runserver # run on local dev. host
   # run periodically (eg. quarterly) and at setup to update list of securities/companies/fundamentals
   python3 src/asxtrade.py --want-companies
   python3 src/asxtrade.py --want-isin
-  python3 src/asxtrade.py --want-prices
   python3 src/asxtrade.py --want-details
 
   # daily: fetch prices from ASX - configuration in config.json. Run after trading close each trading day
