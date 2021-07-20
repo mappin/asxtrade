@@ -86,6 +86,9 @@
                         {%if title %}<h3>{{ title }}</h3>{% endif %}
                     </div>
 
+                    {% block header %}
+                    {% endblock %}
+
                     {% block searchform %}
                     {% endblock %}
 
@@ -93,9 +96,15 @@
 
                     {% block content %}
                     {% endblock %}
+
+                    {% block footer %}
+                        {% include "user-messages.html" %}
+                    {% endblock %}
                 </div>
             </td>
         </tr>
+
+        
     </table>
 </body>
 
