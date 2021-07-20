@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 
-{% block content %}
-
-{% if watchlist_trends %}
+{% block header %}
 <div class="row">
     <h3>Trends for watched stocks over past 300 days</h3>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if watchlist_trends %}
 
     <table style="width: 60%" class="mt-4">
         <tr>
@@ -33,7 +36,4 @@
 </div>
 {% endif %}
 
-<div class="row mt-4">
-    {% include "user-messages.html" %}
-</div>
 {% endblock %}

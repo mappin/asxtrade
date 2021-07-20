@@ -33,6 +33,8 @@ from app.messages import info, warning, add_messages
 from app.plots import plot_heatmap, plot_breakdown, user_theme
 from app.data import cache_plot, timeframe_end_performance
 from plotnine.layer import Layers
+from plotnine.positions.position_dodge import position_dodge
+from plotnine.themes.themeable import legend_position
 
 
 @login_required
@@ -150,46 +152,73 @@ def show_companies(
         key = f"{sorted_codes}-{sentiment_timeframe.description}-breakdown-plot"
         sector_breakdown_uri = cache_plot(key, plot_breakdown, datasets=ld)
 
+        def positive_sum(col):
+            return col[col > 0.0].sum()
+
+        def negative_sum(col):
+            return col[col < 0.0].sum()
+
         def plot_cumulative_returns(
             wanted_stocks: Iterable[str], ld: LazyDictionary
         ) -> p9.ggplot:
             df = ld["cip_df"]
-            df = (
-                df.filter(wanted_stocks, axis=0)
-                .filter(regex="^\d", axis=1)
-                .cumsum(axis=1)
+            df = df.filter(wanted_stocks, axis=0).filter(regex="^\d", axis=1)
+            dates = set(df.columns)
+            movers = df
+            movers["asx_code"] = movers.index
+            movers = movers.melt(id_vars="asx_code", value_vars=dates)
+            movers = movers[
+                (movers["value"] < -5.0) | (movers["value"] > 5.0)
+            ]  # ignore small movers
+            # print(movers)
+            movers["fetch_date"] = pd.to_datetime(
+                movers["fetch_date"], format="%Y-%m-%d"
             )
-            dates = df.columns
-            df["asx_code"] = df.index
-            df = df.melt(value_vars=dates, id_vars="asx_code")
-            df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
-            # smooth each line to make the plot more readable
-            textual_df = df[df["fetch_date"] == dates[-1]]
-            df["rank"] = pd.qcut(df["value"], 10, labels=False, duplicates="drop")
-            df["rank"] = np.clip((df["rank"] / 10) + 0.1, 0.4, 1.0)
-            df["rank"] = df["rank"].fillna(value=0.4)
+
+            # need to have separate dataframe's for positive and negative stocks - otherwise plotnine plot will be wrong
+            pos_df = df.agg([positive_sum])
+            neg_df = df.agg([negative_sum])
+            pos_df = pos_df.melt(value_vars=dates)
+            neg_df = neg_df.melt(value_vars=dates)
+            pos_df["fetch_date"] = pd.to_datetime(
+                pos_df["fetch_date"], format="%Y-%m-%d"
+            )
+            neg_df["fetch_date"] = pd.to_datetime(
+                neg_df["fetch_date"], format="%Y-%m-%d"
+            )
 
             plot = (
-                p9.ggplot(
-                    df,
-                    p9.aes(
-                        "fetch_date",
-                        "value",
-                        group="asx_code",
-                        colour="asx_code",
-                    ),
+                p9.ggplot()
+                + p9.geom_bar(
+                    p9.aes(x="fetch_date", y="value"),
+                    data=pos_df,
+                    stat="identity",
+                    fill="green",
                 )
-                + p9.geom_line(p9.aes(alpha="rank"), size=1.3)
-                + p9.geom_text(
-                    textual_df,
-                    p9.aes(x="fetch_date", y="value", label="asx_code"),
-                    color="black",
-                    size=9,
-                    position=p9.position_jitter(width=1, height=1),
+                + p9.geom_bar(
+                    p9.aes(x="fetch_date", y="value"),
+                    data=neg_df,
+                    stat="identity",
+                    fill="red",
+                )
+                + p9.geom_point(
+                    p9.aes(
+                        x="fetch_date",
+                        y="value",
+                        fill="asx_code",
+                    ),
+                    data=movers,
+                    size=3,
+                    position=p9.position_dodge(width=0.4),
+                    colour="black",
                 )
             )
-
-            return user_theme(plot, y_axis_label="Cumulative Return (%)")
+            return user_theme(
+                plot,
+                y_axis_label="Cumulative Return (%)",
+                legend_position="right",
+                asxtrade_want_fill_d=True,
+            )
 
         top10_plot_uri = cache_plot(
             f"top10-plot-{'-'.join(ld['top10'].index)}",
