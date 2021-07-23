@@ -217,7 +217,7 @@ def show_companies(
                 plot,
                 y_axis_label="Cumulative Return (%)",
                 legend_position="right",
-                asxtrade_want_fill_d=True,
+                asxtrade_want_fill_d=True,  # points (stocks) are filled with the user-chosen theme, but everything else is fixed
             )
 
         top10_plot_uri = cache_plot(
