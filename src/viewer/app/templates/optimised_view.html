@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block content %}
+{% block searchform %}
 
 <div class="row mt-2">
     <h2>Portfolio optimisation: {{ stock_selector }}</h2>
@@ -16,7 +16,9 @@
         </table>
     </form>
 </div>
+{% endblock %}
 
+{% block content %}
 {% if efficient_frontier_plot_uri is not None %}
 <div class="row mt-4">
     <h2>Results</h2>
