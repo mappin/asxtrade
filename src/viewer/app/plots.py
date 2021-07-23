@@ -161,9 +161,10 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
 
 @timing
 def plot_fundamentals(
-    df: pd.DataFrame, stock: str, line_size=1.5  # pylint: disable=unused-argument
-) -> str:
-    columns_to_report = [
+    df: pd.DataFrame,
+    stock: str,
+    line_size=1.5,  # pylint: disable=unused-argument
+    columns_to_report=(
         "pe",
         "eps",
         "annual_dividend_yield",
@@ -173,11 +174,8 @@ def plot_fundamentals(
         "change_price",
         "market_cap",
         "number_of_shares",
-    ]
-    colnames = df.columns
-    for column in columns_to_report:
-        assert column in colnames
-
+    ),
+) -> str:
     plot_df = pd.melt(
         df,
         id_vars="fetch_date",
@@ -185,6 +183,7 @@ def plot_fundamentals(
         var_name="indicator",
         value_name="value",
     )
+    plot_df = plot_df[plot_df["indicator"].isin(columns_to_report)]
     plot_df["value"] = pd.to_numeric(plot_df["value"])
     plot_df = plot_df.dropna(axis=0, subset=["value"], how="any")
     n = len(columns_to_report)
@@ -344,7 +343,7 @@ def plot_market_wide_sector_performance(ld: LazyDictionary) -> p9.ggplot:
     all_stocks_cip = ld["sector_df"]
     n_stocks = len(all_stocks_cip)
     # merge in sector information for each company
-    code_and_sector = stocks_by_sector()
+    code_and_sector = ld["stocks_by_sector"]
     n_unique_sectors = len(code_and_sector["sector_name"].unique())
     print("Found {} unique sectors".format(n_unique_sectors))
 
@@ -452,7 +451,7 @@ def plot_breakdown(ld: LazyDictionary) -> p9.ggplot:
     cols_to_drop = [colname for colname in cip_df.columns if colname.startswith("bin_")]
     df = cip_df.drop(columns=cols_to_drop)
     df = pd.DataFrame(df.sum(axis="columns"), columns=["sum"])
-    ss = stocks_by_sector()
+    ss = ld["stocks_by_sector"]
     # ss should be:
     #             asx_code             sector_name
     # asx_code
@@ -687,7 +686,7 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
     assert linema200 is not None
 
     props = font_manager.FontProperties(size=10)
-    leg = ax2.legend(loc="center left", shadow=True, fancybox=True, prop=props)
+    leg = ax2.legend(loc="lower left", shadow=True, fancybox=True, prop=props)
     leg.get_frame().set_alpha(0.5)
 
     volume = (last_price * volume) / 1e6  # dollar volume in millions

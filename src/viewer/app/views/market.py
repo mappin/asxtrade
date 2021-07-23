@@ -110,9 +110,10 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         return result_df
 
     ld = LazyDictionary()
-    ld["cip_df"] = lambda: data_factory()
-    ld["sector_df"] = lambda: sector_data_factory()
-    ld["market_cap_df"] = lambda: market_cap_data_factory()
+    ld["cip_df"] = lambda ld: data_factory()
+    ld["sector_df"] = lambda ld: sector_data_factory()
+    ld["market_cap_df"] = lambda ld: market_cap_data_factory()
+    ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
 
     sentiment_plot = cache_plot(
         f"market-sentiment-{timeframe.description}",

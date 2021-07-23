@@ -57,6 +57,71 @@ def png(request, key):
         raise Http404("No such cached image: {}".format(key))
 
 
+def positive_sum(col):
+    return col[col > 0.0].sum()
+
+
+def negative_sum(col):
+    return col[col < 0.0].sum()
+
+
+def plot_cumulative_returns(
+    wanted_stocks: Iterable[str], ld: LazyDictionary
+) -> p9.ggplot:
+    df = ld["cip_df"]
+    df = df.filter(wanted_stocks, axis=0).filter(regex="^\d", axis=1)
+    dates = set(df.columns)
+    movers = df
+    movers["asx_code"] = movers.index
+    movers = movers.melt(id_vars="asx_code", value_vars=dates)
+    movers = movers[
+        (movers["value"] < -5.0) | (movers["value"] > 5.0)
+    ]  # ignore small movers
+    # print(movers)
+    movers["fetch_date"] = pd.to_datetime(movers["fetch_date"], format="%Y-%m-%d")
+
+    # need to have separate dataframe's for positive and negative stocks - otherwise plotnine plot will be wrong
+    pos_df = df.agg([positive_sum])
+    neg_df = df.agg([negative_sum])
+    pos_df = pos_df.melt(value_vars=dates)
+    neg_df = neg_df.melt(value_vars=dates)
+    pos_df["fetch_date"] = pd.to_datetime(pos_df["fetch_date"], format="%Y-%m-%d")
+    neg_df["fetch_date"] = pd.to_datetime(neg_df["fetch_date"], format="%Y-%m-%d")
+
+    plot = (
+        p9.ggplot()
+        + p9.geom_bar(
+            p9.aes(x="fetch_date", y="value"),
+            data=pos_df,
+            stat="identity",
+            fill="green",
+        )
+        + p9.geom_bar(
+            p9.aes(x="fetch_date", y="value"),
+            data=neg_df,
+            stat="identity",
+            fill="red",
+        )
+        + p9.geom_point(
+            p9.aes(
+                x="fetch_date",
+                y="value",
+                fill="asx_code",
+            ),
+            data=movers,
+            size=3,
+            position=p9.position_dodge(width=0.4),
+            colour="black",
+        )
+    )
+    return user_theme(
+        plot,
+        y_axis_label="Cumulative Return (%)",
+        legend_position="right",
+        asxtrade_want_fill_d=True,  # points (stocks) are filled with the user-chosen theme, but everything else is fixed
+    )
+
+
 def show_companies(
     matching_companies,  # may be QuerySet or iterable of stock codes (str)
     request,
@@ -67,8 +132,6 @@ def show_companies(
     """
     Support function to public-facing views to eliminate code redundancy
     """
-    virtual_purchases_by_user = user_purchases(request.user)
-
     if isinstance(matching_companies, QuerySet):
         stocks_queryset = matching_companies  # we assume QuerySet is already sorted by desired criteria
     elif matching_companies is None or len(matching_companies) > 0:
@@ -121,7 +184,7 @@ def show_companies(
         "watched": user_watchlist(request.user),
         "n_stocks": len(asx_codes),
         "n_top_bottom": n_top_bottom,
-        "virtual_purchases": virtual_purchases_by_user,
+        "virtual_purchases": user_purchases(request.user),
     }
 
     # since we sort above, we must setup the pagination also...
@@ -138,6 +201,7 @@ def show_companies(
     ld["sum_by_company"] = lambda ld: ld["cip_df"].sum(axis=1)
     ld["top10"] = lambda ld: ld["sum_by_company"].nlargest(n_top_bottom)
     ld["bottom10"] = lambda ld: ld["sum_by_company"].nsmallest(n_top_bottom)
+    ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
 
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
@@ -151,74 +215,6 @@ def show_companies(
 
         key = f"{sorted_codes}-{sentiment_timeframe.description}-breakdown-plot"
         sector_breakdown_uri = cache_plot(key, plot_breakdown, datasets=ld)
-
-        def positive_sum(col):
-            return col[col > 0.0].sum()
-
-        def negative_sum(col):
-            return col[col < 0.0].sum()
-
-        def plot_cumulative_returns(
-            wanted_stocks: Iterable[str], ld: LazyDictionary
-        ) -> p9.ggplot:
-            df = ld["cip_df"]
-            df = df.filter(wanted_stocks, axis=0).filter(regex="^\d", axis=1)
-            dates = set(df.columns)
-            movers = df
-            movers["asx_code"] = movers.index
-            movers = movers.melt(id_vars="asx_code", value_vars=dates)
-            movers = movers[
-                (movers["value"] < -5.0) | (movers["value"] > 5.0)
-            ]  # ignore small movers
-            # print(movers)
-            movers["fetch_date"] = pd.to_datetime(
-                movers["fetch_date"], format="%Y-%m-%d"
-            )
-
-            # need to have separate dataframe's for positive and negative stocks - otherwise plotnine plot will be wrong
-            pos_df = df.agg([positive_sum])
-            neg_df = df.agg([negative_sum])
-            pos_df = pos_df.melt(value_vars=dates)
-            neg_df = neg_df.melt(value_vars=dates)
-            pos_df["fetch_date"] = pd.to_datetime(
-                pos_df["fetch_date"], format="%Y-%m-%d"
-            )
-            neg_df["fetch_date"] = pd.to_datetime(
-                neg_df["fetch_date"], format="%Y-%m-%d"
-            )
-
-            plot = (
-                p9.ggplot()
-                + p9.geom_bar(
-                    p9.aes(x="fetch_date", y="value"),
-                    data=pos_df,
-                    stat="identity",
-                    fill="green",
-                )
-                + p9.geom_bar(
-                    p9.aes(x="fetch_date", y="value"),
-                    data=neg_df,
-                    stat="identity",
-                    fill="red",
-                )
-                + p9.geom_point(
-                    p9.aes(
-                        x="fetch_date",
-                        y="value",
-                        fill="asx_code",
-                    ),
-                    data=movers,
-                    size=3,
-                    position=p9.position_dodge(width=0.4),
-                    colour="black",
-                )
-            )
-            return user_theme(
-                plot,
-                y_axis_label="Cumulative Return (%)",
-                legend_position="right",
-                asxtrade_want_fill_d=True,  # points (stocks) are filled with the user-chosen theme, but everything else is fixed
-            )
 
         top10_plot_uri = cache_plot(
             f"top10-plot-{'-'.join(ld['top10'].index)}",
