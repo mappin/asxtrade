@@ -66,11 +66,13 @@ def load_prices(db, field_name, month, year) -> pd.DataFrame:
 def save_dataframe(db, df, tag, field_name, n_days=None, n_stocks=None, **kwargs):
     assert isinstance(df, pd.DataFrame) and len(df) > 0
     assert db is not None
-    #print(df.dtypes)   
     for colname in ['asx_code', 'fetch_date', 'field_name']:
         if colname in df.columns:
            print(f"Making {colname} a categorical column")
            df[colname] = pd.Categorical(df[colname], categories=df[colname].unique())
+    df['field_value'] = pd.to_numeric(df['field_value'], downcast='float')
+    df = df.sort_values(['field_name', 'field_value'], axis=0) # sorting improves parquet compression and thus resulting size
+    print(df.dtypes)
     scope = kwargs.get('scope', 'all-downloaded')
     market = kwargs.get('market', 'asx')
     compression = kwargs.get('compression', 'snappy') 
@@ -135,7 +137,6 @@ def load_all_prices(db, month: int, year: int, required_fields, **kwargs):
     print("% missing values: ", ((uber_df.isnull() | uber_df.isna()).sum() * 100 / uber_df.index.size).round(2))
     n_stocks = uber_df['asx_code'].nunique()
     n_days = uber_df['fetch_date'].nunique()
-    #print(uber_df)
     save_dataframe(db, uber_df, uber_tag, 'uber', n_days=n_days, n_stocks=n_stocks, **kwargs)
 
 if __name__ == "__main__":
