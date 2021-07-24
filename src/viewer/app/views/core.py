@@ -287,21 +287,21 @@ def show_etfs(request):
     )
 
 
-@login_required
-def show_increasing_eps_stocks(request):
-    validate_user(request.user)
-    timeframe = Timeframe(past_n_days=300)
-    sentiment_timeframe = Timeframe(past_n_days=30)
-    matching_companies = increasing_only_filter(None, timeframe, "eps")
-    return show_companies(
-        matching_companies,
-        request,
-        sentiment_timeframe,
-        extra_context={
-            "title": "Stocks with increasing EPS",
-            "sentiment_heatmap_title": "Sentiment for selected stocks",
-        },
-    )
+# @login_required
+# def show_increasing_eps_stocks(request):
+#     validate_user(request.user)
+#     timeframe = Timeframe(past_n_days=300)
+#     sentiment_timeframe = Timeframe(past_n_days=30)
+#     matching_companies = increasing_only_filter(None, timeframe, "eps")
+#     return show_companies(
+#         matching_companies,
+#         request,
+#         sentiment_timeframe,
+#         extra_context={
+#             "title": "Stocks with increasing EPS",
+#             "sentiment_heatmap_title": "Sentiment for selected stocks",
+#         },
+#     )
 
 
 @login_required
