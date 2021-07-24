@@ -123,17 +123,19 @@ class SectorSearchView(DividendYieldSearch):
 
     def additional_context(self, context):
         d = super().additional_context(context)
-        d.update({
-            # to highlight top10/bottom10 bookmarks correctly
-            "title": "Find by company sector",
-            "sector_name": self.sector,
-            "sector_id": self.sector_id,
-            "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
-            "sector_performance_plot_uri": self.ld["sector_performance_plot"]
-            if "sector_performance_plot" in self.ld
-            else None,
-            "timeframe_end_performance": timeframe_end_performance(self.ld),
-        })
+        d.update(
+            {
+                # to highlight top10/bottom10 bookmarks correctly
+                "title": "Find by company sector",
+                "sector_name": self.sector,
+                "sector_id": self.sector_id,
+                "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
+                "sector_performance_plot_uri": self.ld["sector_performance_plot"]
+                if "sector_performance_plot" in self.ld
+                else None,
+                "timeframe_end_performance": timeframe_end_performance(self.ld),
+            }
+        )
         return d
 
     def get_queryset(self, **kwargs):
@@ -200,10 +202,12 @@ class MoverSearch(DividendYieldSearch):
 
     def additional_context(self, context):
         d = super().additional_context(context)
-        d.update({
-            "title": "Find companies exceeding threshold over timeframe",
-            "sentiment_heatmap_title": "Heatmap for moving stocks",
-        })
+        d.update(
+            {
+                "title": "Find companies exceeding threshold over timeframe",
+                "sentiment_heatmap_title": "Heatmap for moving stocks",
+            }
+        )
         return d
 
     def get_queryset(self, **kwargs):
@@ -213,6 +217,7 @@ class MoverSearch(DividendYieldSearch):
             return Quotation.objects.none()
         threshold_percentage = kwargs.get("threshold")
         self.timeframe = Timeframe(past_n_days=kwargs.get("timeframe_in_days", 30))
+
         df = find_movers(
             threshold_percentage,
             self.timeframe,
@@ -221,6 +226,8 @@ class MoverSearch(DividendYieldSearch):
             kwargs.get("max_price", None),
             field=kwargs.get("metric", "change_in_percent"),
         )
+        # print(df)
+
         self.qs, _ = latest_quote(tuple(df.index))
         return self.qs
 
