@@ -469,6 +469,6 @@ def timeframe_end_performance(ld: LazyDictionary) -> pd.Series:
     if ld is None or "cip_df" not in ld:
         return None
 
-    timeframe_end_perf = ld["cip_df"].sum(axis=1)
+    timeframe_end_perf = ld["cip_df"].sum(axis=1, numeric_only=True)
     # print(timeframe_end_perf)
     return timeframe_end_perf.to_dict()

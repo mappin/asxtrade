@@ -118,6 +118,7 @@ def plot_cumulative_returns(
         plot,
         y_axis_label="Cumulative Return (%)",
         legend_position="right",
+        asxtrade_want_cmap_d=False,
         asxtrade_want_fill_d=True,  # points (stocks) are filled with the user-chosen theme, but everything else is fixed
     )
 
@@ -198,7 +199,7 @@ def show_companies(
     # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
     ld = LazyDictionary()
     ld["cip_df"] = lambda ld: selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-    ld["sum_by_company"] = lambda ld: ld["cip_df"].sum(axis=1)
+    ld["sum_by_company"] = lambda ld: ld["cip_df"].sum(axis=1, numeric_only=True)
     ld["top10"] = lambda ld: ld["sum_by_company"].nlargest(n_top_bottom)
     ld["bottom10"] = lambda ld: ld["sum_by_company"].nsmallest(n_top_bottom)
     ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
