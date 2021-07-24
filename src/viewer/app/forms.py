@@ -67,6 +67,7 @@ class MoverSearchForm(forms.Form):
         ("change_in_percent", "Price change in percent (%) terms"),
         ("pe", "Price/Earnings ratio"),
         ("threshold_eps", "Transition from EPS lower than threshold to greater"),
+        ("eps_growth", "Growth in EPS (%) above threshold (negative EPS ignored)"),
     )
     threshold = forms.FloatField(
         required=True, min_value=0.0, max_value=10000.0, initial=50.0

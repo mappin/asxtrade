@@ -623,7 +623,7 @@ def find_movers(
     cip = company_prices(
         None,
         timeframe,
-        fields=field if field != "threshold_eps" else "eps",
+        fields=field if field not in ("threshold_eps", "eps_growth") else "eps",
         missing_cb=None,
     )
 
@@ -660,6 +660,19 @@ def find_movers(
         results = results.filter(good, axis=0)
         # print(results)
         needs_results_filtering = False
+    elif field == "eps_growth":
+        positive_eps = cip.mask(cip.lt(0), 0.0).fillna(0.0)
+        df = positive_eps.diff(axis=0).cumsum().iloc[-1]
+        first_eps = (
+            cip.gt(0.0)
+            .idxmax()
+            .to_frame("pos")
+            .assign(val=lambda d: positive_eps.lookup(d.pos, d.index))
+        )
+        # print(df)
+        # print(first_eps)
+        pct_change = 100.0 * (df / first_eps["val"])
+        results = pct_change.dropna()[pct_change > threshold]
     else:
         movements = (
             cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0, numeric_only=True)
