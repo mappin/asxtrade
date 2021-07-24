@@ -623,8 +623,9 @@ def find_movers(
     field_to_fetch = field
     if field in ("threshold_eps", "eps_growth"):
         field_to_fetch = "eps"
-    elif field == "dividend_growth":
+    elif field == "dividend_growth" or field == "threshold_dy":
         field_to_fetch = "annual_dividend_yield"
+
     cip = company_prices(
         None,
         timeframe,
@@ -636,7 +637,7 @@ def find_movers(
     if field == "change_in_percent":
         movements = cip.sum(axis=0, numeric_only=True)
         results = movements[movements.abs() >= threshold]
-    elif field == "threshold_eps":
+    elif field == "threshold_eps" or field == "threshold_dy":
         df = cip
         df = df.agg(["min", "max"], axis=0).transpose()
         # print(df)

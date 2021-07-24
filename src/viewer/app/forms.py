@@ -64,11 +64,12 @@ class MoverSearchForm(forms.Form):
     METRIC_CHOICES = (
         ("annual_dividend_yield", "Change in dividend yield (%)"),
         ("eps", "Earnings per share (cents AUD)"),
+        ("dividend_growth", "Growth in DY (%) above threshold"),
+        ("eps_growth", "Growth in EPS (%) above threshold (negative EPS ignored)"),
         ("change_in_percent", "Price change in percent (%) terms"),
         ("pe", "Price/Earnings ratio"),
+        ("threshold_dy", "Transition from DY lower than threshold to greater"),
         ("threshold_eps", "Transition from EPS lower than threshold to greater"),
-        ("eps_growth", "Growth in EPS (%) above threshold (negative EPS ignored)"),
-        ("dividend_growth", "Growth in DY (%) above threshold"),
     )
     threshold = forms.FloatField(
         required=True, min_value=0.0, max_value=10000.0, initial=50.0
