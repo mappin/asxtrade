@@ -871,18 +871,6 @@ def all_etfs() -> set:
     return etf_codes
 
 
-def increasing_eps(stock_codes, past_n_days=300):
-    tf = Timeframe(past_n_days=past_n_days)
-    return increasing_only_filter(stock_codes, tf, "eps")
-
-
-def increasing_yield(stock_codes, past_n_days=300):
-    tf = Timeframe(past_n_days=past_n_days)
-    return increasing_only_filter(
-        stock_codes, tf, "annual_dividend_yield", min_value=0.01
-    )
-
-
 def increasing_only_filter(
     stock_codes, timeframe: Timeframe, field: str, min_value=0.02
 ):
@@ -897,16 +885,16 @@ def increasing_only_filter(
         )
 
     # NB: we dont care here if some tags cant be found
-    df = company_prices(stock_codes, timeframe, field, transpose=True).fillna(0.0)
+    df = company_prices(stock_codes, timeframe, field, transpose=True)
     # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
     # at least 2c per share positive max(eps) is required to be considered significant
     ret = []
     for idx, series in df.iterrows():
-        if series.is_monotonic_increasing:
+        series = series.dropna()
+        if len(series) > 0 and series.is_monotonic_increasing:
             # print(series)
             if max(series) < 0.02:
                 continue
-            assert series.isna().sum() == 0
             ret.append(idx)
 
     return ret
