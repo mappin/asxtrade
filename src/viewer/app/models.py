@@ -619,23 +619,65 @@ def find_movers(
     implies a decrease, positive an increase in price over the observation period. Some fields are percentages, some AUD cents etc (it is up to the user to get it right)
     """
     assert threshold >= 0.0
-    cip = company_prices(all_stocks(), timeframe, fields=field, missing_cb=None)
+    # if field == "threshold_eps" its a really the eps field that is needed for the analysis
+    cip = company_prices(
+        None,
+        timeframe,
+        fields=field if field != "threshold_eps" else "eps",
+        missing_cb=None,
+    )
 
+    needs_results_filtering = True
     if field == "change_in_percent":
-        movements = cip.sum(axis=0)
+        movements = cip.sum(axis=0, numeric_only=True)
+        results = movements[movements.abs() >= threshold]
+    elif field == "threshold_eps":
+        df = cip
+        df = df.agg(["min", "max"], axis=0).transpose()
+        # print(df)
+        # print(cip)
+        results = cip.transpose()[(df["min"] < threshold) & (df["max"] > threshold)]
+        # reject those results for which the transition is going the wrong way
+        good = set()
+        for idx, series in results.iterrows():
+            min_when = None
+            min = None
+            max_when = None
+            max = None
+
+            for k, v in series.items():
+                if min is None or v <= min:
+                    min = v
+                    min_when = k
+                if max is None or v >= max:
+                    max = v
+                    max_when = k
+            # print(f"{min} {min_when} {max} {max_when}")
+            min_when = datetime.strptime(min_when, "%Y-%m-%d")
+            max_when = datetime.strptime(max_when, "%Y-%m-%d")
+            if min_when < max_when:
+                good.add(idx)
+        results = results.filter(good, axis=0)
+        # print(results)
+        needs_results_filtering = False
     else:
-        movements = cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0)
+        movements = (
+            cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0, numeric_only=True)
+        )
+        results = movements[movements.abs() >= threshold]
     # FALLTHRU...
-    results = movements[movements.abs() >= threshold]
+
     print(
         "Found {} movers (using {}) before filtering: {} {}".format(
             len(results), field, increasing, decreasing
         )
     )
-    if not increasing:
-        results = results.drop(results[results > 0.0].index)
-    if not decreasing:
-        results = results.drop(results[results < 0.0].index)
+
+    if needs_results_filtering:
+        if not increasing:
+            results = results.drop(results[results > 0.0].index)
+        if not decreasing:
+            results = results.drop(results[results < 0.0].index)
     # print(results)
     if max_price is not None:
         ymd = latest_quotation_date("ANZ")

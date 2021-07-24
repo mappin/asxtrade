@@ -62,10 +62,11 @@ class CompanySearchForm(forms.Form):
 
 class MoverSearchForm(forms.Form):
     METRIC_CHOICES = (
-        ("change_in_percent", "Price change in percent (%) terms"),
-        ("eps", "Earnings per share (cents AUD)"),
         ("annual_dividend_yield", "Change in dividend yield (%)"),
+        ("eps", "Earnings per share (cents AUD)"),
+        ("change_in_percent", "Price change in percent (%) terms"),
         ("pe", "Price/Earnings ratio"),
+        ("threshold_eps", "Transition from EPS lower than threshold to greater"),
     )
     threshold = forms.FloatField(
         required=True, min_value=0.0, max_value=10000.0, initial=50.0
