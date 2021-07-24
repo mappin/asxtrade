@@ -157,6 +157,7 @@ def show_pe_trends(request):
 
     def make_pe_trends_market_avg_df(ld: LazyDictionary) -> pd.DataFrame:
         df = ld["data_df"]
+        ss = ld["stocks_by_sector"]
         pe_pos_df, _ = make_pe_trends_positive_pe_df(df, ss)
         market_avg_pe_df = pe_pos_df.mean(axis=0, numeric_only=True).to_frame(
             name="market_pe"
@@ -169,6 +170,7 @@ def show_pe_trends(request):
         n_stocks = df["asx_code"].nunique()
         pe_df, positive_pe_stocks = ld["positive_pe_tuple"]
         eps_df = ld["eps_df"]
+        ss = ld["stocks_by_sector"]
 
         # print(positive_pe_stocks)
         eps_stocks = set(eps_df.index)
@@ -189,7 +191,7 @@ def show_pe_trends(request):
         # print(sector_counts_pe_pos_stocks_only)
         records = []
         for ymd in filter(
-            lambda d: d in trading_dates, timeframe.all_dates()
+            lambda d: d in trading_dates, ld["timeframe"].all_dates()
         ):  # needed to avoid KeyError raised during DataFrame.at[] calls below
             sum_pe_per_sector = defaultdict(float)
             sum_eps_per_sector = defaultdict(float)
@@ -238,16 +240,16 @@ def show_pe_trends(request):
         return df
 
     ld = LazyDictionary()
-    ld["data_df"] = lambda: pe_trends_df(timeframe)
+    ld["data_df"] = lambda ld: pe_trends_df(ld["timeframe"])
     ld["positive_pe_tuple"] = lambda ld: make_pe_trends_positive_pe_df(
-        ld["data_df"], ss
+        ld["data_df"], ld["stocks_by_sector"]
     )
     ld["market_avg_pe_df"] = lambda ld: make_pe_trends_market_avg_df(ld)
     ld["eps_df"] = lambda ld: make_pe_trends_eps_df(ld["data_df"])
     ld["sector_eps_df"] = lambda ld: sector_eps_data_factory(ld)
-    ld["ss"] = stocks_by_sector()
-    ld['timeframe'] = Timeframe(past_n_days=180)
-    td = ld['timeframe'].description
+    ld["stocks_by_sector"] = stocks_by_sector()
+    ld["timeframe"] = Timeframe(past_n_days=180)
+    td = ld["timeframe"].description
 
     # these arent per-user plots: they can safely be shared across all users of the site, so the key reflects that
     sector_pe_cache_key = f"{td}-by-sector-pe-plot"
@@ -269,7 +271,7 @@ def show_pe_trends(request):
     context = {
         "title": "PE Trends",
         "n_stocks": ld["data_df"]["asx_code"].nunique(),
-        "timeframe": timeframe,
+        "timeframe": ld["timeframe"],
         "n_stocks_with_pe": len(ld["positive_pe_tuple"][1]),
         "sector_pe_plot_uri": cache_plot(
             sector_pe_cache_key,
@@ -284,7 +286,9 @@ def show_pe_trends(request):
         "market_pe_plot_uri": market_pe_plot_uri,
         "sector_positive_top_contributors_eps_uri": cache_plot(
             f"top-contributors-{sector_eps_cache_key}",
-            lambda ld: plot_sector_top_eps_contributors(ld["eps_df"], ss),
+            lambda ld: plot_sector_top_eps_contributors(
+                ld["eps_df"], ld["stocks_by_sector"]
+            ),
             datasets=ld,
         ),
     }
