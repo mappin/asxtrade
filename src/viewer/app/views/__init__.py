@@ -4,7 +4,6 @@ Responsible for ensuring all imports as required by urls.py are done
 from app.views.core import (
     show_all_stocks,
     show_etfs,
-    show_increasing_yield_stocks,
     png,
 )
 from app.views.search import (

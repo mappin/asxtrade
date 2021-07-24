@@ -32,7 +32,7 @@ urlpatterns = [
     path("search/market-cap", market_cap_search),
     # path("show/increasing-eps", show_increasing_eps_stocks),
     # NB: order important here!
-    path("show/increasing-yield", show_increasing_yield_stocks),
+    # path("show/increasing-yield", show_increasing_yield_stocks),
     path("show/trends", show_trends),
     path("show/purchase-performance", show_purchase_performance),
     path("show/watched", show_watched, name="show-watched"),

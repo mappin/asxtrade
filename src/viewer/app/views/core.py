@@ -26,7 +26,6 @@ from app.models import (
     validate_date,
     validate_user,
     all_etfs,
-    increasing_only_filter,
 )
 from app.messages import info, warning, add_messages
 from app.plots import plot_heatmap, plot_breakdown, user_theme
@@ -304,20 +303,20 @@ def show_etfs(request):
 #     )
 
 
-@login_required
-def show_increasing_yield_stocks(request):
-    validate_user(request.user)
-    timeframe = Timeframe(past_n_days=300)
-    sentiment_timeframe = Timeframe(past_n_days=30)
-    matching_companies = increasing_only_filter(
-        None, timeframe, "annual_dividend_yield", min_value=0.01
-    )
-    return show_companies(
-        matching_companies,
-        request,
-        sentiment_timeframe,
-        extra_context={
-            "title": "Stocks with increasing yield",
-            "sentiment_heatmap_title": "Sentiment for selected stocks",
-        },
-    )
+# @login_required
+# def show_increasing_yield_stocks(request):
+#     validate_user(request.user)
+#     timeframe = Timeframe(past_n_days=300)
+#     sentiment_timeframe = Timeframe(past_n_days=30)
+#     matching_companies = increasing_only_filter(
+#         None, timeframe, "annual_dividend_yield", min_value=0.01
+#     )
+#     return show_companies(
+#         matching_companies,
+#         request,
+#         sentiment_timeframe,
+#         extra_context={
+#             "title": "Stocks with increasing yield",
+#             "sentiment_heatmap_title": "Sentiment for selected stocks",
+#         },
+#     )

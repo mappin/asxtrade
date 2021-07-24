@@ -620,10 +620,15 @@ def find_movers(
     """
     assert threshold >= 0.0
     # if field == "threshold_eps" its a really the eps field that is needed for the analysis
+    field_to_fetch = field
+    if field in ("threshold_eps", "eps_growth"):
+        field_to_fetch = "eps"
+    elif field == "dividend_growth":
+        field_to_fetch = "annual_dividend_yield"
     cip = company_prices(
         None,
         timeframe,
-        fields=field if field not in ("threshold_eps", "eps_growth") else "eps",
+        fields=field_to_fetch,
         missing_cb=None,
     )
 
@@ -673,6 +678,14 @@ def find_movers(
         # print(first_eps)
         pct_change = 100.0 * (df / first_eps["val"])
         results = pct_change.dropna()[pct_change > threshold]
+    elif field == "dividend_growth":
+        dy = cip.fillna(0.0).pct_change().cumsum() * 100.0
+        # print(dy)
+        dy = dy.iloc[-1]
+        # print(dy)
+        results = dy[dy > threshold]
+        need_results_filtering = False
+        # print(results)
     else:
         movements = (
             cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0, numeric_only=True)
@@ -926,33 +939,33 @@ def all_etfs() -> set:
     return etf_codes
 
 
-def increasing_only_filter(
-    stock_codes, timeframe: Timeframe, field: str, min_value=0.02
-):
-    assert min_value >= 0.0
-    assert timeframe is not None
+# def increasing_only_filter(
+#     stock_codes, timeframe: Timeframe, field: str, min_value=0.02
+# ):
+#     assert min_value >= 0.0
+#     assert timeframe is not None
 
-    if timeframe.n_days < 14:
-        raise Http404(
-            "Not enough days requested to produce meaningful results: {}".format(
-                timeframe.n_days
-            )
-        )
+#     if timeframe.n_days < 14:
+#         raise Http404(
+#             "Not enough days requested to produce meaningful results: {}".format(
+#                 timeframe.n_days
+#             )
+#         )
 
-    # NB: we dont care here if some tags cant be found
-    df = company_prices(stock_codes, timeframe, field, transpose=True)
-    # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
-    # at least 2c per share positive max(eps) is required to be considered significant
-    ret = []
-    for idx, series in df.iterrows():
-        series = series.dropna()
-        if len(series) > 0 and series.is_monotonic_increasing:
-            # print(series)
-            if max(series) < 0.02:
-                continue
-            ret.append(idx)
+#     # NB: we dont care here if some tags cant be found
+#     df = company_prices(stock_codes, timeframe, field, transpose=True)
+#     # df will be very large: 300 days * ~2000 stocks... but mostly the numbers will be the same each day...
+#     # at least 2c per share positive max(eps) is required to be considered significant
+#     ret = []
+#     for idx, series in df.iterrows():
+#         series = series.dropna()
+#         if len(series) > 0 and series.is_monotonic_increasing:
+#             # print(series)
+#             if max(series) < 0.02:
+#                 continue
+#             ret.append(idx)
 
-    return ret
+#     return ret
 
 
 def get_required_tags(all_dates, fields) -> Tuple[str]:
