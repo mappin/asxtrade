@@ -154,13 +154,11 @@ def show_pe_trends(request):
     ref: https://www.commsec.com.au/education/learn/choosing-investments/what-is-price-to-earnings-pe-ratio.html
     """
     validate_user(request.user)
-    timeframe = Timeframe(past_n_days=180)
-    ss = stocks_by_sector()
 
     def make_pe_trends_market_avg_df(ld: LazyDictionary) -> pd.DataFrame:
         df = ld["data_df"]
         pe_pos_df, _ = make_pe_trends_positive_pe_df(df, ss)
-        market_avg_pe_df = pe_pos_df.mean(axis=0).to_frame(
+        market_avg_pe_df = pe_pos_df.mean(axis=0, numeric_only=True).to_frame(
             name="market_pe"
         )  # avg P/E by date series
         market_avg_pe_df["date"] = pd.to_datetime(market_avg_pe_df.index)
@@ -247,11 +245,14 @@ def show_pe_trends(request):
     ld["market_avg_pe_df"] = lambda ld: make_pe_trends_market_avg_df(ld)
     ld["eps_df"] = lambda ld: make_pe_trends_eps_df(ld["data_df"])
     ld["sector_eps_df"] = lambda ld: sector_eps_data_factory(ld)
+    ld["ss"] = stocks_by_sector()
+    ld['timeframe'] = Timeframe(past_n_days=180)
+    td = ld['timeframe'].description
 
     # these arent per-user plots: they can safely be shared across all users of the site, so the key reflects that
-    sector_pe_cache_key = f"{timeframe.description}-by-sector-pe-plot"
-    sector_eps_cache_key = f"{timeframe.description}-by-sector-eps-plot"
-    market_pe_cache_key = f"{timeframe.description}-market-pe-mean"
+    sector_pe_cache_key = f"{td}-by-sector-pe-plot"
+    sector_eps_cache_key = f"{td}-by-sector-eps-plot"
+    market_pe_cache_key = f"{td}-market-pe-mean"
     market_pe_plot_uri = cache_plot(
         market_pe_cache_key,
         lambda ld: plot_series(
