@@ -642,7 +642,7 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
     # print(len(rsi))
     fillcolor = "darkgoldenrod"
 
-    timeline = pd.to_datetime(last_price.index)
+    timeline = pd.to_datetime(last_price.index, format="%Y-%m-%d")
     ax1.plot(timeline, rsi, color=fillcolor)
     ax1.axhline(70, color="darkgreen")
     ax1.axhline(30, color="darkgreen")
@@ -678,8 +678,9 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
     up = deltas > 0
     ax2.vlines(timeline[up], low[up], high[up], color="black", label="_nolegend_")
     ax2.vlines(timeline[~up], low[~up], high[~up], color="black", label="_nolegend_")
+
     ma20 = last_price.rolling(window=20).mean()
-    ma200 = last_price.rolling(window=200).mean()
+    ma200 = last_price.rolling(window=200, min_periods=50).mean()
 
     # timeline = timeline.to_list()
     (linema20,) = ax2.plot(timeline, ma20, color="blue", lw=2, label="MA (20)")
