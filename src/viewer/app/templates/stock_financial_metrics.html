@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block content %}
+{% block header %}
 <div class="mt-4">
     <h3>Earnings and revenue</h3>
+</div>
 
+{% include "user-messages.html" %}
+
+{% endblock %}
+
+{% block content %}
     {% if earnings_and_revenue_plot_uri %}
     <img src="/png/{{ earnings_and_revenue_plot_uri }}" alt="Earnings and revenue plot" />
     {% endif %}
