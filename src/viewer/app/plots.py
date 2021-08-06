@@ -694,7 +694,8 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
 
     volume = (last_price * volume) / 1e6  # dollar volume in millions
     # print(volume)
-    vmax = max(volume)
+    vmax = np.nanmax(volume)
+    # print(vmax)
     poly = ax2t.fill_between(
         timeline,
         volume.to_list(),
@@ -705,8 +706,9 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
         edgecolor=fillcolor,
     )
     assert poly is not None  # avoid unused variable from pylint
-    ax2t.set_ylim(0, 5 * vmax)
-    ax2t.set_yticks([])
+    if not np.isnan(vmax):
+        ax2t.set_ylim(0, 5 * vmax)
+        ax2t.set_yticks([])
 
     # compute the MACD indicator
     fillcolor = "darkslategrey"
