@@ -529,8 +529,10 @@ def all_sector_stocks(sector_name: str) -> set:
 
 
 @timing
-@func.lfu_cache(maxsize=2)  # cache today's data only to save memory
+@func.lfu_cache(maxsize=2)
 def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tuple:
+    if ymd == "latest":
+        ymd = latest_quotation_date("ANZ")
     validate_date(ymd)
     results = (
         Quotation.objects.filter(fetch_date=ymd)
