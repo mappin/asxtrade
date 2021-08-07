@@ -146,6 +146,13 @@ class OptimisePortfolioForm(forms.Form):
         initial=80,
         label="Maximum stocks to consider (random sample taken)",
     )
+    returns_by = forms.ChoiceField(
+        choices=(
+            ("by_prices", "By ASX Prices for chosen stocks"),
+            ("by_black_litterman", "Black-Litterman model"),
+        ),
+        required=True,
+    )
 
     def __init__(self, excluded_stocks, **kwargs):
         super(OptimisePortfolioForm, self).__init__(**kwargs)

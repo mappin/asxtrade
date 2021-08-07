@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 from lazydict import LazyDictionary
 from pyod.models.iforest import IForest
 from pypfopt.expected_returns import mean_historical_return, returns_from_prices
+from pypfopt.black_litterman import (
+    BlackLittermanModel,
+    market_implied_risk_aversion,
+    market_implied_prior_returns,
+)
 from pypfopt.discrete_allocation import DiscreteAllocation
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt import objective_functions
@@ -21,6 +26,7 @@ from app.models import (
     stocks_by_sector,
     Timeframe,
     validate_date,
+    valid_quotes_only,
 )
 from app.data import cache_plot
 from app.messages import warning
@@ -365,9 +371,11 @@ def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
     return cw
 
 
-def portfolio_performance(optimizer):
-    assert optimizer is not None
-    pt = optimizer.portfolio_performance()
+def portfolio_performance(ld: LazyDictionary) -> dict:
+    weights = ld[
+        "raw_weights"
+    ]  # force optimization to be done, so the weights exists and thus the performance...
+    pt = ld["optimizer"].portfolio_performance()
     assert len(pt) == 3
     performance_dict = {
         "expected return": pt[0] * 100.0,
@@ -377,35 +385,41 @@ def portfolio_performance(optimizer):
     return performance_dict
 
 
-def hrp_strategy(returns):
-    assert returns is not None
-    ef = HRPOpt(returns=returns)
-    weights = ef.optimize()
-    return weights, portfolio_performance(ef), ef
+def hrp_strategy(ld: LazyDictionary, **kwargs) -> None:
+    ef = HRPOpt(returns=kwargs.get("returns"))
+    ld["optimizer"] = ef
+    ld["raw_weights"] = lambda ld: ld["optimizer"].optimize()
 
 
-def ef_sharpe_strategy(returns=None, cov_matrix=None):
-    assert returns is not None
-    ef = EfficientFrontier(returns, cov_matrix)
+def ef_sharpe_strategy(ld: LazyDictionary, **kwargs) -> None:
+    ef = EfficientFrontier(
+        expected_returns=kwargs.get("returns"),
+        cov_matrix=kwargs.get("cov_matrix", None),
+    )
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)  # eliminate minor weights
-    weights = ef.max_sharpe()
-    return weights, portfolio_performance(ef), ef
+    ld["optimizer"] = ef
+    ld["raw_weights"] = lambda ld: ld["optimizer"].max_sharpe()
 
 
-def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=5.0):
+def ef_risk_strategy(
+    ld: LazyDictionary, returns=None, cov_matrix=None, target_volatility=5.0
+) -> None:
     assert returns is not None
     assert cov_matrix is not None
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
-    weights = ef.efficient_risk(target_volatility=target_volatility)
-    return weights, portfolio_performance(ef), ef
+    ld["optimizer"] = ef
+    ld["raw_weights"] = lambda ld: ld["optimizer"].efficient_risk(
+        target_volatility=target_volatility
+    )
 
 
-def ef_minvol_strategy(returns=None, cov_matrix=None):
+def ef_minvol_strategy(ld: LazyDictionary, returns=None, cov_matrix=None):
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
     weights = ef.min_volatility()
-    return weights, portfolio_performance(ef), ef
+    ld["optimizer"] = ef
+    ld["raw_weights"] = lambda ld: ld["optimizer"].min_volatility()
 
 
 def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, min_price, warning_cb):
@@ -472,39 +486,49 @@ def setup_optimisation_matrices(
     return all_returns, stock_prices, latest_prices, first_prices
 
 
-def assign_strategy(filtered_stocks: pd.DataFrame, algo: str, n_stocks: int) -> tuple:
-    filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
-    returns = returns_from_prices(filtered_stocks, log_returns=False)
-    mu = mean_historical_return(filtered_stocks)
-    assert len(mu) == n_stocks
-    s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
+def assign_strategy(ld: LazyDictionary, algo: str) -> tuple:
+    assert ld is not None
+    # use of black-litterman is based on https://github.com/robertmartin8/PyPortfolioOpt/blob/master/cookbook/4-Black-Litterman-Allocation.ipynb
+    # print(market_prices)
+    ld["s"] = CovarianceShrinkage(ld["filtered_stocks"]).ledoit_wolf()
+    ld["delta"] = market_implied_risk_aversion(ld["market_prices"])
+    # use BlackLitterman model to compute returns - hopefully better estimate of returns than extrapolation of historical prices
+    # market_prior = market_implied_prior_returns(ld["market_caps"], delta, ld["s"])
+    ld["bl"] = lambda ld: BlackLittermanModel(
+        ld["s"],
+        pi="market",
+        market_caps=ld["market_caps"],
+        risk_aversion=ld["delta"],
+        absolute_views={},
+    )
+    ld["posterior_total_returns"] = lambda ld: ld["bl"].bl_returns()
+    ld["posterior_s"] = lambda ld: ld["bl"].bl_cov()
+    ld["mu"] = lambda ld: mean_historical_return(ld["filtered_stocks"])
+    ld["returns_from_prices"] = lambda ld: returns_from_prices(ld["filtered_stocks"])
+
+    use_bl = ld["returns_by"] != "by_prices"
+    kwargs = (
+        {"returns": ld["mu"]} if use_bl else {"returns": ld["posterior_total_returns"]}
+    )
+    if algo != "hrp":
+        kwargs["cov_matrix"] = ld["s"] if not use_bl else ld["posterior_s"]
+    else:
+        # algo is HRP
+        kwargs = {"returns": ld["returns_from_prices"]}
 
     if algo == "hrp":
-        return (hrp_strategy, "Hierarchical Risk Parity", {"returns": returns}, mu, s)
+        ld["title"] = "Hierarchical Risk Parity"
+        return (hrp_strategy, kwargs)
     elif algo == "ef-sharpe":
-        return (
-            ef_sharpe_strategy,
-            "Efficient Frontier - max. sharpe",
-            {"returns": mu, "cov_matrix": s},
-            mu,
-            s,
-        )
+        ld["title"] = "Efficient Frontier - max. sharpe"
+        return (ef_sharpe_strategy, kwargs)
     elif algo == "ef-risk":
-        return (
-            ef_risk_strategy,
-            "Efficient Frontier - efficient risk",
-            {"returns": mu, "cov_matrix": s, "target_volatility": 5.0},
-            mu,
-            s,
-        )
+        ld["title"] = "Efficient Frontier - efficient risk"
+        kwargs["target_volatility"] = 5.0
+        return (ef_risk_strategy, kwargs)
     elif algo == "ef-minvol":
-        return (
-            ef_minvol_strategy,
-            "Efficient Frontier - minimum volatility",
-            {"returns": mu, "cov_matrix": s},
-            mu,
-            s,
-        )
+        ld["title"] = "Efficient Frontier - minimum volatility"
+        return (ef_minvol_strategy, kwargs)
     else:
         assert False
 
@@ -529,84 +553,64 @@ def select_suitable_stocks(
 
 
 def run_iteration(
-    title,
+    ld: LazyDictionary,
     strategy,
     first_prices,
     latest_prices,
-    total_portfolio_value,
-    n_stocks,
-    mu,
-    s,
     filtered_stocks,
     **kwargs,
 ):
-    ld = LazyDictionary()
-    ld["weights"] = lambda ld: strategy(
-        **kwargs
-    )  # tuple (weights, performance_dict, _)
+    assert ld is not None
+    strategy(ld, **kwargs)
+
+    ld["optimizer_performance"] = lambda ld: portfolio_performance(ld)
     ld["allocator"] = lambda ld: DiscreteAllocation(
-        ld["weights"][0], first_prices, total_portfolio_value=total_portfolio_value
+        ld["raw_weights"],
+        first_prices,
+        total_portfolio_value=ld["total_portfolio_value"],
     )
-    ld["portfolio"] = lambda ld: ld["allocator"].greedy_portfolio()
+    ld["portfolio"] = lambda ld: ld[
+        "allocator"
+    ].greedy_portfolio()  # greedy_portfolio returns (dict, float) tuple
     ld["cleaned_weights"] = lambda ld: clean_weights(
-        ld["weights"][0], ld["portfolio"][0], first_prices, latest_prices
+        ld["raw_weights"], ld["portfolio"][0], first_prices, latest_prices
     )
-
-    def plot_random_portfolios(ld: LazyDictionary):
-        fig, ax = plt.subplots()
-        # disabled due to TypeError during deepcopy of OSQP results object
-        # if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
-        #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
-        performance_dict = ld["weights"][1]
-        volatility = performance_dict.get("volatility")
-        expected_return = performance_dict.get("expected return")
-        ax.scatter(
-            volatility, expected_return, marker="*", s=100, c="r", label="Portfolio"
-        )
-        ax.set_xlabel("Volatility")
-        ax.set_ylabel("Returns (%)")
-
-        # Generate random portfolios
-        n_samples = 10000
-        w = np.random.dirichlet(np.ones(n_stocks), n_samples)
-        rets = w.dot(mu)
-        stds = np.sqrt(np.diag(w @ s @ w.T))
-        sharpes = rets / stds
-        ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
-
-        # Output
-        ax.set_title(title)
-        ax.legend()
-        plt.tight_layout()
-        fig = plt.gcf()
-        return fig
-
-    # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
-    efficient_frontier_plot = cache_plot(
-        secrets.token_urlsafe(32), plot_random_portfolios, datasets=ld
-    )
+    ld["latest_prices"] = latest_prices
+    ld["len_latest_prices"] = lambda ld: len(ld["latest_prices"])
 
     # only plot covmatrix/corr for significant holdings to ensure readability
     ld["m"] = lambda ld: CovarianceShrinkage(
         filtered_stocks[list(ld["cleaned_weights"].keys())[:30]]
     ).ledoit_wolf()
 
-    correlation_plot = cache_plot(
-        secrets.token_urlsafe(32),
-        lambda ld: plot_covariance(ld["m"], plot_correlation=True).figure,
-        datasets=ld,
-    )
 
-    return (
-        ld["cleaned_weights"],
-        ld["weights"][1],
-        efficient_frontier_plot,
-        correlation_plot,
-        title,
-        total_portfolio_value,
-        ld["portfolio"][1],
-        len(latest_prices),
-    )
+def plot_random_portfolios(ld: LazyDictionary):
+    assert ld is not None
+    fig, ax = plt.subplots()
+    # disabled due to TypeError during deepcopy of OSQP results object
+    # if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
+    #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
+    performance_dict = ld["optimizer_performance"]
+    volatility = performance_dict.get("volatility")
+    expected_return = performance_dict.get("expected return")
+    ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
+    ax.set_xlabel("Volatility")
+    ax.set_ylabel("Returns (%)")
+
+    # Generate random portfolios
+    n_samples = 10000
+    w = np.random.dirichlet(np.ones(ld["n_stocks"]), n_samples)
+    rets = w.dot(ld["mu"])
+    stds = np.sqrt(np.diag(w @ ld["s"] @ w.T))
+    sharpes = rets / stds
+    ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+
+    # Output
+    ax.set_title(ld["title"])
+    ax.legend()
+    plt.tight_layout()
+    fig = plt.gcf()
+    return fig
 
 
 def optimise_portfolio(
@@ -617,6 +621,7 @@ def optimise_portfolio(
     total_portfolio_value=100 * 1000,
     exclude_price=None,
     warning_cb=None,
+    **kwargs,
 ):
     assert len(stocks) >= 1
     assert timeframe is not None
@@ -629,26 +634,57 @@ def optimise_portfolio(
         latest_prices,
         first_prices,
     ) = setup_optimisation_matrices(stocks, timeframe, exclude_price, warning_cb)
+
+    market_prices = company_prices(
+        ("A200",), Timeframe(past_n_days=180), missing_cb=None
+    )
+    market_prices.index = pd.to_datetime(market_prices.index, format="%Y-%m-%d")
+    market_prices = pd.Series(market_prices["A200"])
+    quotes, ymd = valid_quotes_only("latest", ensure_date_has_data=True)
+
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         filtered_stocks, n_stocks = select_suitable_stocks(
             all_returns, stock_prices, max_stocks, *t
         )
-        strategy, title, kwargs, mu, s = assign_strategy(
-            filtered_stocks, algo, n_stocks
-        )
+        # since the sample of stocks might be different, we must recompute each iteration...
+        filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
+        market_caps = {
+            q.asx_code: q.market_cap
+            for q in quotes
+            if q.asx_code in filtered_stocks.columns
+        }
+
+        ld = (
+            LazyDictionary()
+        )  # must start a new dict since each key is immutable after use
+        ld["n_stocks"] = n_stocks
+        ld["filtered_stocks"] = filtered_stocks
+        ld["market_prices"] = market_prices
+        ld["market_caps"] = market_caps
+        ld["total_portfolio_value"] = total_portfolio_value
+        ld["returns_by"] = kwargs.get("returns_by", "by_prices")
+
+        strategy, kwargs = assign_strategy(ld, algo)
         try:
-            return run_iteration(
-                title,
+            run_iteration(
+                ld,
                 strategy,
                 first_prices,
                 latest_prices,
-                total_portfolio_value,
-                n_stocks,
-                mu,
-                s,
                 filtered_stocks,
                 **kwargs,
             )
+
+            # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
+            ld["efficient_frontier_plot"] = cache_plot(
+                secrets.token_urlsafe(32), plot_random_portfolios, datasets=ld
+            )
+            ld["correlation_plot"] = lambda ld: cache_plot(
+                secrets.token_urlsafe(32),
+                lambda ld: plot_covariance(ld["m"], plot_correlation=True).figure,
+                datasets=ld,
+            )
+            return ld
         except ValueError as ve:
             if warning_cb:
                 warning_cb(
@@ -657,15 +693,7 @@ def optimise_portfolio(
                     )
                 )
             # try next iteration
+            raise ve
 
     print("*** WARNING: unable to optimise portolio!")
-    return (
-        None,
-        None,
-        None,
-        None,
-        title,
-        total_portfolio_value,
-        0.0,
-        len(latest_prices),
-    )
+    return LazyDictionary()
