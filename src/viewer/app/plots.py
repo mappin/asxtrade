@@ -706,9 +706,8 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
         edgecolor=fillcolor,
     )
     assert poly is not None  # avoid unused variable from pylint
-    if not np.isnan(vmax):
-        ax2t.set_ylim(0, 5 * vmax)
-        ax2t.set_yticks([])
+    ax2t.set_ylim(0, 5 * vmax)
+    ax2t.set_yticks([])
 
     # compute the MACD indicator
     fillcolor = "darkslategrey"
