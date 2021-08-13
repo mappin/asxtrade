@@ -37,9 +37,9 @@
         <table style="width: 100%">
            <tr>
               <th>ASX Code</th>
+              <th></th>
               <th>Price<br/>($AUD)</th>
               <th>Sector</th>
-              <th></th>
               <th>Day change</th>
               <th>Volume<br/>($AUD Mil.)</th>
               <th>EPS</th>
@@ -52,14 +52,14 @@
            {% for stock in page_obj %}
                <tr class="small" style="margin-bottom: 5px">
                   <td>{% clickable_stock stock.asx_code user=request.user.username next=request.path %}</td>
-                  <td>{{ stock.last_price }}</td>
-                  <td>{{ stock.asx_code | stock_sector }}</td>
                   <td>
                       {% if timeframe_end_performance and stock.asx_code in timeframe_end_performance %}
                           {% tag_moving_stocks stock.asx_code timeframe_end_performance %}
                       {% endif %}
                   </td>
-                  <td>{{ stock.change_price }} <span class="unimportant">({{ stock.change_in_percent }})</span></td>
+                  <td>{{ stock.last_price |floatformat:2 }}</td>
+                  <td>{{ stock.asx_code | stock_sector }}</td>
+                  <td>{{ stock.change_price|floatformat:2 }} <span class="unimportant">({{ stock.change_in_percent |floatformat:1 }}%)</span></td>
                   <td align="center">{{ stock.volume_as_millions }}</td>
                   <td align="right">{{ stock.eps_as_cents|floatformat }}</td>
                   <td align="center">{{ stock.pe|floatformat }}</td>
