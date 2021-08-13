@@ -59,7 +59,11 @@
                   </td>
                   <td>{{ stock.last_price |floatformat:2 }}</td>
                   <td>{{ stock.asx_code | stock_sector }}</td>
+                  {% if stock.change_price != None %}
                   <td>{{ stock.change_price|floatformat:2 }} <span class="unimportant">({{ stock.change_in_percent |floatformat:1 }}%)</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
                   <td align="center">{{ stock.volume_as_millions }}</td>
                   <td align="right">{{ stock.eps_as_cents|floatformat }}</td>
                   <td align="center">{{ stock.pe|floatformat }}</td>

@@ -143,6 +143,9 @@ def show_companies(
             request, template_name, context={"timeframe": sentiment_timeframe}
         )
 
+    # prune companies without a latest price, makes no sense to report them
+    stocks_queryset = stocks_queryset.exclude(last_price__isnull=True)
+
     # sort queryset as this will often be requested by the USER
     arg = request.GET.get("sort_by", "asx_code")
     info(request, "Sorting by {}".format(arg))
