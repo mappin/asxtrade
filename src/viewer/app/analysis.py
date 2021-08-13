@@ -86,9 +86,7 @@ def calculate_trends(
         assert isinstance(series, pd.Series)
         series = series.dropna()  # NB: np.polyfit doesnt work with NA so...
         n = len(series)
-        assert n > 0
-        # print(n)
-        if n < max(
+        if n == 0 or n < max(
             4, 2 + polynomial_degree
         ):  # too few data points for a trend? if so, ignore the series
             continue
@@ -538,13 +536,12 @@ def select_suitable_stocks(
 ):
     # drop columns were there is no activity (ie. same value) in the observation period
     cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
-
     print("Dropping due to inactivity: {}".format(cols_to_drop))
     # drop columns with very low variance
     v = all_returns.var()
     low_var = v[v < var_min]
     print("Dropping due to low variance: {}".format(low_var.index))
-    cols_to_drop.extend(low_var.index)
+    # cols_to_drop.extend(low_var.index)
     # print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
     filtered_stocks = stock_prices.drop(columns=cols_to_drop)
     colnames = filtered_stocks.columns
@@ -600,7 +597,7 @@ def plot_random_portfolios(ld: LazyDictionary):
     # Generate random portfolios
     n_samples = 10000
     w = np.random.dirichlet(np.ones(ld["n_stocks"]), n_samples)
-    rets = w.dot(ld["mu"])
+    rets = w.dot(ld["posterior_total_returns"])
     stds = np.sqrt(np.diag(w @ ld["s"] @ w.T))
     sharpes = rets / stds
     ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
