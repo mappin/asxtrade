@@ -340,7 +340,7 @@ def plot_market_wide_sector_performance(ld: LazyDictionary) -> p9.ggplot:
     Display specified dates for average sector performance. Each company is assumed to have at zero
     at the start of the observation period. A plot as base64 data is returned.
     """
-    all_stocks_cip = ld["sector_df"]
+    all_stocks_cip = ld["sector_cumsum_df"]
     n_stocks = len(all_stocks_cip)
     # merge in sector information for each company
     code_and_sector = ld["stocks_by_sector"]
@@ -355,14 +355,9 @@ def plot_market_wide_sector_performance(ld: LazyDictionary) -> p9.ggplot:
             n_stocks, len(code_and_sector), len(df)
         )
     )
-    # compute average change in percent of each unique sector over each day and sum over the dates
-    cumulative_pct_change = df.expanding(axis="columns").sum()
-    # merge date-wise into df
-    for date in cumulative_pct_change.columns:
-        df[date] = cumulative_pct_change[date]
-    # df.to_csv('/tmp/crap.csv')
+    print(df)
     grouped_df = df.groupby("sector_name").mean()
-    # grouped_df.to_csv('/tmp/crap.csv')
+    print(grouped_df)
 
     # ready the dataframe for plotting
     grouped_df = pd.melt(

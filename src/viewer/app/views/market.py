@@ -75,20 +75,9 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     validate_user(request.user)
     assert n_days > 0
     assert n_top_bottom > 0
-    timeframe = Timeframe(past_n_days=n_days)
-    sector_timeframe = Timeframe(past_n_days=sector_n_days)
-    asx_codes = all_stocks()
 
-    def data_factory():
-        cip = cached_all_stocks_cip(timeframe)
-        return cip
-
-    def sector_data_factory():
-        sector_df = cached_all_stocks_cip(sector_timeframe)
-        return sector_df
-
-    def market_cap_data_factory():
-        dates = sector_timeframe.all_dates()
+    def market_cap_data_factory(ld: LazyDictionary) -> pd.DataFrame:
+        dates = ld["sector_timeframe"].all_dates()
         # print(dates)
         assert len(dates) > 90
         result_df = None
@@ -97,7 +86,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
             quotes, actual_trading_date = valid_quotes_only(
                 the_date, ensure_date_has_data=True
             )
-            df = make_quote_df(quotes, asx_codes, actual_trading_date)
+            df = make_quote_df(quotes, ld["asx_codes"], actual_trading_date)
             result_df = df if result_df is None else result_df.append(df)
             if the_date != actual_trading_date:
                 adjusted_dates.append(the_date)
@@ -110,36 +99,44 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         return result_df
 
     ld = LazyDictionary()
-    ld["cip_df"] = lambda ld: data_factory()
-    ld["sector_df"] = lambda ld: sector_data_factory()
+    ld["asx_codes"] = lambda ld: all_stocks()
+    ld["sector_timeframe"] = lambda ld: Timeframe(past_n_days=sector_n_days)
+    ld["timeframe"] = lambda ld: Timeframe(past_n_days=n_days)
+    ld["sector_df"] = lambda ld: cached_all_stocks_cip(ld["sector_timeframe"])
+    ld["sector_cumsum_df"] = lambda ld: ld["sector_df"].cumsum(axis=1)
+    ld["cip_df"] = lambda ld: ld["sector_df"].filter(
+        items=ld["timeframe"].all_dates(), axis=1
+    )
     ld["market_cap_df"] = lambda ld: market_cap_data_factory()
     ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
 
     sentiment_plot = cache_plot(
-        f"market-sentiment-{timeframe.description}",
-        lambda ld: plot_heatmap(timeframe, ld),
+        f"market-sentiment-{ld['timeframe'].description}",
+        lambda ld: plot_heatmap(ld["timeframe"], ld),
         datasets=ld,
     )
+    sector_descr = ld["sector_timeframe"].description
     sector_performance_plot = cache_plot(
-        f"sector-performance-{sector_timeframe.description}",
+        f"sector-performance-{sector_descr}",
         lambda ld: plot_market_wide_sector_performance(ld),
         datasets=ld,
+        dont_cache=True,
     )
     market_cap_dist_plot = cache_plot(
-        f"market-cap-dist-{sector_timeframe.description}",
+        f"market-cap-dist-{sector_descr}",
         lambda lds: plot_market_cap_distribution(ld),
         datasets=ld,
     )
     context = {
         "sentiment_uri": sentiment_plot,
-        "n_days": timeframe.n_days,
-        "n_stocks_plotted": len(asx_codes),
+        "n_days": ld["timeframe"].n_days,
+        "n_stocks_plotted": len(ld["asx_codes"]),
         "n_top_bottom": n_top_bottom,
         "watched": user_watchlist(request.user),
         "sector_performance_uri": sector_performance_plot,
-        "sector_timeframe": sector_timeframe,
+        "sector_timeframe": ld["sector_timeframe"],
         "sector_performance_title": "Cumulative sector avg. performance: {}".format(
-            sector_timeframe.description
+            ld["sector_timeframe"].description
         ),
         "title": "Market sentiment",
         "market_cap_distribution_uri": market_cap_dist_plot,

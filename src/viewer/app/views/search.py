@@ -365,9 +365,13 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
         sector = form.cleaned_data.get("sector", "Communication Services")
         norm_method = form.cleaned_data.get("normalisation_method", None)
         n_days = form.cleaned_data.get("n_days", 30)
-        stocks = all_sector_stocks(sector)
-        timeframe = Timeframe(past_n_days=n_days)
-        cip = selected_cached_stocks_cip(stocks, timeframe)
+        ld = LazyDictionary()
+        ld["stocks"] = lambda ld: all_sector_stocks(sector)
+        ld["timeframe"] = Timeframe(past_n_days=n_days)
+        ld["cip_df"] = lambda ld: selected_cached_stocks_cip(
+            ld["stocks"], ld["timeframe"]
+        )
+
         context = self.get_context_data()
 
         def winner_results(df: pd.DataFrame) -> list:
@@ -386,9 +390,6 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
                     results.append((asx_code, n_wins, x))
             return list(reversed(sorted(results, key=lambda t: t[2])))
 
-        def make_plot():
-            return plot_boxplot_series(cip, normalisation_method=norm_method)
-
         context.update(
             {
                 "title": "Past {} day sector performance: box plot trends".format(
@@ -397,10 +398,13 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
                 "n_days": n_days,
                 "sector": sector,
                 "plot_uri": cache_plot(
-                    f"{sector}-recent-sector-view-{timeframe.description}-{norm_method}",
-                    make_plot,
+                    f"{sector}-recent-sector-view-{ld['timeframe'].description}-{norm_method}",
+                    lambda ld: plot_boxplot_series(
+                        ld["cip_df"], normalisation_method=norm_method
+                    ),
+                    datasets=ld,
                 ),
-                "winning_stocks": winner_results(cip),
+                "winning_stocks": winner_results(ld["cip_df"]),
             }
         )
         return render(self.request, self.template_name, context)

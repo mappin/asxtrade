@@ -202,7 +202,7 @@ def show_companies(
     ld["bottom10"] = lambda ld: ld["sum_by_company"].nsmallest(n_top_bottom)
     ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
 
-    if len(asx_codes) <= 0:
+    if len(asx_codes) <= 0 or len(ld["top10"]) <= 0:
         warning(request, "No matching companies found.")
     else:
         sorted_codes = "-".join(sorted(asx_codes))
