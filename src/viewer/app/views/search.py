@@ -131,7 +131,7 @@ class SectorSearchView(DividendYieldSearch):
                 "sector_id": self.sector_id,
                 "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
                 "sector_performance_plot_uri": self.ld["sector_performance_plot"]
-                if "sector_performance_plot" in self.ld
+                if self.ld and "sector_performance_plot" in self.ld
                 else None,
                 "timeframe_end_performance": timeframe_end_performance(self.ld),
             }
