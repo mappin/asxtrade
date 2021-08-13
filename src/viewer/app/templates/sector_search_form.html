@@ -4,7 +4,11 @@
 {% block content %}
      {% include "stock_list.html" %}
 
-     <div class="row mt-4">
-         <img src="/png/{{ sector_performance_plot_uri }}" alt="{{ sector_name }} performance" />
+     {% if sector_performance_plot_uri %}
+     <div class="row">
+         <h3>Performance of all stocks in {{ sector_name }}</h3>
+         
+         <img class="mt-4" src="/png/{{ sector_performance_plot_uri }}" alt="{{ sector_name }} performance" />
      </div>
+     {% endif %}
 {% endblock %}

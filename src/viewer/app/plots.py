@@ -15,30 +15,18 @@ import plotnine as p9
 from lazydict import LazyDictionary
 from django.contrib.auth import get_user_model
 from app.models import (
-    stocks_by_sector,
     Timeframe,
     timing,
     user_purchases,
     all_available_dates,
 )
 from app.data import (
-    make_sector_performance_dataframe,
-    make_stock_vs_sector_dataframe,
     make_portfolio_dataframe,
     cache_plot,
     make_portfolio_performance_dataframe,
     price_change_bins,
 )
 from plotnine.layer import Layers
-
-
-@timing
-def cached_sector_performance(sector: str, sector_companies, ld: LazyDictionary) -> str:
-    def inner(ld: LazyDictionary):
-        df = make_sector_performance_dataframe(ld.get("cip_df"), sector_companies)
-        return plot_sector_performance(df, sector) if df is not None else None
-
-    return cache_plot(f"{sector}-sector-performance", inner, datasets=ld)
 
 
 def cached_portfolio_performance(user):

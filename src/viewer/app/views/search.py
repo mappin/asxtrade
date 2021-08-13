@@ -33,10 +33,12 @@ from app.models import (
     selected_cached_stocks_cip,
     CompanyFinancialMetric,
 )
+from app.data import make_sector_performance_dataframe
 from app.views.core import show_companies
-from app.plots import cached_sector_performance, plot_boxplot_series
+from app.plots import plot_sector_performance, plot_boxplot_series
 from app.messages import warning
 from lazydict import LazyDictionary
+from plotnine.layer import Layers
 
 
 class DividendYieldSearch(
@@ -114,52 +116,66 @@ dividend_search = DividendYieldSearch.as_view()
 
 
 class SectorSearchView(DividendYieldSearch):
+    DEFAULT_SECTOR = "Communication Services"
     form_class = SectorSearchForm
     action_url = "/search/by-sector"
-    sector = "Communication Services"  # default to Comms. Services if not specified
     template_name = "sector_search_form.html"
-    sector_id = None
-    ld = None
+    ld = LazyDictionary()
 
     def additional_context(self, context):
         d = super().additional_context(context)
+        ld = self.ld
+        sector = ld.get(
+            "sector", self.DEFAULT_SECTOR
+        )  # default to Comms. Services if not specified'
+        sector_id = ld.get("sector_id", None)
         d.update(
             {
                 # to highlight top10/bottom10 bookmarks correctly
                 "title": "Find by company sector",
-                "sector_name": self.sector,
-                "sector_id": self.sector_id,
-                "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
-                "sector_performance_plot_uri": self.ld["sector_performance_plot"]
-                if self.ld and "sector_performance_plot" in self.ld
-                else None,
-                "timeframe_end_performance": timeframe_end_performance(self.ld),
+                "sector_name": sector,
+                "sector_id": sector_id,
+                "sentiment_heatmap_title": "{} sector sentiment".format(sector),
+                "sector_performance_plot_uri": ld.get("sector_performance_plot", None),
+                "timeframe_end_performance": timeframe_end_performance(ld),
             }
         )
         return d
 
     def get_queryset(self, **kwargs):
+        def sector_performance(ld: LazyDictionary) -> str:
+            sector = ld.get("sector")
+            return cache_plot(
+                f"{sector}-sector-performance",
+                lambda ld: plot_sector_performance(ld["sector_performance_df"], sector)
+                if ld["sector_performance_df"] is not None
+                else None,
+                datasets=ld,
+                dont_cache=True,
+            )
+
         # user never run this view before?
         if kwargs == {}:
             print("WARNING: no form parameters specified - returning empty queryset")
             return Quotation.objects.none()
 
-        self.sector = kwargs.get("sector", self.sector)
-        self.sector_id = int(Sector.objects.get(sector_name=self.sector).sector_id)
-        wanted_stocks = all_sector_stocks(self.sector)
-        print(
-            "Found {} stocks matching sector={}".format(len(wanted_stocks), self.sector)
-        )
-        mrd = latest_quotation_date("ANZ")
+        sector = kwargs.get("sector", self.DEFAULT_SECTOR)
+        sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
+        wanted_stocks = all_sector_stocks(sector)
+        print("Found {} stocks matching sector={}".format(len(wanted_stocks), sector))
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
         self.timeframe = Timeframe(past_n_days=90)
-        self.ld = LazyDictionary()
-        self.ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
-        self.ld["sector_performance_plot"] = lambda ld: cached_sector_performance(
-            self.sector, wanted_stocks, ld
+        ld = LazyDictionary()
+        ld["sector"] = sector
+        ld["sector_id"] = sector_id
+        ld["sector_companies"] = wanted_stocks
+        ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
+        ld["sector_performance_df"] = lambda ld: make_sector_performance_dataframe(
+            ld["cip_df"], ld["sector_companies"]
         )
-
+        ld["sector_performance_plot"] = lambda ld: sector_performance(ld)
+        self.ld = ld
         if report_top_n is not None or report_bottom_n is not None:
             cip_sum = self.ld["cip_df"].transpose().sum().to_frame(name="percent_cip")
 
@@ -176,19 +192,16 @@ class SectorSearchView(DividendYieldSearch):
             )
             wanted_stocks = top_N.union(bottom_N)
         print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
-        quotations_as_at, actual_mrd = valid_quotes_only(mrd, ensure_date_has_data=True)
-        if actual_mrd != mrd:
-            warning(
-                self.request,
-                f"Due to no data (non-trading day?), date {mrd} adusted to {actual_mrd}",
-            )
+        quotations_as_at, actual_mrd = valid_quotes_only(
+            "latest", ensure_date_has_data=True
+        )
         self.qs = quotations_as_at.filter(asx_code__in=wanted_stocks)
         if len(self.qs) < len(wanted_stocks):
             got = set([q.asx_code for q in self.qs.all()])
             missing_stocks = wanted_stocks.difference(got)
             warning(
                 self.request,
-                f"could not obtain quotes for all stocks as at {mrd}: {missing_stocks}",
+                f"could not obtain quotes for all stocks as at {actual_mrd}: {missing_stocks}",
             )
         return self.qs
 
