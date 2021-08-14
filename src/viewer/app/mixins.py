@@ -31,7 +31,7 @@ class SearchMixin:
     def get_initial_form(self, form_values):
         assert isinstance(form_values, dict)
         form_class = self.get_form_class()
-        return form_class(initial=form_values)
+        return form_class(initial=form_values, label_suffix="")
 
     def update_form(self, form_values):
         assert isinstance(form_values, dict)
@@ -45,7 +45,7 @@ class SearchMixin:
         assert context is not None
         assert self.action_url is not None
         context["action_url"] = self.action_url
-        self.form = self.form_class(initial=form_values)
+        self.form = self.form_class(initial=form_values, label_suffix="")
         context["form"] = self.form
         return self.render_to_response(context)
 

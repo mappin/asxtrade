@@ -148,7 +148,7 @@ def show_companies(
 
     # sort queryset as this will often be requested by the USER
     arg = request.GET.get("sort_by", "asx_code")
-    info(request, "Sorting by {}".format(arg))
+    #info(request, "Sorting by {}".format(arg))
 
     if arg == "sector" or arg == "sector,-eps":
         ss = {
