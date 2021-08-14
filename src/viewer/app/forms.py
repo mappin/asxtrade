@@ -202,7 +202,7 @@ class FinancialMetricSearchForm(forms.Form):
         ("max <=", "Maxmimum (over the years) less than or equal to"),
     )
     metric = forms.ChoiceField(choices=(), required=True, label="Find stocks with... ")
-    amount = forms.FloatField(required=True, initial=10.0, label="a value ...")
+    amount = forms.FloatField(required=True, initial=10.0, label="and value ...")
     relation = forms.ChoiceField(choices=RELATION_CHOICES, label="which matches...")
     unit = forms.ChoiceField(
         choices=UNIT_CHOICES,
