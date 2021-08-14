@@ -304,12 +304,17 @@ class FinancialMetricSearchView(SearchMixin, LoginRequiredMixin, FormView):
             # They will be shown if the ASX data endpoint still returns data as at the latest quote date
         else:
             matching_stocks = Quotation.objects.none()
-        return matching_stocks
+        return matching_stocks  # will be assigned to self.object_list by superclass
 
     def render_to_response(self, context):
-        context.update({"title": "Find companies by financial metric"})
+        context.update(
+            {
+                "title": "Find companies by financial metric",
+                "sentiment_heatmap_title": "Matching stock sentiment",
+            }
+        )
         return show_companies(
-            self.object_list,
+            self.object_list,  # ie. return result from self.get_queryset()
             self.request,
             Timeframe(past_n_days=30),
             context,
