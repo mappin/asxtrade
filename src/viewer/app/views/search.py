@@ -272,37 +272,21 @@ class CompanySearch(DividendYieldSearch):
 company_search = CompanySearch.as_view()
 
 
-class FinancialMetricSearchView(LoginRequiredMixin, FormView):
+class FinancialMetricSearchView(SearchMixin, LoginRequiredMixin, FormView):
     form_class = FinancialMetricSearchForm
     template_name = "search_form.html"
     action_url = "/search/by-metric"
 
-    def get_form(self, form_class=None):
-        if form_class is None:
-            form_class = self.get_form_class()
-        return form_class(
-            [
-                (v, v)
-                for v in sorted(
-                    list(
-                        CompanyFinancialMetric.objects.order_by("name")
-                        .values_list("name", flat=True)
-                        .distinct()
-                    )
-                )
-            ],
-            **self.get_form_kwargs(),
-        )
-
-    def form_valid(self, form):
+    def get_queryset(self, **kwargs):
         """
         Invoke show_companies()
         """
-        wanted_metric = form.cleaned_data.get("metric", None)
-        wanted_value = form.cleaned_data.get("amount", None)
-        wanted_unit = form.cleaned_data.get("unit", "")
+        wanted_metric = kwargs.get("metric", None)
+        wanted_value = kwargs.get("amount", None)
+        wanted_unit = kwargs.get("unit", "")
+        wanted_relation = kwargs.get("relation", ">=")
+
         mult = 1 if not wanted_unit.endswith("(M)") else 1000 * 1000
-        wanted_relation = form.cleaned_data.get("relation", ">=")
         print(f"{wanted_metric} {wanted_value} {mult} {wanted_relation}")
 
         if all([wanted_metric, wanted_value, wanted_relation]):
@@ -320,11 +304,12 @@ class FinancialMetricSearchView(LoginRequiredMixin, FormView):
             # They will be shown if the ASX data endpoint still returns data as at the latest quote date
         else:
             matching_stocks = Quotation.objects.none()
+        return matching_stocks
 
-        context = self.get_context_data()
+    def render_to_response(self, context):
         context.update({"title": "Find companies by financial metric"})
         return show_companies(
-            matching_stocks,
+            self.object_list,
             self.request,
             Timeframe(past_n_days=30),
             context,

@@ -68,8 +68,16 @@
                   <td align="right">{{ stock.eps_as_cents|floatformat }}</td>
                   <td align="center">{{ stock.pe|floatformat }}</td>
                   <td>{{ stock.annual_dividend_yield |floatformat }}</td>
+                  {% if stock.year_high_price != None %}
                   <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
+                  {% if stock.year_low_price != None %}
                   <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
                 </tr>
                {% if stock.asx_code in virtual_purchases %}
                    {% for purchase in virtual_purchases|get_item:stock.asx_code %}

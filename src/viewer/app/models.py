@@ -627,6 +627,9 @@ def find_movers(
         field_to_fetch = "eps"
     elif field == "dividend_growth" or field == "threshold_dy":
         field_to_fetch = "annual_dividend_yield"
+    # threshold is measured in cents AUD if search == "eps" but the data is measured in $AUD so ...
+    if field == "eps":
+        threshold = threshold / 100.0  # convert threshold user input into cents
 
     cip = company_prices(
         None,
@@ -709,8 +712,7 @@ def find_movers(
             results = results.drop(results[results < 0.0].index)
     # print(results)
     if max_price is not None:
-        ymd = latest_quotation_date("ANZ")
-        qs, _ = valid_quotes_only(ymd, ensure_date_has_data=True)
+        qs, _ = valid_quotes_only("latest", ensure_date_has_data=True)
         stocks_lte_max_price = [q.asx_code for q in qs if q.last_price <= max_price]
         results = results.filter(stocks_lte_max_price)
     print("Reporting {} movers after filtering".format(len(results)))
