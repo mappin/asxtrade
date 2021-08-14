@@ -58,7 +58,7 @@ def update_all_metrics(df: pd.DataFrame, asx_code: str) -> int:
     Add (or update) all financial metrics (ie. rows) for the specified asx_code in the specified dataframe
     :rtype: the number of records updated/created is returned
     """
-    print(f"Updating {len(df)} records for {asx_code}")
+    print(f"Updating {len(df)} financial metrics for {asx_code}")
     n = 0
     for t in df.itertuples():
         d = {
@@ -105,7 +105,7 @@ def fetch_metrics(asx_code: str) -> pd.DataFrame:
 
 
 def make_asx_prices_dict(new_quote: tuple, asx_code: str) -> dict:
-    print(new_quote)
+    #print(new_quote)
 
     d = {
         "asx_code": asx_code,
@@ -127,7 +127,7 @@ def make_asx_prices_dict(new_quote: tuple, asx_code: str) -> dict:
     return d
 
 
-def fill_stock_quote_gaps(db, stock_to_fetch: str, force=True) -> int:
+def fill_stock_quote_gaps(db, stock_to_fetch: str, force=False) -> int:
     assert db is not None
     assert len(stock_to_fetch) >= 3
     ticker = yf.Ticker(stock_to_fetch + ".AX")
@@ -146,8 +146,8 @@ def fill_stock_quote_gaps(db, stock_to_fetch: str, force=True) -> int:
         available_dates.difference(quoted_dates) if not force else available_dates
     )
     print(
-        "Got {} existing daily quotes for {}, found {} yfinance daily quotes, gap filling for {} dates".format(
-            len(available_quotes), stock_to_fetch, len(df), len(dates_to_fill)
+        "Got {} existing daily quotes for {}, found {} yfinance daily quotes, gap filling for {} dates (force={})".format(
+            len(available_quotes), stock_to_fetch, len(df), len(dates_to_fill), force
         )
     )
     df["change_price"] = df["Close"].diff()
@@ -190,6 +190,7 @@ if __name__ == "__main__":
     args.add_argument(
         "--delay", help="Delay between stocks in seconds [30]", type=int, default=30
     )
+    args.add_argument("--force", help="Overwrite existing data (if any)", action="store_true")
     args.add_argument(
         "--debug",
         help="Try to fetch specified stock (for debugging)",
@@ -207,16 +208,17 @@ if __name__ == "__main__":
 
     stock_codes = desired_stocks() if not a.debug else set([a.debug])
     print(f"Updating financial metrics for {len(stock_codes)} stocks")
-    for asx_code in stock_codes:
+    for asx_code in sorted(stock_codes):
+        print(f"Processing stock {asx_code}")
         try:
             melted_df = fetch_metrics(asx_code)
             if melted_df is None or len(melted_df) < 1:
-                raise ValueError(f"No data availale for {asx_code}... skipping")
+                raise ValueError(f"No data available for {asx_code}... skipping")
             melted_df["asx_code"] = asx_code
             ret = update_all_metrics(melted_df, asx_code)
             assert ret == len(melted_df)
             if a.fill_gaps:
-                fill_stock_quote_gaps(db, asx_code)
+                fill_stock_quote_gaps(db, asx_code, force=a.force)
                 # FALLTHRU...
             time.sleep(a.delay)
         except Exception as e:
