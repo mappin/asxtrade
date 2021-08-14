@@ -1,6 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from app.models import all_sector_stocks
+from app.models import CompanyFinancialMetric, all_sector_stocks
 
 
 def is_not_blank(value):
@@ -211,6 +211,16 @@ class FinancialMetricSearchForm(forms.Form):
         label="interpreting value as... ",
     )
 
-    def __init__(self, metric_choices, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        metric_choices = [
+            (v, v)
+            for v in sorted(
+                list(
+                    CompanyFinancialMetric.objects.order_by("name")
+                    .values_list("name", flat=True)
+                    .distinct()
+                )
+            )
+        ]
         super().__init__(*args, **kwargs)
         self.fields["metric"].choices = metric_choices

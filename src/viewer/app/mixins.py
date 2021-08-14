@@ -2,7 +2,6 @@ from app.models import Quotation, VirtualPurchase
 from bson.objectid import ObjectId
 
 
-
 class VirtualPurchaseMixin:
     """
     Retrieve the object by mongo _id for use by CRUD CBV views for VirtualPurchase's
@@ -16,6 +15,7 @@ class VirtualPurchaseMixin:
         purchase.pop("_id", None)
         return VirtualPurchase(**purchase)
 
+
 class SearchMixin:
     model = Quotation
     object_list = Quotation.objects.none()
@@ -24,7 +24,7 @@ class SearchMixin:
         """need to subclass this method to ensure pagination works correctly (as 'next', 'last' etc. is GET not POST)"""
         d = {}
         key = self.__class__.__name__
-        print("Updating session state: {}".format(key))
+        # print("Updating session state: {}".format(key))
         d.update(request.session.get(key, {}))  # update the form to the session state
         return self.update_form(d)
 
