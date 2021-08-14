@@ -313,6 +313,10 @@ class FinancialMetricSearchView(SearchMixin, LoginRequiredMixin, FormView):
                 "sentiment_heatmap_title": "Matching stock sentiment",
             }
         )
+        warning(
+            self.request,
+            "Due to experimental data ingest, results may be wrong/inaccurate/misleading. Use at own risk",
+        )
         return show_companies(
             self.object_list,  # ie. return result from self.get_queryset()
             self.request,
