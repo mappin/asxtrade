@@ -107,7 +107,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     ld["cip_df"] = lambda ld: ld["sector_df"].filter(
         items=ld["timeframe"].all_dates(), axis=1
     )
-    ld["market_cap_df"] = lambda ld: market_cap_data_factory()
+    ld["market_cap_df"] = lambda ld: market_cap_data_factory(ld)
     ld["stocks_by_sector"] = lambda ld: stocks_by_sector()
 
     sentiment_plot = cache_plot(
@@ -124,7 +124,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     )
     market_cap_dist_plot = cache_plot(
         f"market-cap-dist-{sector_descr}",
-        lambda lds: plot_market_cap_distribution(ld),
+        lambda ld: plot_market_cap_distribution(ld),
         datasets=ld,
     )
     context = {
