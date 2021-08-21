@@ -79,7 +79,7 @@
         <li>{{ total_cleaned_weight_pct | floatformat }}% of the total allocation is shown above (small allocations not shown)</li>
         {% endif %}
         {% if leftover_funds > 0.0 %}
-        <li>Due to whole share purchases, some funds could not be allocated: ${{ leftover_funds|floatformat }}</li>
+        <li>Due to whole share purchases, some funds could not be allocated: ${{ leftover_funds|floatformat:2 }}</li>
         {% endif %}
         <li>Total profit ($AUD) over timeframe: {{ total_profit_aud |floatformat }}</li>
     </ul>

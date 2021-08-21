@@ -645,6 +645,7 @@ def optimise_portfolio(
         )
         # since the sample of stocks might be different, we must recompute each iteration...
         filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
+        # print(len(filtered_stocks.columns))
         market_caps = {
             q.asx_code: q.market_cap
             for q in quotes
