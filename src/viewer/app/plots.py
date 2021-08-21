@@ -305,7 +305,7 @@ def plot_company_rank(ld: LazyDictionary) -> p9.ggplot:
 
 def plot_company_versus_sector(
     df: pd.DataFrame, stock: str, sector: str  # pylint: disable=unused-argument
-) -> str:
+) -> p9.ggplot:
     if df is None or len(df) < 1:
         print("No data for stock vs. sector plot... ignored")
         return None

@@ -382,10 +382,7 @@ def show_purchase_performance(request):
 def show_total_earnings(request):
     validate_user(request.user)
 
-    @timing
-    def data_factory(timeframe: Timeframe) -> pd.DataFrame:
-        df = pe_trends_df(timeframe)
-        # print(df)
+    def data_factory(df: pd.DataFrame) -> pd.DataFrame:
         df = df.pivot(
             index=["asx_code", "fetch_date"], columns="field_name", values="field_value"
         )
@@ -406,9 +403,7 @@ def show_total_earnings(request):
 
         return df
 
-    def plot(ld: LazyDictionary) -> p9.ggplot:
-        df = ld["df"]
-        # print(df)
+    def plot(df: pd.DataFrame) -> p9.ggplot:
         plot = (
             p9.ggplot(
                 df,
@@ -430,14 +425,15 @@ def show_total_earnings(request):
         )
 
     ld = LazyDictionary()
-    timeframe = Timeframe(past_n_days=180)
-    ld["df"] = lambda ld: data_factory(timeframe)
+    ld["timeframe"] = Timeframe(past_n_days=180)
+    ld["pe_trends_df"] = lambda ld: pe_trends_df(ld["timeframe"])
+    ld["df"] = lambda ld: data_factory(ld["pe_trends_df"])
     context = {
         "title": "Earnings per sector over time",
-        "timeframe": timeframe,
+        "timeframe": ld["timeframe"],
         "plot_uri": cache_plot(
-            f"total-earnings-by-sector:{timeframe.description}",
-            lambda ld: plot(ld),
+            f"total-earnings-by-sector:{ld['timeframe'].description}",
+            lambda ld: plot(ld["df"]),
             datasets=ld,
         ),
     }

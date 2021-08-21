@@ -168,3 +168,6 @@ ABS_API_KEY = os.getenv('ABS_API_KEY')
 # see https://simpleisbetterthancomplex.com/tutorial/2018/08/13/how-to-use-bootstrap-4-forms-with-django.html
 CRISPY_TEMPLATE_PACK = 'bootstrap4'
 CRISPY_FAIL_SILENTLY = not DEBUG
+
+# avoid warning at startup
+DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
