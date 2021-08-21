@@ -288,6 +288,7 @@ def prep_cip_dataframe(
     return cip
 
 
+@timing
 def make_stock_vs_sector_dataframe(
     all_stocks_cip: pd.DataFrame, stock: str, sector_companies=None
 ) -> pd.DataFrame:
@@ -296,30 +297,48 @@ def make_stock_vs_sector_dataframe(
     if cip is None:
         return None
 
-    cum_sum = defaultdict(float)
-    stock_versus_sector = []
     # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
     best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
     best_group = "{} (#1 in sector)".format(best_stock_in_sector)
-    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-        for asx_code, daily_change in cip[day].iteritems():
-            cum_sum[asx_code] += daily_change
+    # ensure cip columns are in correct date order
+    cip = cip.reindex(
+        sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")), axis=1
+    )
+    #     fetch_date  2019-08-23  2019-08-26  2019-08-27  2019-08-28  2019-08-29  2019-08-30  ...  2021-08-13  2021-08-16  2021-08-17  2021-08-18  2021-08-19  2021-08-20
+    # asx_code                                                                            ...
+    # NVU           0.000000    0.000000    0.000000    0.000000    0.000000    0.000000  ...    4.255000       2.041      -2.000       0.000       2.041      -8.000
+    # 3DP           2.564103    0.000000    2.631579   -5.128205   -2.631579    5.263158  ...    2.469000       0.000      -1.220       0.000       1.235      -3.614
+    # TDY           0.000000    0.000000    0.000000    0.000000    0.000000    0.000000  ...    0.000000       0.000       0.000       0.000       0.000       0.000
+    # AMO           0.000000    0.000000    0.000000    0.000000    0.000000    0.000000  ...    1.961000       5.769       1.818      -1.786      -1.818       3.704
+    # YOJ           0.000000   -1.428571    0.000000  -10.606061    0.000000   24.590164  ...    2.941000       0.000      -5.714       6.061      -5.714       0.000
+    # ...                ...         ...         ...         ...         ...         ...  ...         ...         ...         ...         ...         ...         ...
+    # ERD           0.000000    0.000000    0.000000    0.000000    0.000000    0.000000  ...    0.333333      -0.828      -1.169      -1.858       1.549       1.695
+    # 9SP           8.695652   -3.846154   -3.846154   -8.000000   -4.347826    4.545455  ...   -6.667000       7.143       0.000       0.000       0.000       0.000
+    # DDR           1.550388   -0.763359    1.846154    1.649175   -3.757225   -5.685131  ...   -1.400000       0.203      -3.509       0.490       1.809       2.051
+    # BTH          -3.488372    2.469136    7.142857    1.098901    1.030928    0.000000  ...    0.000000      -5.000       0.000       0.877       4.783      -0.830
+    # DUB          -0.803213   -0.823045    1.224490    4.780876   -3.030303   -5.859375  ...   -1.897000       0.829      -3.014       1.695       0.278      -2.216s
 
-        stock_versus_sector.append(
-            {"group": stock, "date": day, "value": cum_sum[stock]}
+    cum_sum_df = cip.apply(lambda daily_prices: daily_prices.cumsum(), axis=1)
+    sector_average = cum_sum_df.mean()  # arithmetic not weighted mean
+    # print(sector_average)
+    records = []
+    for date in cip.columns:
+        records.append(
+            {"group": stock, "value": cum_sum_df.at[stock, date], "date": date}
         )
-        stock_versus_sector.append(
-            {"group": "sector_average", "date": day, "value": pd.Series(cum_sum).mean()}
+        records.append(
+            {"group": "sector_average", "value": sector_average.at[date], "date": date}
         )
         if stock != best_stock_in_sector:
-            stock_versus_sector.append(
+            records.append(
                 {
                     "group": best_group,
-                    "value": cum_sum[best_stock_in_sector],
-                    "date": day,
+                    "value": cum_sum_df.at[best_stock_in_sector, date],
+                    "date": date,
                 }
             )
-    df = pd.DataFrame.from_records(stock_versus_sector)
+
+    df = pd.DataFrame.from_records(records)
     return df
 
 

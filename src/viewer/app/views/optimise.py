@@ -91,6 +91,7 @@ class OptimisedWatchlistView(LoginRequiredMixin, FormView):
         algo = form.cleaned_data["method"]
         portfolio_cost = form.cleaned_data["portfolio_cost"]
         exclude_price = form.cleaned_data.get("exclude_price", None)
+        max_stocks = form.cleaned_data.get("max_stocks", 80)
         stocks = self.stocks()
 
         if exclude is not None:
@@ -103,6 +104,7 @@ class OptimisedWatchlistView(LoginRequiredMixin, FormView):
             stocks,
             self.timeframe,
             algo=algo,
+            max_stocks=max_stocks,
             total_portfolio_value=portfolio_cost,
             exclude_price=exclude_price,
             warning_cb=lambda msg: warning(self.request, msg),
