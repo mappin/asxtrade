@@ -44,7 +44,9 @@ def timing(f):
                 for i in args
             ]
         )
-        print(f"func:{f.__name__}({arg_str}) took: {te-ts:.3f} sec")
+        time_taken = te - ts
+        if time_taken > 0.10: # ignore anything below 10ms
+           print(f"func:{f.__name__}({arg_str}) took: {time_taken:.3f} sec")
         return result
 
     return wrap

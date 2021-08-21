@@ -1,14 +1,14 @@
 <div class="mt-4">
-     {% if stock_versus_sector.plot_uri is None %}
+     {% if stock_vs_sector.plot_uri is None %}
      {% else %}
-          <h3>{{ stock_versus_sector.title }}</h3>
+          <h3>{{ stock_vs_sector.title }}</h3>
 
           <ul>
                <li>Timeframe: {{ timeframe.description }}</li>
           </ul>
 
           <img class="company_versus_sector"
-               src="/png/{{ stock_versus_sector.plot_uri }}"
+               src="/png/{{ stock_vs_sector.plot_uri }}"
                alt="{{ stock_versus_sector.title }}" />
      {% endif %}
 </div>
