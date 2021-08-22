@@ -901,6 +901,7 @@ def plot_monthly_returns(
     df = df.filter([d.strftime("%Y-%m-%d") for d in dt], axis=0)
     df["percentage_change"] = df["last_price"].pct_change(periods=1) * 100.0
     df.index = pd.to_datetime(df.index, format="%Y-%m-%d")
+    df = df.fillna(0.0)  # NB: avoid plotnine warning plotting missing data
     # print(df)
 
     plot = p9.ggplot(
