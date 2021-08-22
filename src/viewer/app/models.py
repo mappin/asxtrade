@@ -45,8 +45,8 @@ def timing(f):
             ]
         )
         time_taken = te - ts
-        if time_taken > 0.10: # ignore anything below 10ms
-           print(f"func:{f.__name__}({arg_str}) took: {time_taken:.3f} sec")
+        if time_taken > 0.10:  # ignore anything below 10ms
+            print(f"func:{f.__name__}({arg_str}) took: {time_taken:.3f} sec")
         return result
 
     return wrap
@@ -511,10 +511,16 @@ def companies_with_same_sector(stock: str) -> set:
     """
     Return the set of all known companies designated with the same sector as the specified stock
     """
-    cd = CompanyDetails.objects.filter(asx_code=stock).first()
-    if cd is None:
+    ss = stocks_by_sector()
+    wanted_stock = ss[ss["asx_code"] == stock]
+    if wanted_stock is None or len(wanted_stock) != 1:
         return set()
-    return all_sector_stocks(cd.sector_name)
+
+    wanted_sector = wanted_stock.iloc[0, 1]
+    assert wanted_sector is not None and len(wanted_sector) > 0
+    # print(ss)
+    rows_with_sector = ss[ss["sector_name"] == wanted_sector]
+    return set(rows_with_sector["asx_code"].unique())
 
 
 @timing
@@ -585,10 +591,11 @@ def desired_dates(
         raise ValueError("Unsupported start_date {}".format(type(start_date)))
     assert start_date <= today
     all_dates = [
-        d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, today, freq="D")
+        d.strftime("%Y-%m-%d")
+        for d in sorted(pd.date_range(start_date, today, freq="D"))
     ]
     assert len(all_dates) > 0
-    return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
+    return all_dates
 
 
 @timing
