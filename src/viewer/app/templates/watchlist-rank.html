@@ -2,13 +2,13 @@
 
 {% block header %}
 <div class="row">
-    <h3>Trends for watched stocks over past 300 days</h3>
+    <h3 class="mt-4">Trends for watched stocks over past 300 days</h3>
 </div>
 {% endblock %}
 
 {% block content %}
 {% if watchlist_trends %}
-
+<div class="row">
     <table style="width: 60%" class="mt-4">
         <tr>
             <th>Stock</th>
