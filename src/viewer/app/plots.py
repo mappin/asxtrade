@@ -421,6 +421,7 @@ def plot_market_cap_distribution(ld: LazyDictionary) -> p9.ggplot:
         p9.ggplot(df)
         + p9.geom_boxplot(p9.aes(x="market", y="market_cap"))
         + p9.facet_wrap("bin", scales="free_y")
+        + p9.scales.scale_y_log10()
     )
     return user_theme(
         plot,
