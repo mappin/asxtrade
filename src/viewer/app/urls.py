@@ -30,6 +30,7 @@ urlpatterns = [
     path("search/by-metric", financial_metric_search),
     path("search/movers", mover_search),
     path("search/market-cap", market_cap_search),
+    path("search/momentum-change", momentum_change_search),
     # path("show/increasing-eps", show_increasing_eps_stocks),
     # NB: order important here!
     # path("show/increasing-yield", show_increasing_yield_stocks),

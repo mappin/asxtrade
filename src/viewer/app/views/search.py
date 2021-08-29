@@ -9,10 +9,11 @@ from django.shortcuts import render
 import pandas as pd
 from pandas.core.base import NoNewAttributesMixin
 from app.mixins import SearchMixin
-from app.data import cache_plot, timeframe_end_performance
+from app.data import cache_plot, calc_ma_crossover_points, timeframe_end_performance
 from app.messages import info
 from app.forms import (
     DividendSearchForm,
+    MomentumSearchForm,
     SectorSearchForm,
     MoverSearchForm,
     CompanySearchForm,
@@ -23,11 +24,14 @@ from app.forms import (
 from app.models import (
     Timeframe,
     Quotation,
+    all_stocks,
     latest_quotation_date,
+    user_watchlist,
     valid_quotes_only,
     latest_quote,
     Sector,
     all_sector_stocks,
+    company_prices,
     find_movers,
     find_named_companies,
     selected_cached_stocks_cip,
@@ -418,3 +422,59 @@ class ShowRecentSectorView(LoginRequiredMixin, FormView):
 
 
 show_recent_sector = ShowRecentSectorView.as_view()
+
+
+class MomentumSearch(DividendYieldSearch):
+    form_class = MomentumSearchForm
+    action_url = "/search/momentum-change"
+    template_name = "search_form.html"
+
+    def additional_context(self, context):
+        ret = super().additional_context(context)
+        ret.update(
+            {
+                "title": "Momentum Search",
+                "sentiment_heatmap_title": "Momentum stock sentiment",
+            }
+        )
+        return ret
+
+    def get_queryset(self, **kwargs):
+        n_days = kwargs.get("n_days")
+        what_to_search = kwargs.get("what_to_search")
+        period1 = kwargs.get("period1")
+        period2 = kwargs.get("period2")
+        stocks_to_consider = (
+            all_stocks()
+            if what_to_search == "all_stocks"
+            else user_watchlist(self.request.user)
+        )
+        matching_stocks = set()
+        self.timeframe = Timeframe(past_n_days=n_days)
+
+        assert period2 > period1
+        df = company_prices(
+            stocks_to_consider, Timeframe(past_n_days=n_days + period2), transpose=False
+        )
+        # print(df)
+        wanted_dates = set(self.timeframe.all_dates())
+        for s in stocks_to_consider:
+            if s not in df.columns:
+                print(f"WARNING: no data for {s}")
+                continue
+            last_price = df[s]
+            ma20 = last_price.rolling(period1).mean()
+            ma200 = last_price.rolling(
+                period2, min_periods=min([50, 3 * period1])
+            ).mean()
+
+            matching_dates = set(
+                [xo[1] for xo in calc_ma_crossover_points(ma20, ma200)]
+            )
+            if len(matching_dates.intersection(wanted_dates)) > 0:
+                matching_stocks.add(s)
+        self.qs = matching_stocks
+        return matching_stocks
+
+
+momentum_change_search = MomentumSearch.as_view()
