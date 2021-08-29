@@ -150,12 +150,14 @@ def fill_stock_quote_gaps(db, stock_to_fetch: str, force=False) -> int:
             len(available_quotes), stock_to_fetch, len(df), len(dates_to_fill), force
         )
     )
+    if len(dates_to_fill) < 1:
+        return 0
+
     df["change_price"] = df["Close"].diff()
     df["change_in_percent"] = df["Close"].pct_change() * 100.0
     gap_quotes_df = df.filter(dates_to_fill, axis=0)
     # print(df)
     n = 0
-
     for new_quote in gap_quotes_df.itertuples():
         d = make_asx_prices_dict(new_quote, stock_to_fetch)
         result = db.asx_prices.update_one(
