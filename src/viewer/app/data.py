@@ -514,7 +514,11 @@ def calc_ma_crossover_points(
         ls1.append((i, v1))
         ls2.append((i, v2))
 
-    result = LineString(ls1).intersection(LineString(ls2))
+    result = None
+    ls1 = LineString(ls1)
+    ls2 = LineString(ls2)
+    if ls1.crosses(ls2):
+        result = ls1.intersection(ls2)
     if result is None or result.is_empty:
         return []
     elif isinstance(result, Point):

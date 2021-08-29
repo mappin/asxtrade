@@ -463,10 +463,13 @@ class MomentumSearch(DividendYieldSearch):
                 print(f"WARNING: no data for {s}")
                 continue
             last_price = df[s]
-            ma20 = last_price.rolling(period1).mean()
-            ma200 = last_price.rolling(
-                period2, min_periods=min([50, 3 * period1])
-            ).mean()
+            # we filter now because it is after the warm-up period for MA200....
+            ma20 = last_price.rolling(period1).mean().filter(items=wanted_dates, axis=0)
+            ma200 = (
+                last_price.rolling(period2, min_periods=min([50, 3 * period1]))
+                .mean()
+                .filter(items=wanted_dates, axis=0)
+            )
 
             matching_dates = set(
                 [xo[1] for xo in calc_ma_crossover_points(ma20, ma200)]
