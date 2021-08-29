@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 from scipy.cluster.vq import kmeans, vq
 from sklearn.cluster import KMeans
 from threading import Lock
+from shapely.geometry import LineString, Point
 
 
 def hash_str(key: str) -> str:
@@ -491,3 +492,48 @@ def timeframe_end_performance(ld: LazyDictionary) -> pd.Series:
     timeframe_end_perf = ld["cip_df"].sum(axis=1, numeric_only=True)
     # print(timeframe_end_perf)
     return timeframe_end_perf.to_dict()
+
+
+def calc_ma_crossover_points(
+    array1: pd.Series, array2: pd.Series
+) -> Iterable[tuple]:  # array indexes are returned
+    """
+    Calculate the points (index, YYYY-mm-dd, price) where array1 and array2 cross over and return them.
+    Typically they represent MA20 and MA200 lines, but any two poly lines will do.
+    """
+    assert len(array1) == len(array2)
+    ls1 = []
+    ls2 = []
+    for i in range(len(array1)):
+        v1 = array1[i]
+        v2 = array2[i]
+        if np.isnan(v1) or np.isnan(
+            v2
+        ):  # TODO FIXME: gaps can create false overlaps due to "straight line" intersections in error... GIGO...
+            continue
+        ls1.append((i, v1))
+        ls2.append((i, v2))
+
+    result = LineString(ls1).intersection(LineString(ls2))
+    if result is None or result.is_empty:
+        return []
+    elif isinstance(result, Point):
+        nearest_idx = int(result.x)
+        return [(nearest_idx, array1[nearest_idx], result.y)]
+    else:  # assume multiple points ie. MultiPoint
+        ret = []
+        # print(result)
+        for hit in list(result):
+            if isinstance(hit, Point):
+                nearest_idx = int(hit.x)
+                intersect_price = hit.y
+            elif isinstance(hit, LineString):
+                # if a hit exists over multiple consecutive days, we just report the start
+                coords = list(hit.coords)
+                nearest_idx, intersect_price = coords[0]
+            else:
+                assert False  # fail for obscure corner cases
+            # print(array1)
+            ret.append((nearest_idx, array1.index[nearest_idx], intersect_price))
+
+        return ret

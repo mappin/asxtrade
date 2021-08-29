@@ -224,3 +224,33 @@ class FinancialMetricSearchForm(forms.Form):
         ]
         super().__init__(*args, **kwargs)
         self.fields["metric"].choices = metric_choices
+
+
+class MomentumSearchForm(forms.Form):
+    n_days = forms.IntegerField(
+        max_value=300,
+        min_value=7,
+        required=True,
+        initial=300,
+        label="Only report cross-overs in past ... days",
+    )
+    period1 = forms.IntegerField(
+        max_value=300,
+        min_value=5,
+        required=True,
+        initial=20,
+        label="Number of days to use for MA20",
+    )
+    period2 = forms.IntegerField(
+        max_value=300,
+        min_value=20,
+        required=True,
+        initial=200,
+        label="Number of days to use for MA200",
+    )
+    what_to_search = forms.ChoiceField(
+        choices=(("all_stocks", "All stocks"), ("watchlist", "Watchlist")),
+        label="Consider .. stocks only",
+        widget=forms.RadioSelect,
+        required=True,
+    )

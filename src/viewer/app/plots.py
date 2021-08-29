@@ -25,6 +25,7 @@ from app.data import (
     cache_plot,
     make_portfolio_performance_dataframe,
     price_change_bins,
+    calc_ma_crossover_points,
 )
 from plotnine.layer import Layers
 

@@ -14,6 +14,7 @@ from app.views.search import (
     market_cap_search,
     show_recent_sector,
     financial_metric_search,
+    momentum_change_search,
 )
 from app.views.download import download_data
 from app.views.optimise import (
