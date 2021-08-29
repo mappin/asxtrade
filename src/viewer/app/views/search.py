@@ -43,6 +43,7 @@ from app.plots import plot_sector_performance, plot_boxplot_series
 from app.messages import warning
 from lazydict import LazyDictionary
 from plotnine.layer import Layers
+from cachetools import LRUCache
 
 
 class DividendYieldSearch(
@@ -59,6 +60,7 @@ class DividendYieldSearch(
     )
     timeframe = Timeframe(past_n_days=30)
     qs = None
+    query_cache = LRUCache(maxsize=2)
 
     def additional_context(self, context):
         """
@@ -93,7 +95,7 @@ class DividendYieldSearch(
             template_name=self.template_name,
         )
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         if kwargs == {}:
             return Quotation.objects.none()
 
@@ -112,8 +114,23 @@ class DividendYieldSearch(
             results = results.filter(pe__lt=kwargs.get("max_pe"))
         if "min_eps_aud" in kwargs:
             results = results.filter(eps__gte=kwargs.get("min_eps_aud"))
-        self.qs = results
-        return self.qs
+        return results
+
+    def get_queryset(self, **kwargs):
+        """
+        DO NOT override this method, use recalc_queryset() instead so that you get caching behaviour to speed page navigation
+        """
+        cache_key = (
+            self.action_url + "-" + "-".join([f"{k}={v}" for k, v in kwargs.items()])
+        )
+        if cache_key in self.query_cache:
+            print(f"Using cached queryset: {cache_key}")
+            self.qs = self.query_cache[cache_key]
+            return self.qs
+        else:
+            self.qs = self.recalc_queryset(**kwargs)
+            self.query_cache[cache_key] = self.qs
+            return self.qs
 
 
 dividend_search = DividendYieldSearch.as_view()
@@ -146,7 +163,7 @@ class SectorSearchView(DividendYieldSearch):
         )
         return d
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         def sector_performance(ld: LazyDictionary) -> str:
             sector = ld.get("sector")
             return cache_plot(
@@ -199,15 +216,15 @@ class SectorSearchView(DividendYieldSearch):
         quotations_as_at, actual_mrd = valid_quotes_only(
             "latest", ensure_date_has_data=True
         )
-        self.qs = quotations_as_at.filter(asx_code__in=wanted_stocks)
-        if len(self.qs) < len(wanted_stocks):
+        ret = quotations_as_at.filter(asx_code__in=wanted_stocks)
+        if len(ret) < len(wanted_stocks):
             got = set([q.asx_code for q in self.qs.all()])
             missing_stocks = wanted_stocks.difference(got)
             warning(
                 self.request,
                 f"could not obtain quotes for all stocks as at {actual_mrd}: {missing_stocks}",
             )
-        return self.qs
+        return ret
 
 
 sector_search = SectorSearchView.as_view()
@@ -227,7 +244,7 @@ class MoverSearch(DividendYieldSearch):
         )
         return d
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         if any(
             [kwargs == {}, "threshold" not in kwargs, "timeframe_in_days" not in kwargs]
         ):
@@ -245,8 +262,8 @@ class MoverSearch(DividendYieldSearch):
         )
         # print(df)
 
-        self.qs, _ = latest_quote(tuple(df.index))
-        return self.qs
+        ret, _ = latest_quote(tuple(df.index))
+        return ret
 
 
 mover_search = MoverSearch.as_view()
@@ -262,15 +279,15 @@ class CompanySearch(DividendYieldSearch):
             "sentiment_heatmap_title": "Heatmap for named companies",
         }
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         if kwargs == {} or not any(["name" in kwargs, "activity" in kwargs]):
             return Quotation.objects.none()
         wanted_name = kwargs.get("name", "")
         wanted_activity = kwargs.get("activity", "")
         matching_companies = find_named_companies(wanted_name, wanted_activity)
         print("Showing results for {} companies".format(len(matching_companies)))
-        self.qs, _ = latest_quote(tuple(matching_companies))
-        return self.qs
+        ret, _ = latest_quote(tuple(matching_companies))
+        return ret
 
 
 company_search = CompanySearch.as_view()
@@ -343,7 +360,7 @@ class MarketCapSearch(MoverSearch):
             "sentiment_heatmap_title": "Heatmap for matching market cap stocks",
         }
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         # identify all stocks which have a market cap which satisfies the required constraints
         quotes_qs, most_recent_date = latest_quote(None)
         min_cap = kwargs.get("min_cap", 1)
@@ -360,8 +377,7 @@ class MarketCapSearch(MoverSearch):
                 quotes_qs.count(), most_recent_date
             ),
         )
-        self.qs = quotes_qs
-        return self.qs
+        return quotes_qs
 
 
 market_cap_search = MarketCapSearch.as_view()
@@ -425,6 +441,11 @@ show_recent_sector = ShowRecentSectorView.as_view()
 
 
 class MomentumSearch(DividendYieldSearch):
+    """
+    Search for momentum related signals by finding cross over points between 20-day moving average and 200 day moving average.
+    We try to provide a warm-up period of data (depending on what it is in the database) so that the user-requested period has good data.
+    """
+
     form_class = MomentumSearchForm
     action_url = "/search/momentum-change"
     template_name = "search_form.html"
@@ -439,7 +460,7 @@ class MomentumSearch(DividendYieldSearch):
         )
         return ret
 
-    def get_queryset(self, **kwargs):
+    def recalc_queryset(self, **kwargs):
         n_days = kwargs.get("n_days")
         what_to_search = kwargs.get("what_to_search")
         period1 = kwargs.get("period1")
@@ -458,10 +479,7 @@ class MomentumSearch(DividendYieldSearch):
         )
         # print(df)
         wanted_dates = set(self.timeframe.all_dates())
-        for s in stocks_to_consider:
-            if s not in df.columns:
-                print(f"WARNING: no data for {s}")
-                continue
+        for s in filter(lambda asx_code: asx_code in df.columns, stocks_to_consider):
             last_price = df[s]
             # we filter now because it is after the warm-up period for MA200....
             ma20 = last_price.rolling(period1).mean().filter(items=wanted_dates, axis=0)
@@ -476,7 +494,6 @@ class MomentumSearch(DividendYieldSearch):
             )
             if len(matching_dates.intersection(wanted_dates)) > 0:
                 matching_stocks.add(s)
-        self.qs = matching_stocks
         return matching_stocks
 
 

@@ -517,7 +517,7 @@ def calc_ma_crossover_points(
     result = None
     ls1 = LineString(ls1)
     ls2 = LineString(ls2)
-    if ls1.crosses(ls2):
+    if ls1.crosses(ls2):  # symettry: implies ls2.crosses(ls1)
         result = ls1.intersection(ls2)
     if result is None or result.is_empty:
         return []
