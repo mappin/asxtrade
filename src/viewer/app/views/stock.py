@@ -1,6 +1,7 @@
 """
 Responsible for providing detiled views about a single stock and closely related views
 """
+from typing import Iterable
 from matplotlib.pyplot import subplots_adjust
 import pandas as pd
 import plotnine as p9
@@ -90,7 +91,7 @@ def show_financial_metrics(request, stock=None):
             raise Http404(f"No financial metrics available for {stock}")
         return data_df
 
-    def find_linear_metrics(ld: LazyDictionary):
+    def find_linear_metrics(ld: LazyDictionary) -> Iterable[str]:
         linear_metrics = calculate_trends(ld["data_df"])
         good_linear_metrics = []
         for k, t in linear_metrics.items():
@@ -98,13 +99,14 @@ def show_financial_metrics(request, stock=None):
                 good_linear_metrics.append(k)
         return good_linear_metrics
 
-    def find_exp_metrics(ld: LazyDictionary):
+    def find_exp_metrics(ld: LazyDictionary) -> Iterable[str]:
         exp_metrics = calculate_trends(
-            ld["data_df"], polynomial_degree=3, nrmse_cutoff=0.1
+            ld["data_df"], polynomial_degree=2, nrmse_cutoff=0.05
         )
+        good_linear_metrics = set(ld["linear_metrics"])
         good_exp_metrics = []
         for k, t in exp_metrics.items():
-            if t[1] < 0.1:
+            if t[1] < 0.1 and k not in good_linear_metrics:
                 good_exp_metrics.append(k)
         return good_exp_metrics
 
