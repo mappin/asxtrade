@@ -19,6 +19,7 @@ pytest-factoryboy
 pytest-cov
 pyod
 pyportfolioopt
+shapely >= 1.7.0
 sqlparse==0.2.4
 tox
 xlsxwriter
