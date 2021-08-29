@@ -87,7 +87,7 @@ def calculate_trends(
         series = series.dropna()  # NB: np.polyfit doesnt work with NA so...
         n = len(series)
         if n == 0 or n < max(
-            4, 2 + polynomial_degree
+            4, 3 + polynomial_degree
         ):  # too few data points for a trend? if so, ignore the series
             continue
 
